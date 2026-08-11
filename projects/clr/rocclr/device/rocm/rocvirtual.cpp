@@ -4943,6 +4943,11 @@ bool VirtualGPU::submitKernelInternal(const amd::NDRangeContainer& sizes, const 
     if (isGraphCapture) {
       argBuffer = command_->getGraphKernArg(gpuKernel.KernargSegmentByteSize(),
                                             gpuKernel.KernargSegmentAlignment(), dev().index());
+      // A kernel with no kernarg segment gets no buffer by design.
+      if (argBuffer == nullptr && gpuKernel.KernargSegmentByteSize() != 0) {
+        LogError("Failed to allocate graph kernel argument buffer (out of memory)");
+        return false;
+      }
       command_->SetKernelName(gpuKernel.getDemangledName());
     } else {
       argBuffer = reinterpret_cast<address>(
