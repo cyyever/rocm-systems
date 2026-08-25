@@ -9,6 +9,7 @@
 # While those are fixed, this hack should allow us to pass windows CI.
 set(TEST_SRC
   hipGraphExecUpdate_oom_test.cc
+  hipGraphExecUpdate_error_propagation_test.cc
   hipGraphAddEmptyNode.cc
   hipGraphAddDependencies.cc
   hipGraphAddEventRecordNode.cc
