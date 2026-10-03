@@ -15,12 +15,14 @@ For details on how KMD emulation and the interposer layer work, see [GPU virtual
 
 ``` text
 rocjitsu --config <config.json> [--daemon|--attach] [--] <app> [args...]
+rocjitsu --preload-only -- python <script.py> [args...]
 rocjitsu --config <config.json> --vfio-socket <path>
 ```
 
 | Option | Description |
 | --- | --- |
-| `--config <path>` | Path to the simulation configuration JSON file. Required for all modes. |
+| `--config <path>` | Path to the simulation configuration JSON file. Required except with `--preload-only`. |
+| `--preload-only` | Preload the interposer without a config. The application must call `rocjitsu.enable(config)` in Python before GPU discovery; the Python bootstrap `python -m rocjitsu` uses this mode. Cannot be combined with configuration or other execution modes. |
 | `--daemon` | Run in daemon mode: fork a daemon process hosting the simulation engine, then launch the application with the interposer. Without `-- <app>`, runs the daemon server only (no application is launched). |
 | `--attach` | Attach to a running daemon. The socket path is resolved as described in [Environment variables and socket path resolution](#socket-path-resolution). |
 | `--vfio-socket <path>` | Serve the configured GPU as a PCI function over VFIO-user. Requires a build configured with `ROCJITSU_ENABLE_VFIO=ON` and a VMM that shares guest RAM through mmap-able file descriptors. |
@@ -40,6 +42,19 @@ rocjitsu --config configs/gfx950_mi355x_kmd.json -- ./app
 The simulator runs in-process. `rocjitsu` sets `LD_PRELOAD` and calls `execve` on the target application. The interposer routes `/dev/kfd` operations to a `SimulatedDriver` within the same process, and a background thread runs the simulation engine.
 
 This mode corresponds to `RJ_VM_MODE_LOCAL` in the C API.
+
+### Python startup activation
+
+```sh
+rocjitsu --preload-only -- python app.py
+```
+
+The CLI preloads the interposer before starting Python. In `app.py`, import
+`rocjitsu` and call `rocjitsu.enable(config)` before GPU discovery or framework
+imports. This is equivalent to `python -m rocjitsu app.py`; see the
+[Python execution API](python-api.md#main-process-activation) for a complete
+example. Applications launched with `--config` already have their simulation
+configuration and must not call `enable()`.
 
 ### Daemon mode
 
@@ -150,3 +165,22 @@ File descriptors (`memfd` handles) are passed via `sendmsg()`/`recvmsg()` with `
 4.  The runtime calls `DESTROY_QUEUE`, `DESTROY_EVENT`, and `close(kfd_fd)`.
 5.  The client's `RemoteDriver` sends `RPC_CLOSE` to the daemon.
 6.  The daemon closes the client connection and, when all clients have disconnected, shuts down the simulation engine.
+
+### Programmatic activation environment
+
+`--preload-only` sets `ROCJITSU_PROGRAMMATIC=1`. Interposed KFD/DRM device
+and discovery paths refuse access until the application activates a config.
+A discovery attempt prevents later activation because frameworks may cache the
+failed result. Ordinary configured launches set the variable to `0`.
+
+After successful activation, Python exports `ROCJITSU_INVOCATION_DIR` pointing
+to its private config handoff and sets `ROCJITSU_PROGRAMMATIC=2` for fresh exec
+children. The interpreter that calls `enable()` owns this handoff and must
+remain alive until those children finish their GPU work.
+
+The inherited mode (`2`) permits an identical `enable` call when multiprocessing
+re-imports a module in a spawn or forkserver child. The native parser compares
+the effective configs, including any CPU thread budget override; a different
+config is refused. Configured CLI launches (`0`) still reject activation.
+These environment values and the native entry point are private implementation
+details of the Python binding.

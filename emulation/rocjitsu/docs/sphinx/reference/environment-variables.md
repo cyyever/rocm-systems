@@ -91,6 +91,16 @@ Path to the AMD ROCm installation.
 | **Allowed values** | Any valid directory path pointing to a ROCm installation |
 | **Effect** | Used to locate ROCm libraries and tools for optional ROCm-dependent tests when `BUILD_TESTING=ON`. An explicitly empty CMake `ROCM_PATH` disables environment and `/opt/rocm` fallbacks. It does not select the host compiler or install destination. |
 
+### `ROCJITSU_EXECUTABLE`
+
+Override for the native executable used by the Python package.
+
+| | |
+|---|---|
+| **Default** | The bundled wheel's launcher (no fallback); source installs use the Python environment's `bin/rocjitsu`, then `rocjitsu` on `PATH` |
+| **Allowed values** | An executable name on `PATH` or a path to the native executable |
+| **Effect** | Selects the launcher for Python sessions, bootstrap and diagnostics. An explicit `executable=` argument takes priority. |
+
 ### `ROCJITSU_RUNTIME_DIR`
 
 Override for the runtime directory used by daemon socket resolution.
