@@ -27,7 +27,6 @@ def raw(mode='single'):
             'samples': 3,
             'timeout_seconds': 60,
             'benchmark_suite': 'smoke',
-            'threading_mode': mode,
             'timestamp': '2026-01-01T01:00:00Z',
             'finished_at': '2026-01-01T01:01:00Z',
             'wall_time_s': 60,
@@ -38,6 +37,8 @@ def raw(mode='single'):
                 'name': 'Example',
                 'target': 'gfx950',
                 'suite': 'smoke',
+                'operation': 'Example computation',
+                'thread_policy': mode,
                 'problem': {'size': 8},
                 'status': 'completed',
                 'exit_code': 0,
@@ -55,7 +56,6 @@ def raw(mode='single'):
             'rocjitsu': {
                 'rocjitsu_commit_sha': SHA,
                 'rocjitsu_commit_timestamp': '2026-01-01T00:00:00Z',
-                'target_config_sha256': {'gfx950': 'c' * 64},
                 'rocm_sdk_version': '7.0',
             },
             'corpus': {
@@ -217,6 +217,11 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(config['threadingMode'], 'ST')
         self.assertEqual(config['results'][0]['durationSeconds'], 2)
         self.assertEqual(config['results'][0]['error'], None)
+        self.assertEqual(config['results'][0]['testId'], 'case-1')
+        self.assertEqual(
+            self.read(run['testCatalog'])['tests'][0]['operation'],
+            'Example computation',
+        )
         self.assertEqual(
             sorted(
                 path.relative_to(self.data).as_posix()
@@ -229,6 +234,253 @@ class PrepareTests(unittest.TestCase):
                 ]
             ),
         )
+
+    def test_consolidated_run_preserves_identity_operation_and_sparse_policies(self):
+        value = raw('default')
+        value['execution_summary']['benchmark_suite'] = 'performance-v1'
+        value['benchmark_results'] = []
+        for target, policy, status, samples in (
+            ('gfx950', 'default', 'completed', [9, 1, 2]),
+            ('gfx950', 'single', 'failed', [5, 2]),
+            ('gfx1250', 'default', 'timeout', []),
+        ):
+            result = copy.deepcopy(raw()['benchmark_results'][0])
+            result.update(
+                id='gemm-and-reduce.default',
+                target=target,
+                thread_policy=policy,
+                operation='Matrix multiplication followed by reduction',
+                status=status,
+                timing_results_s=samples,
+                exit_code=0 if status == 'completed' else None,
+                error=None if status == 'completed' else 'Incomplete execution',
+            )
+            value['benchmark_results'].append(result)
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        catalog = self.read(run['testCatalog'])
+        self.assertEqual(len(catalog['tests']), 1)
+        self.assertEqual(catalog['tests'][0]['id'], 'gemm-and-reduce.default')
+        self.assertEqual(
+            catalog['tests'][0]['operation'],
+            'Matrix multiplication followed by reduction',
+        )
+        configs = {(c['target'], c['threadingMode']): c for c in run['configurations']}
+        self.assertEqual(
+            set(configs), {('gfx950', 'MT'), ('gfx950', 'ST'), ('gfx1250', 'MT')}
+        )
+        for result in value['benchmark_results']:
+            mode = 'ST' if result['thread_policy'] == 'single' else 'MT'
+            prepared = configs[result['target'], mode]['results'][0]
+            self.assertEqual(prepared['testId'], result['id'])
+            self.assertEqual(prepared['timing_results_s'], result['timing_results_s'])
+            self.assertEqual(prepared['status'], result['status'])
+            self.assertEqual(
+                prepared['durationSeconds'],
+                2 if mode == 'MT' and result['target'] == 'gfx950' else None,
+            )
+        details = {entry['key']: entry['value'] for entry in run['environment']}
+        self.assertEqual(details['execution.benchmark_suite'], 'performance-v1')
+        self.assertEqual(details['execution.samples'], 3)
+        self.assertFalse(
+            any('threading_mode' in key or 'target_config' in key for key in details)
+        )
+        original = self.snapshot()
+        value['benchmark_results'].reverse()
+        self.assert_ok(self.invoke([value]))
+        self.assertEqual(self.snapshot(), original)
+
+    def test_same_definition_with_different_ids_is_not_collapsed(self):
+        value = raw()
+        other = copy.deepcopy(value['benchmark_results'][0])
+        other['id'] = 'case-2'
+        value['benchmark_results'].append(other)
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        self.assertEqual(
+            [test['id'] for test in self.read(run['testCatalog'])['tests']],
+            ['case-1', 'case-2'],
+        )
+
+    def test_conflicting_workload_definitions_reject_before_writes(self):
+        for key, changed in (
+            ('suite', 'different'),
+            ('name', 'Different name'),
+            ('operation', 'Different computation'),
+            ('problem', {'size': 16}),
+            ('problem', {'size': True}),
+        ):
+            for separate_files in (False, True):
+                with self.subTest(
+                    key=key, changed=changed, separate_files=separate_files
+                ):
+                    first, second = raw(), raw('default')
+                    second['benchmark_results'][0][key] = changed
+                    inputs = [first, second]
+                    if not separate_files:
+                        first['benchmark_results'].extend(second['benchmark_results'])
+                        inputs = [first]
+                    result = self.invoke(inputs)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        'Conflicting workload definition: case-1', result.stderr
+                    )
+                    self.assertFalse(self.data.exists())
+
+    def test_duplicate_result_identity_rejected_within_and_across_files(self):
+        result = self.invoke([raw(), raw()])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Duplicate result identity', result.stderr)
+        self.assertFalse(self.data.exists())
+        value = raw()
+        value['benchmark_results'].append(copy.deepcopy(value['benchmark_results'][0]))
+        result = self.invoke([value])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Duplicate result identity', result.stderr)
+        self.assertFalse(self.data.exists())
+
+    def test_unknown_sdk_version_is_preserved_as_null_environment_fact(self):
+        value = raw()
+        value['provenance']['rocjitsu']['rocm_sdk_version'] = None
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        details = {entry['key']: entry['value'] for entry in run['environment']}
+        self.assertEqual(details['rocjitsu.rocm_sdk_version'], 'null')
+
+    def test_same_policy_disjoint_targets_can_be_prepared_without_hash_checks(self):
+        first, second = raw(), raw()
+        second['benchmark_results'][0]['target'] = 'gfx1250'
+        # Obsolete producer fields are neither required nor checked/published.
+        first['provenance']['rocjitsu']['target_config_sha256'] = {'gfx950': 'unused'}
+        second['provenance']['rocjitsu']['target_config_sha256'] = None
+        self.assert_ok(self.invoke([first, second]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        self.assertEqual(len(run['configurations']), 2)
+        self.assertFalse(
+            any('target_config_sha256' in item['key'] for item in run['environment'])
+        )
+
+    def test_missing_row_policy_or_operation_is_not_inferred_from_summary(self):
+        for field in ('thread_policy', 'operation'):
+            with self.subTest(field=field):
+                value = raw()
+                value['execution_summary']['threading_mode'] = 'single'
+                del value['benchmark_results'][0][field]
+                result = self.invoke([value])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(field, result.stderr)
+                self.assertFalse(self.data.exists())
+
+    def test_definition_conflict_keeps_seeded_publication_unchanged(self):
+        self.assert_ok(self.invoke())
+        before = self.snapshot()
+        first, second = raw(), raw('default')
+        first['benchmark_results'][0]['problem'] = {'flag': False}
+        second['benchmark_results'][0]['problem'] = {'flag': 0}
+        first['benchmark_results'].extend(second['benchmark_results'])
+        result = self.invoke([first], run_id='attempt-2')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Conflicting workload definition', result.stderr)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_new_candidate_preserves_readable_schema_one_history(self):
+        legacy_catalog = {
+            'id': 'legacy-catalog',
+            'tests': [
+                {
+                    'id': 'historical-hash-id',
+                    'suite': 'smoke',
+                    'name': 'Legacy',
+                    'problem': {'size': 8},
+                }
+            ],
+            'targets': {'gfx950': ['historical-hash-id']},
+        }
+        legacy_run = {
+            'id': 'legacy-run',
+            'comparisonId': 'legacy-comparison',
+            'plugin': {'id': 'vanilla', 'name': 'Vanilla'},
+            'testCatalog': 'test-catalogs/legacy-catalog.json',
+            'source': {
+                'branch': 'develop',
+                'commit': SHA,
+                'committedAt': '2026-01-01T00:00:00Z',
+            },
+            'execution': {
+                'completedAt': '2026-01-01T01:01:00Z',
+                'trigger': 'auto',
+                'machine': 'worker-1',
+            },
+            'environment': [
+                {
+                    'key': 'default.rocjitsu.target_config_sha256',
+                    'label': 'Historical config hash',
+                    'value': 'c' * 64,
+                }
+            ],
+            'targets': [
+                {
+                    'id': 'gfx950',
+                    'results': [
+                        {
+                            'testId': 'historical-hash-id',
+                            'status': 'completed',
+                            'durationSeconds': 2,
+                            'error': None,
+                        }
+                    ],
+                }
+            ],
+        }
+        for path, value in (
+            ('runs/legacy-run.json', legacy_run),
+            ('test-catalogs/legacy-catalog.json', legacy_catalog),
+            (
+                'index.json',
+                {
+                    'generatedAt': '2026-01-01T02:00:00Z',
+                    'runFiles': ['runs/legacy-run.json'],
+                },
+            ),
+        ):
+            destination = self.data / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(json.dumps(value) + '\n')
+        history = self.snapshot()
+        self.assert_ok(self.invoke())
+        for path, content in history.items():
+            self.assertEqual((self.data / path).read_bytes(), content)
+        self.assert_ok(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(UPDATE),
+                    '--data-dir',
+                    str(self.data),
+                    '--run-path',
+                    'runs/default-branch/attempt-1.json',
+                ],
+                capture_output=True,
+                text=True,
+            )
+        )
+        processed = subprocess.run(
+            [
+                'node',
+                str(HERE.parents[1] / 'process-dashboard-data.mjs'),
+                str(self.data),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assert_ok(processed)
+        normalized = json.loads(processed.stdout)['data']['runs']
+        self.assertEqual(len(normalized), 2)
+        old = next(run for run in normalized if run['runId'] == 'legacy-run')
+        self.assertEqual(old['tests'][0]['logicalTestId'], 'historical-hash-id')
+        self.assertNotIn('timing_results_s', old['tests'][0])
+        for path in ('runs/legacy-run.json', 'test-catalogs/legacy-catalog.json'):
+            self.assertEqual((self.data / path).read_bytes(), history[path])
 
     def test_timing_samples_survive_publication_and_consumer_normalization(self):
         value = raw()
@@ -286,6 +538,12 @@ class PrepareTests(unittest.TestCase):
                 self.assertEqual(result.get('timing_results_s'), samples)
                 self.assertEqual(result['status'], status)
                 self.assertEqual(result['durationSeconds'], duration)
+            self.assertEqual(
+                normalized[f'Example {index}']['logicalTestId'], f'case-{index}'
+            )
+            self.assertEqual(
+                normalized[f'Example {index}']['operation'], 'Example computation'
+            )
 
     def test_uppercase_git_shas_are_published_in_lowercase(self):
         value = raw()
@@ -357,10 +615,10 @@ class PrepareTests(unittest.TestCase):
 
     def test_explicit_modes_share_definitions_with_asymmetric_membership(self):
         single, multi = raw(), raw('default')
-        single['execution_summary']['benchmark_suite'] = 'nightly-single'
-        multi['execution_summary']['benchmark_suite'] = 'nightly'
-        single['benchmark_results'][0]['id'] = 'example.single'
-        multi['benchmark_results'][0]['id'] = 'example.default'
+        single['execution_summary']['benchmark_suite'] = 'performance-v1'
+        multi['execution_summary']['benchmark_suite'] = 'performance-v1'
+        single['benchmark_results'][0]['id'] = 'example'
+        multi['benchmark_results'][0]['id'] = 'example'
         problem = {
             'nested': {'z': None, 'a': [1, False]},
             'nil': None,
@@ -371,7 +629,7 @@ class PrepareTests(unittest.TestCase):
         for value in (single, multi):
             value['benchmark_results'][0]['problem'] = copy.deepcopy(problem)
             value['provenance']['auxiliary'] = {'nested': {'b': 1, 'a': None}}
-        multi['provenance']['rocjitsu']['target_config_sha256']['gfx950'] = 'd' * 64
+
         failed = copy.deepcopy(single['benchmark_results'][0])
         failed.update(
             id='failure',
@@ -412,20 +670,13 @@ class PrepareTests(unittest.TestCase):
         )
         details = {entry['key']: entry['value'] for entry in run['environment']}
         self.assertEqual(details['machine.hostname'], 'worker')
-        self.assertEqual(
-            details['single.rocjitsu.target_config_sha256'],
-            '{"gfx950":"' + 'c' * 64 + '"}',
-        )
-        self.assertEqual(
-            details['default.rocjitsu.target_config_sha256'],
-            '{"gfx950":"' + 'd' * 64 + '"}',
-        )
+        self.assertFalse(any('target_config_sha256' in key for key in details))
         self.assertEqual(details['auxiliary.nested'], '{"a":null,"b":1}')
         self.assertFalse(
             any(
                 'timestamp' in key or 'wall_time' in key
                 for key in details
-                if key.startswith(('single.execution.', 'default.execution.'))
+                if key.startswith('execution.')
             )
         )
 
@@ -451,7 +702,7 @@ class PrepareTests(unittest.TestCase):
         self.assert_ok(self.invoke([revised], run_id='attempt-3'))
         changed = self.read('runs/default-branch/attempt-3.json')
         self.assertNotEqual(old['testCatalog'], changed['testCatalog'])
-        self.assertNotEqual(
+        self.assertEqual(
             old['configurations'][0]['results'][0]['testId'],
             changed['configurations'][0]['results'][0]['testId'],
         )
@@ -477,13 +728,12 @@ class PrepareTests(unittest.TestCase):
             (('execution_summary', 'samples'), 1.5),
             (('execution_summary', 'timeout_seconds'), 0),
             (('execution_summary', 'wall_time_s'), float('inf')),
-            (('execution_summary', 'threading_mode'), 'ST'),
+            (('benchmark_results', 0, 'thread_policy'), 'ST'),
+            (('benchmark_results', 0, 'operation'), ''),
             (('provenance', 'rocjitsu', 'rocjitsu_commit_sha'), None),
             (('provenance', 'rocjitsu', 'rocjitsu_commit_sha'), 'd' * 40),
             (('provenance', 'rocjitsu', 'rocjitsu_commit_timestamp'), None),
             (('provenance', 'rocjitsu', 'rocm_sdk_version'), ''),
-            (('provenance', 'rocjitsu', 'target_config_sha256'), {}),
-            (('provenance', 'rocjitsu', 'target_config_sha256'), {'gfx950': 'oops'}),
             (('provenance', 'corpus', 'corpus_commit_sha'), 'd' * 40),
             (('provenance', 'corpus', 'corpus_commit_timestamp'), None),
             (('provenance', 'machine', 'hostname'), ''),
@@ -528,6 +778,7 @@ class PrepareTests(unittest.TestCase):
             (('execution_summary', 'samples'), 4),
             (('execution_summary', 'warmups'), 2),
             (('execution_summary', 'timeout_seconds'), 120),
+            (('execution_summary', 'benchmark_suite'), 'different-suite'),
         ]
         for keys, value in changes:
             with self.subTest(keys=keys):
@@ -815,9 +1066,9 @@ class PrepareTests(unittest.TestCase):
 
         value = raw()
         other = copy.deepcopy(value['benchmark_results'][0])
-        other.update(id='case-for-other-target', target='gfx1250')
+        other.update(target='gfx1250')
         value['benchmark_results'].append(other)
-        value['provenance']['rocjitsu']['target_config_sha256']['gfx1250'] = 'e' * 64
+
         self.assert_ok(
             self.invoke(
                 [value], extra=('--branch', 'feature/example', '--trigger', 'manual')
@@ -844,9 +1095,7 @@ class PrepareTests(unittest.TestCase):
         variant = copy.deepcopy(value['benchmark_results'][0])
         variant.update(id='variant-case', target='gfx950-variant')
         value['benchmark_results'].append(variant)
-        value['provenance']['rocjitsu']['target_config_sha256']['gfx950-variant'] = (
-            'd' * 64
-        )
+
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
         # Existing runs order configurations by the combined target:mode key.
@@ -873,13 +1122,13 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(first['environment'], second['environment'])
         self.assertNotEqual(first['source']['commit'], second['source']['commit'])
 
-    def test_same_mode_inputs_cannot_silently_overwrite_provenance(self):
+    def test_same_policy_inputs_cannot_silently_overwrite_provenance(self):
         first, second = raw(), raw()
         second['benchmark_results'][0]['target'] = 'gfx1250'
-        second['provenance']['rocjitsu']['target_config_sha256'] = {'gfx1250': 'd' * 64}
+        second['provenance']['machine']['cpu'] = 'Different CPU'
         result = self.invoke([first, second])
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Duplicate threading_mode', result.stderr)
+        self.assertIn('Inconsistent machine provenance', result.stderr)
         self.assertFalse(self.data.exists())
 
     def test_immutable_comparison_distinguishes_booleans_from_numbers(self):
@@ -914,11 +1163,10 @@ def test_export_prepared_data_for_workflow(tmp_path):
                 timing_results_s=[],
             )
             value['benchmark_results'].append(result)
-    inputs = []
-    for name, value in (('single', single), ('multi', multi)):
-        file = tmp_path / f'{name}.json'
-        file.write_text(json.dumps(value))
-        inputs.extend(['--raw-run', str(file)])
+    single['benchmark_results'].extend(multi['benchmark_results'])
+    file = tmp_path / 'run.json'
+    file.write_text(json.dumps(single))
+    inputs = ['--raw-run', str(file)]
     destination = tmp_path / 'prepared'
     for branch, run_id in (
         ('develop', 'develop-fixture'),

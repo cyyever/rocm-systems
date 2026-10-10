@@ -11,7 +11,7 @@ Accepted timing_results_s samples are preserved in their original order.
 Completed results use the median of these samples. Failed
 and timed-out results always have null duration, even with partial samples:
 partial work is not a completed-workload measurement. No completion is invented.
-Logical workload IDs hash suite/name/raw problem, never target, mode or case ID.
+Workload IDs are preserved directly from the corpus across targets and policies.
 Full wire-schema validation is a separate workflow step before publication.
 """
 
@@ -61,7 +61,6 @@ def scalar(value):
 def environment(inputs):
     details = {}
     for raw in inputs:
-        mode = raw['execution_summary']['threading_mode']
         for section, values in raw['provenance'].items():
             for key, value in values.items():
                 # Source revision/time already live in source, not environment
@@ -71,20 +70,16 @@ def environment(inputs):
                     'rocjitsu_commit_timestamp',
                 ):
                     continue
-                prefix = (
-                    mode + '.'
-                    if section == 'rocjitsu' and key == 'target_config_sha256'
-                    else ''
-                )
-                details[f'{prefix}{section}.{key}'] = scalar(value)
+                if section == 'rocjitsu' and key == 'target_config_sha256':
+                    continue
+                details[f'{section}.{key}'] = scalar(value)
         for key in (
             'warmups',
             'samples',
             'timeout_seconds',
             'benchmark_suite',
-            'threading_mode',
         ):
-            details[f'{mode}.execution.{key}'] = raw['execution_summary'][key]
+            details[f'execution.{key}'] = raw['execution_summary'][key]
     return [
         {'key': key, 'label': key, 'value': value}
         for key, value in sorted(details.items())
@@ -138,9 +133,7 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
         'wall_time_s must be nonnegative and finite',
     )
     require(text(summary['benchmark_suite']), 'benchmark_suite must be nonempty text')
-    require(
-        summary['threading_mode'] in ('single', 'default'), 'Invalid threading_mode'
-    )
+
     require(
         summary['finished_at'] is not None, 'Missing finished_at: incomplete raw run'
     )
@@ -181,20 +174,9 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
         require(committed <= start, f'{prefix} commit is later than execution start')
     rocjitsu = provenance['rocjitsu']
     require(
-        text(rocjitsu['rocm_sdk_version']), 'rocm_sdk_version must be nonempty text'
+        rocjitsu['rocm_sdk_version'] is None or text(rocjitsu['rocm_sdk_version']),
+        'rocm_sdk_version must be nonempty text or null',
     )
-    hashes = rocjitsu['target_config_sha256']
-    require(
-        isinstance(hashes, dict) and hashes,
-        'target_config_sha256 must be a nonempty object',
-    )
-    for target, sha in hashes.items():
-        require(
-            re.fullmatch(r'[A-Za-z0-9._-]+', target)
-            and isinstance(sha, str)
-            and re.fullmatch(r'[a-fA-F0-9]{64}', sha),
-            f'Invalid target_config_sha256 for {target}',
-        )
     results = raw['benchmark_results']
     require(
         isinstance(results, list) and results,
@@ -202,11 +184,14 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
     )
     for result in results:
         require(isinstance(result, dict), 'Benchmark result must be an object')
-        for key in ('id', 'name', 'suite', 'target'):
+        for key in ('id', 'name', 'suite', 'target', 'operation'):
             require(text(result[key]), f'Result {key} must be nonempty text')
         require(
-            result['target'] in hashes,
-            f'Missing target config hash for {result["target"]}',
+            re.fullmatch(r'[A-Za-z0-9._-]+', result['target']),
+            f'Invalid target: {result["target"]}',
+        )
+        require(
+            result['thread_policy'] in ('single', 'default'), 'Invalid thread_policy'
         )
         require(isinstance(result['problem'], dict), 'problem must be an object')
         require(
@@ -241,11 +226,6 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
 
 
 def validate_consistency(inputs):
-    modes = [raw['execution_summary']['threading_mode'] for raw in inputs]
-    require(
-        len(set(modes)) == len(modes),
-        'Duplicate threading_mode: supply one raw run per mode',
-    )
     reference = inputs[0]
     for raw in inputs[1:]:
         for section in ('machine', 'corpus', 'auxiliary', 'rocjitsu'):
@@ -257,7 +237,7 @@ def validate_consistency(inputs):
                 canonical(left) == canonical(right),
                 f'Inconsistent {section} provenance across raw runs',
             )
-        for key in ('warmups', 'samples', 'timeout_seconds'):
+        for key in ('warmups', 'samples', 'timeout_seconds', 'benchmark_suite'):
             require(
                 reference['execution_summary'][key] == raw['execution_summary'][key],
                 f'Inconsistent {key} across raw runs',
@@ -277,15 +257,23 @@ def normalize_runs(
 ):
     """Build one run and its catalog, independent of file I/O or CLI parsing."""
     tests = {}
+    definitions = {}
     groups = {}
     for raw in raw_runs:
-        mode = {'single': 'ST', 'default': 'MT'}[
-            raw['execution_summary']['threading_mode']
-        ]
         for result in raw['benchmark_results']:
-            # Identity uses raw values, before converting nested values to strings.
-            definition = {key: result[key] for key in ('suite', 'name', 'problem')}
-            test_id = 'test-' + digest(definition)
+            mode = {'single': 'ST', 'default': 'MT'}[result['thread_policy']]
+            # Corpus owns workload identity. Preserve it through future schema
+            # changes; never hash definitions or strip policy/target suffixes.
+            test_id = result['id']
+            definition = {
+                key: result[key] for key in ('suite', 'name', 'operation', 'problem')
+            }
+            encoded = canonical(definition)
+            require(
+                test_id not in definitions or definitions[test_id] == encoded,
+                f'Conflicting workload definition: {test_id}',
+            )
+            definitions[test_id] = encoded
             tests[test_id] = {
                 'id': test_id,
                 **definition,
@@ -296,7 +284,7 @@ def normalize_runs(
             results = groups.setdefault((result['target'], mode), {})
             require(
                 test_id not in results,
-                f'Duplicate logical result in {result["target"]}:{mode}: {test_id}',
+                f'Duplicate result identity: ({test_id}, {result["target"]}, {result["thread_policy"]})',
             )
             results[test_id] = {
                 'testId': test_id,
@@ -433,7 +421,7 @@ def prepare(
     pull_request_number=None,
     pull_request_url=None,
 ):
-    """Load raw ST/MT runs and write one built run. Does not write index or metadata."""
+    """Load consolidated raw runs and write one run, not index or metadata."""
     require(
         re.fullmatch(r'[A-Za-z0-9._-]+', run_id) and run_id not in ('.', '..'),
         '--run-id must be a safe filename token',
