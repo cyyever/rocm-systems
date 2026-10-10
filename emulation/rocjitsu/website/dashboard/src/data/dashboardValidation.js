@@ -62,6 +62,7 @@ function validateCatalog(catalog, file) {
   }
   const ids = catalog.tests.map((test) => test?.id);
   if (new Set(ids).size !== ids.length || catalog.tests.some((test) => !hasText(test?.id) || !hasText(test.suite) || !hasText(test.name)
+    || Object.hasOwn(test, 'operation') && !hasText(test.operation)
     || !object(test.problem) || Object.entries(test.problem).some(([key, value]) => !hasText(key) || !scalar(value)))) {
     throw new Error(`Test catalog ${file} contains an invalid or duplicate test definition`);
   }
@@ -229,8 +230,11 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
   }
   for (const [file, catalog] of normalizedCatalogs) for (const definition of catalog.tests) {
     const previous = definitions.get(definition.id);
-    if (previous && definitionIdentity(previous) !== definitionIdentity(definition)) throw new Error(`Test ${definition.id} is defined differently in ${file}; publish a new test ID`);
-    definitions.set(definition.id, definition);
+    if (previous && (definitionIdentity(previous) !== definitionIdentity(definition)
+      || previous.operation !== undefined && definition.operation !== undefined && previous.operation !== definition.operation)) throw new Error(`Test ${definition.id} is defined differently in ${file}; publish a new test ID`);
+    // Historical catalogs may lack operation. Preserve richer catalog metadata without
+    // rewriting old run results or mapping corpus-owned workload identities.
+    definitions.set(definition.id, { ...previous, ...definition });
   }
   const sourceData = { index, catalogs: Object.fromEntries(sourceCatalogs), runs };
   const data = buildDashboardData({ repository: siteConfig.repository, isBeta: siteConfig.isBeta, canonicalBranch: siteConfig.canonicalBranch, schemaVersion: CURRENT_SCHEMA_VERSION, generatedAt: index.generatedAt, testCatalog: [...definitions.values()], catalogs: Object.fromEntries(normalizedCatalogs), runs: normalizedRuns });

@@ -41,7 +41,7 @@ data/
 {
   "id": "example",
   "tests": [
-    { "id": "gemm", "suite": "Example", "name": "GEMM", "problem": { "size": 16 } }
+    { "id": "gemm", "suite": "Example", "name": "GEMM", "operation": "Matrix multiplication", "problem": { "size": 16 } }
   ],
   "configurations": {
     "gfx950:ST": ["gemm"],
@@ -90,6 +90,21 @@ data/
 ```
 
 ## Result rules
+
+Catalog IDs and result `testId` values preserve the corpus-owned workload ID literally
+across targets and policies: no definition hashes, suffix stripping, or historical ID
+mapping. Distinct IDs remain distinct even when their definitions are identical.
+`operation` describes the overall computation (including composite operations), not
+identity. New prepared catalogs include it; historical catalogs may omit it. If
+present, it must be nonempty text and must agree across definitions of the same ID.
+Normalization retains it as workload metadata without adding a filter or UI field.
+
+The raw producer emits one `run.json` with per-result `target` and `thread_policy`.
+Preparation maps `single` to ST and `default` to MT independently for each target.
+MT is the existing label for automatic/default policy, not proof of multiple workers.
+Only selected, supported combinations are published; no missing combinations are
+invented. Target configuration hashes are neither required nor emitted; catalog
+content addressing and immutable publication checks remain unchanged.
 
 ```js
 // completed: positive finite samples; duration is their median; error must be null

@@ -71,10 +71,10 @@ Unindexed files are not scanned. Compatibility, exclusions, and raw-export behav
 
 ## Preparing and publishing measurements
 
-The benchmark workflow runs on relevant develop pushes or manual dispatch; its “nightly” name is not a scheduled trigger. Before a side-branch benchmark starts, a lightweight job snapshots `develop` and records the dispatched commit's merge-base with that immutable revision. The optional `pull_request_number` input also records an open same-repository PR when its head branch and SHA match the selected workflow branch; without that input, the run keeps its base but has no PR metadata. Develop runs reject the PR input and omit both fields.
+The benchmark workflow runs on relevant develop pushes or manual dispatch, not a scheduled trigger. It invokes the pinned corpus `performance-v1.toml` manifest once with `--thread-policy default,single` and both target configs. The runner selects supported combinations and checkpoints one consolidated `run.json`, alongside per-target/policy diagnostics. Before a side-branch benchmark starts, a lightweight job snapshots `develop` and records the dispatched commit's merge-base with that immutable revision. The optional `pull_request_number` input also records an open same-repository PR when its head branch and SHA match the selected workflow branch; without that input, the run keeps its base but has no PR metadata. Develop runs reject the PR input and omit both fields.
 
 ```text
-Run ST and MT benchmarks
+Run supported target/policy combinations in one corpus invocation
   → upload raw result directories as a GitHub Actions artifact
   → publish job downloads that artifact
   → checkout gh-pages-rocjitsu and the source dashboard scripts
@@ -85,7 +85,7 @@ Run ST and MT benchmarks
   → Git commit + push
 ```
 
-- **Prepare:** validate raw ST/MT results and provenance, lowercase commit SHAs, calculate median completed timings, and generate one schema-2 run plus its content-addressed catalog in an isolated build directory.
+- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one schema-2 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. `single` maps to ST and `default` to the existing MT label (automatic policy, not guaranteed multithreading). Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
 - **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
 - **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
 - **Publish:** validate the complete dataset, stage only the index, run, and catalog, then commit and push once when the staged diff is nonempty.

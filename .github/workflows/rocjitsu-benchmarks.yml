@@ -22,11 +22,9 @@ defaults:
     shell: bash
 
 env:
-  CORPUS_SHA: 35dbe6a09df85c73c9bb010dc645e499c58c7eb1
+  CORPUS_SHA: 8a5e006cc1c205c057dc4c367741c6aff2ba8cd1
   ROCJITSU_SOURCE_DIR: ${{ github.workspace }}/rocm-systems/emulation/rocjitsu
   CORPUS_SOURCE_DIR: ${{ github.workspace }}/rocjitsu-test-corpus
-  SINGLE_THREAD_MODE: "single"
-  MULTI_THREAD_MODE: "default"
   RESULTS_BRANCH: gh-pages-rocjitsu
   RESULTS_ARTIFACT: rocjitsu-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
   RESULTS_DOWNLOAD_DIR: ${{ github.workspace }}/benchmark-results
@@ -108,7 +106,7 @@ jobs:
             "${REQUESTED_PULL_REQUEST}" "${PR_URL}" >> "${GITHUB_OUTPUT}"
 
   benchmark:
-    name: Run nightly benchmark
+    name: Run performance benchmark
     needs: source-metadata
     runs-on: rocjitsu-benchmark
     timeout-minutes: 210
@@ -214,28 +212,21 @@ jobs:
           cmake --build "${ROCJITSU_BUILD_DIR}" \
             --target rocjitsu_bin rocjitsu_shared
 
-      - name: Run nightly suite
+      - name: Run performance suite
         timeout-minutes: 60
         id: benchmark
         working-directory: ${{ env.CORPUS_SOURCE_DIR }}
         run: |
-          STATUS=0
-          for MODE in "${SINGLE_THREAD_MODE}" "${MULTI_THREAD_MODE}"; do
-            MANIFEST=benchmarks/suites/nightly.toml
-            if [[ "${MODE}" == "${SINGLE_THREAD_MODE}" ]]; then
-              MANIFEST=benchmarks/suites/nightly-single.toml
-            fi
-            # A failed workload must not prevent the other mode from running.
-            "${ROCJITSU_VENV}/bin/python" -m benchmarks.runner \
-              --rocjitsu-source-dir "${ROCJITSU_SOURCE_DIR}" \
-              --build-dir "${ROCJITSU_BUILD_DIR}" \
-              --target-config "gfx950=${ROCJITSU_SOURCE_DIR}/configs/gfx950_mi355x_kmd.json" \
-              --target-config "gfx1250=${ROCJITSU_SOURCE_DIR}/configs/gfx1250_mi455x.json" \
-              --run-wrapper "\"${ROCJITSU_BUILD_DIR}/tools/rocjitsu/rocjitsu\" --config {config} --" \
-              --manifest "${MANIFEST}" \
-              --output "${ROCJITSU_RESULT_DIR}/${MODE}" || STATUS=1
-          done
-          exit "${STATUS}"
+          # The runner checkpoints all selected target/policy groups in one raw file.
+          "${ROCJITSU_VENV}/bin/python" -m benchmarks.runner \
+            --rocjitsu-source-dir "${ROCJITSU_SOURCE_DIR}" \
+            --build-dir "${ROCJITSU_BUILD_DIR}" \
+            --target-config "gfx950=${ROCJITSU_SOURCE_DIR}/configs/gfx950_mi355x_kmd.json" \
+            --target-config "gfx1250=${ROCJITSU_SOURCE_DIR}/configs/gfx1250_mi455x.json" \
+            --run-wrapper "\"${ROCJITSU_BUILD_DIR}/tools/rocjitsu/rocjitsu\" --config {config} --" \
+            --manifest benchmarks/suites/performance-v1.toml \
+            --thread-policy default,single \
+            --output "${ROCJITSU_RESULT_DIR}"
 
       - name: Upload benchmark diagnostics
         if: always()
@@ -317,8 +308,7 @@ jobs:
           DATA_DIR="${GITHUB_WORKSPACE}/publication/rocjitsu-dashboard/data"
           SCRIPTS_DIR="${GITHUB_WORKSPACE}/dashboard/emulation/rocjitsu/website/dashboard/scripts"
           PREPARE_ARGS=(
-            --raw-run "${RESULTS_DOWNLOAD_DIR}/${SINGLE_THREAD_MODE}/run.json"
-            --raw-run "${RESULTS_DOWNLOAD_DIR}/${MULTI_THREAD_MODE}/run.json"
+            --raw-run "${RESULTS_DOWNLOAD_DIR}/run.json"
             --data-dir "${BUILD_DIR}"
             --run-id "${RUN_ID}"
             --expected-sha "${BENCHMARK_SHA}"
