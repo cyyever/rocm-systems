@@ -11,16 +11,13 @@ from pathlib import Path
 import re
 import tempfile
 
-NEW_RUN_PATH = re.compile(
+RUN_PATH = re.compile(
     r'runs/(?:default-branch|side-branches)/(?P<name>[A-Za-z0-9._-]+)\.json'
 )
-EXISTING_RUN_PATH = re.compile(
-    r'runs/(?:(?:default-branch|side-branches)/)?(?P<name>[A-Za-z0-9._-]+)\.json'
-)
 
 
-def safe_run_path(path, pattern):
-    match = pattern.fullmatch(path)
+def safe_run_path(path):
+    match = RUN_PATH.fullmatch(path)
     return match is not None and match.group('name') not in ('.', '..')
 
 
@@ -52,8 +49,7 @@ def validate_index(index):
         raise ValueError('Invalid index timestamp') from error
     run_files = index['runFiles']
     if not isinstance(run_files, list) or not all(
-        isinstance(path, str) and safe_run_path(path, EXISTING_RUN_PATH)
-        for path in run_files
+        isinstance(path, str) and safe_run_path(path) for path in run_files
     ):
         raise ValueError('Invalid indexed run path')
     if len(run_files) != len(set(run_files)):
@@ -84,7 +80,7 @@ def reject_symlink_ancestors(path):
 
 
 def update_index(data_dir, run_path):
-    if not safe_run_path(run_path, NEW_RUN_PATH):
+    if not safe_run_path(run_path):
         raise ValueError('Invalid new run path')
     root = Path(os.path.abspath(data_dir))
     reject_symlink_ancestors(root)

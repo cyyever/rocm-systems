@@ -20,7 +20,7 @@ SHA = 'a' * 40
 CORPUS = 'b' * 40
 
 
-def raw(mode='single'):
+def raw(policy='single'):
     return {
         'execution_summary': {
             'warmups': 1,
@@ -38,7 +38,7 @@ def raw(mode='single'):
                 'target': 'gfx950',
                 'suite': 'smoke',
                 'operation': 'Example computation',
-                'thread_policy': mode,
+                'thread_policy': policy,
                 'problem': {'size': 8},
                 'status': 'completed',
                 'exit_code': 0,
@@ -203,18 +203,24 @@ class PrepareTests(unittest.TestCase):
         self.assertTrue((self.data / 'runs/default-branch/attempt-1.json').is_file())
         self.assertFalse((self.data / 'index.json').exists())
 
-    def test_produces_schema_two_consumable_median_results(self):
+    def test_produces_schema_one_median_results(self):
         self.assert_ok(self.invoke())
         self.assertFalse((self.data / 'metadata.json').exists())
         run = self.read('runs/default-branch/attempt-1.json')
         self.assertIs(type(run['schemaVersion']), int)
-        self.assertEqual(run['schemaVersion'], 2)
+        self.assertEqual(run['schemaVersion'], 1)
         self.assertFalse((self.data / 'index.json').exists())
         self.assertNotIn('schemaVersion', self.read(run['testCatalog']))
         self.assertEqual(run['source']['commit'], SHA)
         self.assertEqual(run['execution']['completedAt'], '2026-01-01T01:01:00Z')
         config = run['configurations'][0]
-        self.assertEqual(config['threadingMode'], 'ST')
+        self.assertEqual(config['thread_policy'], 'single')
+        self.assertNotIn('threadingMode', config)
+        self.assertEqual(config['results'][0]['thread_policy'], 'single')
+        self.assertEqual(
+            self.read(run['testCatalog'])['configurations'],
+            {'gfx950/single': ['case-1']},
+        )
         self.assertEqual(config['results'][0]['durationSeconds'], 2)
         self.assertEqual(config['results'][0]['error'], None)
         self.assertEqual(config['results'][0]['testId'], 'case-1')
@@ -265,19 +271,20 @@ class PrepareTests(unittest.TestCase):
             catalog['tests'][0]['operation'],
             'Matrix multiplication followed by reduction',
         )
-        configs = {(c['target'], c['threadingMode']): c for c in run['configurations']}
+        configs = {(c['target'], c['thread_policy']): c for c in run['configurations']}
         self.assertEqual(
-            set(configs), {('gfx950', 'MT'), ('gfx950', 'ST'), ('gfx1250', 'MT')}
+            set(configs),
+            {('gfx950', 'default'), ('gfx950', 'single'), ('gfx1250', 'default')},
         )
         for result in value['benchmark_results']:
-            mode = 'ST' if result['thread_policy'] == 'single' else 'MT'
-            prepared = configs[result['target'], mode]['results'][0]
+            prepared = configs[result['target'], result['thread_policy']]['results'][0]
+            self.assertEqual(prepared['thread_policy'], result['thread_policy'])
             self.assertEqual(prepared['testId'], result['id'])
             self.assertEqual(prepared['timing_results_s'], result['timing_results_s'])
             self.assertEqual(prepared['status'], result['status'])
             self.assertEqual(
                 prepared['durationSeconds'],
-                2 if mode == 'MT' and result['target'] == 'gfx950' else None,
+                2 if result['status'] == 'completed' else None,
             )
         details = {entry['key']: entry['value'] for entry in run['environment']}
         self.assertEqual(details['execution.benchmark_suite'], 'performance-v1')
@@ -300,6 +307,91 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(
             [test['id'] for test in self.read(run['testCatalog'])['tests']],
             ['case-1', 'case-2'],
+        )
+
+    def test_raw_target_and_policy_strings_are_preserved_without_token_grammar(self):
+        value = raw()
+        value['benchmark_results'] = []
+        pairs = [
+            ('gfx950', 'default'),
+            ('gfx950', 'single'),
+            ('gfx950', 'Adaptive / workers?x=1&y=2'),
+            ('Target / variant?x=1', ' single '),
+        ]
+        for target, policy in pairs:
+            result = copy.deepcopy(raw()['benchmark_results'][0])
+            result.update(target=target, thread_policy=policy)
+            value['benchmark_results'].append(result)
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        self.assertEqual(
+            [
+                (config['target'], config['thread_policy'])
+                for config in run['configurations']
+            ],
+            sorted(pairs),
+        )
+        self.assertEqual(
+            self.read(run['testCatalog'])['configurations'],
+            {f'{target}/{policy}': ['case-1'] for target, policy in pairs},
+        )
+        for config in run['configurations']:
+            self.assertEqual(
+                config['results'][0]['thread_policy'], config['thread_policy']
+            )
+        before = self.snapshot()
+        value['benchmark_results'].reverse()
+        self.assert_ok(self.invoke([value]))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_mixed_policies_survive_consumer_normalization_for_same_workload(self):
+        policies = ['single', 'default', 'Adaptive / workers?x=1&y=2']
+        value = raw()
+        value['benchmark_results'] = [
+            raw(policy)['benchmark_results'][0] for policy in policies
+        ]
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        self.assertEqual(
+            {config['thread_policy'] for config in run['configurations']}, set(policies)
+        )
+        for config in run['configurations']:
+            self.assertEqual(config['target'], 'gfx950')
+            self.assertEqual(config['results'][0]['testId'], 'case-1')
+            self.assertEqual(
+                config['results'][0]['thread_policy'], config['thread_policy']
+            )
+        self.assert_ok(
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(UPDATE),
+                    '--data-dir',
+                    str(self.data),
+                    '--run-path',
+                    'runs/default-branch/attempt-1.json',
+                ],
+                capture_output=True,
+                text=True,
+            )
+        )
+        processed = subprocess.run(
+            [
+                'node',
+                str(HERE.parents[1] / 'process-dashboard-data.mjs'),
+                str(self.data),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assert_ok(processed)
+        normalized = json.loads(processed.stdout)['data']['runs'][0]['tests']
+        self.assertEqual(
+            {
+                (test['logicalTestId'], test['target'], test['thread_policy'])
+                for test in normalized
+            },
+            {('case-1', 'gfx950', policy) for policy in policies},
         )
 
     def test_conflicting_workload_definitions_reject_before_writes(self):
@@ -382,105 +474,6 @@ class PrepareTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Conflicting workload definition', result.stderr)
         self.assertEqual(self.snapshot(), before)
-
-    def test_new_candidate_preserves_readable_schema_one_history(self):
-        legacy_catalog = {
-            'id': 'legacy-catalog',
-            'tests': [
-                {
-                    'id': 'historical-hash-id',
-                    'suite': 'smoke',
-                    'name': 'Legacy',
-                    'problem': {'size': 8},
-                }
-            ],
-            'targets': {'gfx950': ['historical-hash-id']},
-        }
-        legacy_run = {
-            'id': 'legacy-run',
-            'comparisonId': 'legacy-comparison',
-            'plugin': {'id': 'vanilla', 'name': 'Vanilla'},
-            'testCatalog': 'test-catalogs/legacy-catalog.json',
-            'source': {
-                'branch': 'develop',
-                'commit': SHA,
-                'committedAt': '2026-01-01T00:00:00Z',
-            },
-            'execution': {
-                'completedAt': '2026-01-01T01:01:00Z',
-                'trigger': 'auto',
-                'machine': 'worker-1',
-            },
-            'environment': [
-                {
-                    'key': 'default.rocjitsu.target_config_sha256',
-                    'label': 'Historical config hash',
-                    'value': 'c' * 64,
-                }
-            ],
-            'targets': [
-                {
-                    'id': 'gfx950',
-                    'results': [
-                        {
-                            'testId': 'historical-hash-id',
-                            'status': 'completed',
-                            'durationSeconds': 2,
-                            'error': None,
-                        }
-                    ],
-                }
-            ],
-        }
-        for path, value in (
-            ('runs/legacy-run.json', legacy_run),
-            ('test-catalogs/legacy-catalog.json', legacy_catalog),
-            (
-                'index.json',
-                {
-                    'generatedAt': '2026-01-01T02:00:00Z',
-                    'runFiles': ['runs/legacy-run.json'],
-                },
-            ),
-        ):
-            destination = self.data / path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(json.dumps(value) + '\n')
-        history = self.snapshot()
-        self.assert_ok(self.invoke())
-        for path, content in history.items():
-            self.assertEqual((self.data / path).read_bytes(), content)
-        self.assert_ok(
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(UPDATE),
-                    '--data-dir',
-                    str(self.data),
-                    '--run-path',
-                    'runs/default-branch/attempt-1.json',
-                ],
-                capture_output=True,
-                text=True,
-            )
-        )
-        processed = subprocess.run(
-            [
-                'node',
-                str(HERE.parents[1] / 'process-dashboard-data.mjs'),
-                str(self.data),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assert_ok(processed)
-        normalized = json.loads(processed.stdout)['data']['runs']
-        self.assertEqual(len(normalized), 2)
-        old = next(run for run in normalized if run['runId'] == 'legacy-run')
-        self.assertEqual(old['tests'][0]['logicalTestId'], 'historical-hash-id')
-        self.assertNotIn('timing_results_s', old['tests'][0])
-        for path in ('runs/legacy-run.json', 'test-catalogs/legacy-catalog.json'):
-            self.assertEqual((self.data / path).read_bytes(), history[path])
 
     def test_timing_samples_survive_publication_and_consumer_normalization(self):
         value = raw()
@@ -613,7 +606,7 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(result['durationSeconds'], 2)
         self.assertIsNone(result['error'])
 
-    def test_explicit_modes_share_definitions_with_asymmetric_membership(self):
+    def test_explicit_policies_share_definitions_with_asymmetric_membership(self):
         single, multi = raw(), raw('default')
         single['execution_summary']['benchmark_suite'] = 'performance-v1'
         multi['execution_summary']['benchmark_suite'] = 'performance-v1'
@@ -646,17 +639,19 @@ class PrepareTests(unittest.TestCase):
         single['benchmark_results'].extend([failed, timeout])
         self.assert_ok(self.invoke([single, multi]))
         run = self.read('runs/default-branch/attempt-1.json')
-        configs = {c['threadingMode']: c for c in run['configurations']}
-        st_success = next(
-            r for r in configs['ST']['results'] if r['status'] == 'completed'
+        configs = {c['thread_policy']: c for c in run['configurations']}
+        single_success = next(
+            r for r in configs['single']['results'] if r['status'] == 'completed'
         )
-        self.assertEqual(st_success['testId'], configs['MT']['results'][0]['testId'])
-        for result in configs['ST']['results']:
+        self.assertEqual(
+            single_success['testId'], configs['default']['results'][0]['testId']
+        )
+        for result in configs['single']['results']:
             if result['status'] != 'completed':
                 self.assertIsNone(result['durationSeconds'])
         catalog = self.read(run['testCatalog'])
         definition = next(
-            t for t in catalog['tests'] if t['id'] == st_success['testId']
+            t for t in catalog['tests'] if t['id'] == single_success['testId']
         )
         self.assertEqual(
             definition['problem'],
@@ -728,7 +723,9 @@ class PrepareTests(unittest.TestCase):
             (('execution_summary', 'samples'), 1.5),
             (('execution_summary', 'timeout_seconds'), 0),
             (('execution_summary', 'wall_time_s'), float('inf')),
-            (('benchmark_results', 0, 'thread_policy'), 'ST'),
+            (('benchmark_results', 0, 'thread_policy'), ''),
+            (('benchmark_results', 0, 'thread_policy'), None),
+            (('benchmark_results', 0, 'thread_policy'), []),
             (('benchmark_results', 0, 'operation'), ''),
             (('provenance', 'rocjitsu', 'rocjitsu_commit_sha'), None),
             (('provenance', 'rocjitsu', 'rocjitsu_commit_sha'), 'd' * 40),
@@ -747,7 +744,7 @@ class PrepareTests(unittest.TestCase):
             (('benchmark_results', 0, 'error'), 'completed with error'),
             (('benchmark_results', 0, 'problem'), []),
             (('benchmark_results', 0, 'name'), ''),
-            (('benchmark_results', 0, 'target'), '../escape'),
+            (('benchmark_results', 0, 'target'), ''),
         ]
         for keys, value in cases:
             with self.subTest(keys=keys, value=value):
@@ -1090,7 +1087,7 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(catalog_id, 'catalog-' + hashlib.sha256(encoded).hexdigest())
         self.assertEqual(run['execution']['machine'], 'worker-1')
 
-    def test_retry_preserves_existing_configuration_order_for_prefix_targets(self):
+    def test_retry_preserves_configuration_order_for_prefix_targets(self):
         value = raw()
         variant = copy.deepcopy(value['benchmark_results'][0])
         variant.update(id='variant-case', target='gfx950-variant')
@@ -1098,12 +1095,12 @@ class PrepareTests(unittest.TestCase):
 
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        # Existing runs order configurations by the combined target:mode key.
-        run['configurations'].sort(
-            key=lambda item: item['target'] + ':' + item['threadingMode']
+        self.assertEqual(
+            [config['target'] for config in run['configurations']],
+            ['gfx950', 'gfx950-variant'],
         )
-        (self.data / 'runs/default-branch/attempt-1.json').write_text(json.dumps(run))
         before = self.snapshot()
+        value['benchmark_results'].reverse()
         self.assert_ok(self.invoke([value]))
         self.assertEqual(self.snapshot(), before)
 

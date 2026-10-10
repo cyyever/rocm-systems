@@ -50,7 +50,7 @@ def test_append_preserves_existing_history(tmp_path):
     original = {
         'generatedAt': '2026-01-01T02:00:00Z',
         'runFiles': [
-            'runs/legacy.json',
+            'runs/default-branch/old.json',
             'runs/side-branches/old.json',
         ],
     }
@@ -62,7 +62,7 @@ def test_append_preserves_existing_history(tmp_path):
     index = json.loads((data_dir / 'index.json').read_text())
     assert index['generatedAt'] != original['generatedAt']
     assert index['runFiles'] == [
-        'runs/legacy.json',
+        'runs/default-branch/old.json',
         'runs/side-branches/old.json',
         'runs/default-branch/new.json',
     ]
@@ -92,7 +92,10 @@ def test_duplicate_index_run_path_is_rejected_without_rewrite(tmp_path):
     original = json.dumps(
         {
             'generatedAt': '2026-01-01T02:00:00Z',
-            'runFiles': ['runs/legacy.json', 'runs/legacy.json'],
+            'runFiles': [
+                'runs/default-branch/old.json',
+                'runs/default-branch/old.json',
+            ],
         }
     ).encode()
     path.write_bytes(original)
@@ -176,6 +179,7 @@ def test_symlinked_data_dir_or_index_is_rejected(tmp_path, target):
         {'generatedAt': '2026-01-01T02:00:00Z', 'runFiles': 'runs/old.json'},
         {'generatedAt': '2026-01-01T02:00:00Z', 'runFiles': [1]},
         {'generatedAt': '2026-01-01T02:00:00Z', 'runFiles': ['other/old.json']},
+        {'generatedAt': '2026-01-01T02:00:00Z', 'runFiles': ['runs/old.json']},
         {'generatedAt': '2026-01-01T02:00:00Z', 'runFiles': ['runs/...json']},
         {
             'generatedAt': '2026-01-01T02:00:00Z',

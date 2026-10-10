@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-"""Build one schema-2 run file and its catalog from recorded benchmark executions.
+"""Build one schema-1 run file and its catalog from recorded benchmark executions.
 
 This does not create or modify index.json or metadata.json. The publication
 workflow copies the candidate files into the results branch and updates the
@@ -184,15 +184,8 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
     )
     for result in results:
         require(isinstance(result, dict), 'Benchmark result must be an object')
-        for key in ('id', 'name', 'suite', 'target', 'operation'):
+        for key in ('id', 'name', 'suite', 'target', 'thread_policy', 'operation'):
             require(text(result[key]), f'Result {key} must be nonempty text')
-        require(
-            re.fullmatch(r'[A-Za-z0-9._-]+', result['target']),
-            f'Invalid target: {result["target"]}',
-        )
-        require(
-            result['thread_policy'] in ('single', 'default'), 'Invalid thread_policy'
-        )
         require(isinstance(result['problem'], dict), 'problem must be an object')
         require(
             all(text(key) for key in result['problem']), 'problem keys must be nonempty'
@@ -261,7 +254,7 @@ def normalize_runs(
     groups = {}
     for raw in raw_runs:
         for result in raw['benchmark_results']:
-            mode = {'single': 'ST', 'default': 'MT'}[result['thread_policy']]
+            policy = result['thread_policy']
             # Corpus owns workload identity. Preserve it through future schema
             # changes; never hash definitions or strip policy/target suffixes.
             test_id = result['id']
@@ -281,13 +274,14 @@ def normalize_runs(
                     key: scalar(value) for key, value in definition['problem'].items()
                 },
             }
-            results = groups.setdefault((result['target'], mode), {})
+            results = groups.setdefault((result['target'], policy), {})
             require(
                 test_id not in results,
                 f'Duplicate result identity: ({test_id}, {result["target"]}, {result["thread_policy"]})',
             )
             results[test_id] = {
                 'testId': test_id,
+                'thread_policy': policy,
                 'status': result['status'],
                 'timing_results_s': list(result['timing_results_s']),
                 'durationSeconds': (
@@ -298,13 +292,12 @@ def normalize_runs(
                 'error': result['error'],
             }
 
-    # Preserve the published target:mode ordering so old runs remain retryable.
-    ordered_groups = sorted(groups.items(), key=lambda item: ':'.join(item[0]))
+    ordered_groups = sorted(groups.items())
     catalog = {
         'tests': [tests[key] for key in sorted(tests)],
         'configurations': {
-            f'{target}:{mode}': sorted(results)
-            for (target, mode), results in ordered_groups
+            f'{target}/{policy}': sorted(results)
+            for (target, policy), results in ordered_groups
         },
     }
     catalog['id'] = 'catalog-' + digest(catalog)
@@ -314,7 +307,7 @@ def normalize_runs(
         key=lambda value: (instant(value), value),
     )
     run = {
-        'schemaVersion': 2,
+        'schemaVersion': 1,
         'id': run_id,
         'testCatalog': f"test-catalogs/{catalog['id']}.json",
         'source': {
@@ -334,10 +327,10 @@ def normalize_runs(
         'configurations': [
             {
                 'target': target,
-                'threadingMode': mode,
+                'thread_policy': policy,
                 'results': [results[key] for key in sorted(results)],
             }
-            for (target, mode), results in ordered_groups
+            for (target, policy), results in ordered_groups
         ],
     }
     return run, catalog
@@ -527,7 +520,7 @@ def main():
     args = parser.parse_args()
     try:
         run = prepare(**vars(args))
-        print(f"Prepared schema-2 run {run['id']}")
+        print(f"Prepared schema-1 run {run['id']}")
     except (ValueError, KeyError, TypeError, OSError) as error:
         parser.exit(1, f'error: {error}\n')
 
