@@ -145,12 +145,6 @@ extern int64_t ncclParamMultiSegmentRegister();
 // NCCL_MULTI_SEGMENT_REGISTER=0 keeps the legacy connect metadata, CTS MR and QP depths.
 static inline bool IbCastAdvertiseMultiSeg() { return ncclParamMultiSegmentRegister() != 0; }
 
-// RCCL: same outstanding-step depth as classic. One extra chain is not enough.
-static inline int IbCastFlushQpSendDepth() {
-  return ncclIbFlushQpSendDepth(NCCL_STEPS, NCCL_NET_IB_MAX_RECVS, NCCL_IB_MAX_SEGMENTS, NET_IB_MAX_REQUESTS,
-                                IbCastAdvertiseMultiSeg());
-}
-
 // Initialize QP sharing fields to defaults (sharing disabled)
 static inline void IbCastQpCreateAttrInitSharing(struct ncclIbQpCreateAttr* attr) {
   attr->isQpSharingEnabled = false;
@@ -160,8 +154,11 @@ static inline void IbCastQpCreateAttrInitSharing(struct ncclIbQpCreateAttr* attr
 }
 
 // Loopback flush QPs post only RDMA_READs, so non-RMA comms keep the flush depth, not the CTS depth.
+// RCCL: a direct-GDR flush can be posted on every proxy step. RMA credits wait for one chain.
 static inline int IbCastFlushQpSendDepth(const struct ncclIbNetCommBase* base) {
-  return base->isRma ? NCCL_IB_RMA_MAX_FLUSH_WRS : NET_IB_MAX_REQUESTS + NCCL_NET_IB_MAX_RECVS * NCCL_IB_MAX_SEGMENTS;
+  if (!IbCastAdvertiseMultiSeg()) return NET_IB_MAX_REQUESTS;
+  if (base->isRma) return NCCL_IB_RMA_MAX_FLUSH_WRS;
+  return ncclIbFlushQpSendDepth(NCCL_STEPS, NCCL_NET_IB_MAX_RECVS, NCCL_IB_MAX_SEGMENTS, NET_IB_MAX_REQUESTS, 1);
 }
 
 ncclResult_t IbCastQpCreate(struct ncclIbQp* qp, struct ncclIbQpCreateAttr* createQpAttrs);
