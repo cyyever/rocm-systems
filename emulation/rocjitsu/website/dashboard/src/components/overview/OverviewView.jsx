@@ -21,7 +21,7 @@ export default function OverviewView({ viewModel, data, state, onOpenBenchmarks 
     <MetricsGrid projection={viewModel} />
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0,1.7fr) minmax(0,1fr)' }, gap: 1.75, alignItems: 'stretch' }}>
       <DurationHistory projection={viewModel} catalogs={catalogs} onRangeChange={state.setHistoryRange} onCatalogChange={state.setOverviewCatalogId} onOpenBenchmarks={onOpenBenchmarks} />
-      <LargestChanges projection={viewModel} />
+      <LargestChanges projection={viewModel} catalogs={catalogs} />
     </Box>
     <RecentRuns data={data} filters={state.filters} />
   </Stack>;

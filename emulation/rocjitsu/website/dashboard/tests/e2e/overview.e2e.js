@@ -18,6 +18,28 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   const model = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: data.modes }, { range: '1W' });
   expect(new URL(page.url()).searchParams.get('range')).toBe('1W');
   const cards = page.getByTestId('metric-strip');
+  const changesPanel = page.getByTestId('largest-changes');
+  const assertFlatChanges = async (projection) => {
+    const expected = projection.rows.flatMap((row) => {
+      if (!(row.latest?.durationSeconds > 0 && row.reference?.durationSeconds > 0)) return [];
+      return row.latest.results.flatMap(({ id, result }) => {
+        if (projection.catalogId == null && !['a', 'b'].includes(id)) return [];
+        const baseline = row.reference.results.find((item) => item.id === id)?.result;
+        const delta = baseline?.durationSeconds > 0 ? (result.durationSeconds - baseline.durationSeconds) / baseline.durationSeconds * 100 : null;
+        return Number.isFinite(delta) ? [{ id, delta, key: row.key, target: row.target, mode: row.mode, suite: result.suite }] : [];
+      });
+    }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.id.localeCompare(b.id)).slice(0, 6);
+    const entries = changesPanel.locator('[data-change-state]');
+    await expect(entries).toHaveCount(expected.length);
+    for (const [index, item] of expected.entries()) {
+      await expect(entries.nth(index)).toHaveAttribute('data-configuration', item.key);
+      await expect(entries.nth(index)).toHaveAttribute('data-workload', item.id);
+      for (const label of [item.target, item.mode, item.suite]) await expect(entries.nth(index)).toContainText(label);
+    }
+    await expect(changesPanel.locator('[data-configuration-group], h3')).toHaveCount(0);
+    await expect(changesPanel.getByRole('combobox')).toHaveCount(0);
+  };
+  await assertFlatChanges(model);
   for (const row of model.rows) {
     await expect(page.getByTestId('metric-card-latest-duration').locator(`[data-configuration="${row.key}"]`)).toContainText(formatDuration(row.latest.durationSeconds));
     await expect(page.getByTestId('metric-card-relative-speedup').locator(`[data-configuration="${row.key}"]`)).toContainText(`${row.latest.speedup.toFixed(2)}×`);
@@ -65,14 +87,50 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   await page.getByRole('checkbox', { name: 'Llama', exact: true }).uncheck();
   const filtered = selectOverviewProjection(data, { targets: data.targets, modes: ['single'], suites: ['Triton'] }, { range: '1M', catalogId });
   for (const row of filtered.rows) await expect(page.getByTestId('metric-card-compared-workloads').locator(`[data-configuration="${row.key}"]`)).toContainText(String(row.cohortIds.length));
-  await page.getByRole('combobox', { name: 'Largest Changes configuration' }).click();
-  await page.getByRole('option', { name: 'gfx950 single', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Largest Changes configuration' })).toContainText('gfx950 single');
+  await assertFlatChanges(filtered);
+  await page.getByRole('checkbox', { name: 'gfx950', exact: true }).uncheck();
+  await assertFlatChanges(selectOverviewProjection(data, { targets: ['gfx1250'], modes: ['single'], suites: ['Triton'] }, { range: '1M', catalogId }));
+  await page.getByRole('checkbox', { name: 'single', exact: true }).uncheck();
+  await expect(changesPanel).toContainText('No configurations selected');
+  await expect(changesPanel.locator('[data-change-state]')).toHaveCount(0);
   await page.screenshot({ path: `${process.env.TMPDIR}/c2-desktop.png`, fullPage: false });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: `${process.env.TMPDIR}/c2-narrow.png`, fullPage: false });
   expect(errors).toEqual([]);
+});
+
+test('Largest Changes Shared excludes a larger nonshared delta and catalog switching restores eligible entries', async ({ page }) => {
+  const publication = createMaintainedPublication();
+  const latest = publication.runs.find(({ id }) => id === 'fictional-develop-23');
+  const added = latest.configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === 'single').results.find(({ testId }) => testId === 'd');
+  added.durationSeconds = 2000;
+  added.timing_results_s = [2000];
+  await installPublication(page, { publication });
+  await openDashboard(page, '/?targets=gfx1250&modes=single&range=1W');
+  const panel = page.getByTestId('largest-changes');
+  const shared = async () => {
+    await expect(panel.locator('[data-change-state]')).toHaveCount(2);
+    for (const id of ['a', 'b']) await expect(panel.locator(`[data-workload="${id}"]`)).toHaveCount(1);
+    for (const id of ['c', 'd', 'e']) await expect(panel.locator(`[data-workload="${id}"]`)).toHaveCount(0);
+  };
+  await shared();
+  const catalog = page.getByRole('combobox', { name: 'Catalog', exact: true });
+  await catalog.click();
+  await page.locator('[role="option"][data-value="fictional-current"]').click();
+  await expect(panel.locator('[data-change-state]')).toHaveCount(4);
+  await expect(panel.locator('[data-change-state]').first()).toHaveAttribute('data-workload', 'd');
+  await catalog.click();
+  await page.getByRole('option', { name: 'Shared benchmarks', exact: true }).click();
+  await shared();
+  await page.getByRole('button', { name: 'Trailing 30 days' }).click();
+  await shared();
+  await catalog.click();
+  await page.locator('[role="option"][data-value="fictional-old"]').click();
+  await expect(panel.locator('[data-workload="c"]')).toHaveCount(1);
+  await catalog.click();
+  await page.getByRole('option', { name: 'Shared benchmarks', exact: true }).click();
+  await shared();
 });
 
 test('explicit empty configuration and suite selections remain empty through reload', async ({ page }) => {
