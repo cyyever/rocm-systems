@@ -168,6 +168,11 @@ class ReferenceCountedObject {
     return ReferenceCountedObject::operator new(size + extSize);
   };
   void operator delete(void* obj, size_t extSize) { ReferenceCountedObject::operator delete(obj); }
+  // A class-scope operator new(size_t) hides the global aligned overload, so
+  // over-aligned subclasses (alignas(64) AQL packets in VirtualGPU) would get
+  // only malloc alignment; AVX-512 stores to them then fault.
+  void* operator new(size_t size, std::align_val_t align) { return ::operator new(size, align); }
+  void operator delete(void* p, std::align_val_t align) { ::operator delete(p, align); }
 
   uint referenceCount() const { return referenceCount_.load(std::memory_order_relaxed); }
 
