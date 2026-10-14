@@ -10,7 +10,7 @@ src/components/                       # pages, charts, tables, pickers
 src/hooks/useDashboardState.js         # filters, selections, URL/history state
 src/data/dashboardData.js             # fetch publication JSON
 src/data/dashboardValidation.js       # validate and normalize it
-src/data/runSchema.js                 # supported versions and schema-1 patch
+src/data/runSchema.js                 # run-version dispatch (consumer transition pending)
 src/data/selectors.js                  # derive chart/comparison data
 src/config/metadata.json              # bundled settings and target run schema
 scripts/dashboard-data/                # prepare and stage benchmark publications
@@ -46,7 +46,7 @@ The base URL comes from `scripts/dashboard-data-source.mjs`; `src/data/published
 | --- | --- |
 | `src/config/metadata.json` | Target run `schemaVersion`, repository URL, Beta flag, canonical branch. Bundled, never fetched from the data branch. |
 | `data/index.json` | Publication time and the complete list of visible run-file paths. |
-| `data/test-catalogs/<id>.json` | Workload definitions and target/ST/MT membership. No measured timings. |
+| `data/test-catalogs/<id>.json` | Workload definitions and target/policy membership. No measured timings. |
 | `data/runs/default-branch/<id>.json` | A develop attempt: schema version, source commit, execution/machine/environment, configurations, timings, statuses, diagnostics. |
 | `data/runs/side-branches/<id>.json` | The same run format for any other branch. Flat directory, not one directory per branch. |
 
@@ -62,12 +62,12 @@ run result.testId → catalog.tests[].id
 Fetch index.json
   → fetch every listed run
   → fetch the distinct catalogs needed by included runs
-  → apply legacy migration
+  → validate version/shape (legacy migration remains until consumer transition)
   → validate and normalize
   → selectors → UI
 ```
 
-Unindexed files are not scanned. Compatibility, exclusions, and raw-export behavior are covered in [schema migration](schema-migration.md). The mutable index bypasses cache; immutable runs/catalogs can use cache. “Reload all data” cache-busts requests.
+Unindexed files are not scanned. The [maintained schema contract](schema-1.md) specifies legacy rejection and parsed-published export preservation; its implementation-status section explains why the current loader is not yet compatible. The mutable index bypasses cache; immutable runs/catalogs can use cache. “Reload all data” cache-busts requests.
 
 ## Preparing and publishing measurements
 
@@ -85,7 +85,7 @@ Run supported target/policy combinations in one corpus invocation
   → Git commit + push
 ```
 
-- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one schema-2 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. `single` maps to ST and `default` to the existing MT label (automatic policy, not guaranteed multithreading). Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
+- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. The current client/validator still expects the retired ST/MT shape and must transition before publication; see [implementation status](schema-1.md#implementation-status). Nested/null problem-value preservation is also pending; current preparation stringifies those values. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
 - **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
 - **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
 - **Publish:** validate the complete dataset, stage only the index, run, and catalog, then commit and push once when the staged diff is nonempty.
@@ -104,4 +104,4 @@ index.json                               → mutable; updated to reference runs
 
 Timing-only changes do not change the catalog. Keep old run/catalog files for cached indexes.
 
-Examples: [schema 1](schema-1.md), [schema 2](schema-2.md), [migration](schema-migration.md). Commands: [build and test](build-and-test.md).
+Contract and examples: [maintained schema 1](schema-1.md). Commands: [build and test](build-and-test.md).
