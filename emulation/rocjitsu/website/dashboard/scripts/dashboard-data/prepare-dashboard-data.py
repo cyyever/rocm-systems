@@ -119,7 +119,7 @@ def validate_numeric_values(value):
 
 def numeric_token(token):
     exact = Decimal(token)
-    require(abs(exact) <= MAX_NUMERIC_VALUE, 'Unsupported numeric JSON token: exceeds safe magnitude')
+    require(exact.copy_abs() <= MAX_NUMERIC_VALUE, 'Unsupported numeric JSON token: exceeds safe magnitude')
     value = float(token)
     require(number(value) and (value != 0 or exact == 0), 'Unsupported numeric JSON token: overflow or underflow')
     return value
@@ -473,8 +473,8 @@ def prepare(
         source_base = {'branch': base_branch, 'commit': base_sha_text.lower()}
     require(
         pull_request_number is None
-        or (type(pull_request_number) is int and pull_request_number > 0),
-        'Pull request number must be a positive integer',
+        or (type(pull_request_number) is int and 0 < pull_request_number <= MAX_NUMERIC_VALUE),
+        'Pull request number must be a positive integer within supported numeric bounds',
     )
     require(
         pull_request_url is None or pull_request_number is not None,

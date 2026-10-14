@@ -68,6 +68,53 @@ def raw(policy='single'):
 
 
 class PrepareTests(unittest.TestCase):
+    def test_rejects_long_decimal_magnitude_before_writes(self):
+        for token in ('9007199254740991.0000000000000000000000000000001',
+                      '-9007199254740991.0000000000000000000000000000001',
+                      '9.0071992547409910000000000000000000000000000001e15',
+                      '-9.0071992547409910000000000000000000000000000001e15'):
+            with self.subTest(token=token):
+                value = raw()
+                value['benchmark_results'][0]['problem'] = {'size': 'NUMERIC_TOKEN'}
+                path = self.root / 'long-token.json'
+                path.write_text(json.dumps(value).replace('"NUMERIC_TOKEN"', token))
+                destination = self.root / f'long-{token}'
+                process = self.invoke([], extra=('--raw-run', str(path), '--data-dir', str(destination)))
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn('numeric', process.stderr.lower())
+                self.assertFalse(destination.exists())
+
+    def test_cli_pr_numeric_bounds_before_writes(self):
+        for number in (9007199254740992, 9007199254740993):
+            with self.subTest(number=number):
+                destination = self.root / f'pr-{number}'
+                process = self.invoke(extra=('--branch', 'feature/numeric', '--base-branch', 'develop',
+                                             '--base-sha', SHA, '--pull-request-number', str(number),
+                                             '--data-dir', str(destination)))
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn('numeric', process.stderr.lower())
+                self.assertFalse(destination.exists())
+
+    def test_cli_pr_supported_boundaries_roundtrip(self):
+        for number in (1, 9007199254740991):
+            with self.subTest(number=number):
+                destination = self.root / f'accepted-pr-{number}'
+                self.assert_ok(self.invoke(extra=('--branch', 'feature/numeric', '--base-branch', 'develop',
+                                                 '--base-sha', SHA, '--pull-request-number', str(number),
+                                                 '--data-dir', str(destination))))
+                run_path = 'runs/side-branches/attempt-1.json'
+                run = json.loads((destination / run_path).read_text())
+                self.assertEqual(run['source']['pullRequest']['number'], number)
+                self.assert_ok(subprocess.run([sys.executable, str(UPDATE), '--data-dir', str(destination),
+                                              '--run-path', run_path], capture_output=True, text=True))
+                for command in ('validate-dashboard-data.mjs', 'process-dashboard-data.mjs'):
+                    result = subprocess.run(['node', str(HERE.parents[1] / command), str(destination)],
+                                            capture_output=True, text=True)
+                    self.assert_ok(result)
+                    if command == 'process-dashboard-data.mjs':
+                        exported = json.loads(result.stdout)['sourceData']['runs'][0]
+                        self.assertEqual(exported['source']['pullRequest']['number'], number)
+
     def test_numeric_boundaries_and_fractional_roundtrip(self):
         value = raw()
         row = value['benchmark_results'][0]
