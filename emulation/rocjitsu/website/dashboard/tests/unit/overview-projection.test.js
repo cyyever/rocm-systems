@@ -52,6 +52,20 @@ test('daily picks one latest commit/attempt before configuration projection, inc
   expect(model.anchorDay).toBe('2026-01-02');
 });
 
+test('equal commit timestamps choose SHA before completion and latest attempt within that commit', () => {
+  const c = catalog('C', { 'gfx950/single': ['a'] });
+  const runs = [
+    run('b-first', '2026-01-01', c, { 'gfx950/single': { a: 2 } }, { sha: 'bbbb', completion: '2026-01-01T11:00:00Z' }),
+    run('a-later', '2026-01-01', c, { 'gfx950/single': { a: 4 } }, { sha: 'aaaa', completion: '2026-01-01T12:00:00Z' }),
+  ];
+  const project = () => selectOverviewProjection(data(runs, [c]), { ...filters, targets: ['gfx950'] });
+  expect(project().latestRun.runId).toBe('b-first');
+  expect(project().rows[0].latest.durationSeconds).toBe(2);
+  runs.push(run('b-retry', '2026-01-01', c, { 'gfx950/single': { a: 1 } }, { sha: 'bbbb', completion: '2026-01-01T11:30:00Z' }));
+  expect(project().latestRun.runId).toBe('b-retry');
+  expect(project().rows[0].latest.durationSeconds).toBe(1);
+});
+
 test('catalog switching preserves the full-history date window and deterministic daily tie-breaks', () => {
   const a = catalog('A', { 'gfx950/single': ['a'] });
   const b = catalog('B', { 'gfx950/single': ['a'] });

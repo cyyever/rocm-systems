@@ -1,5 +1,5 @@
 import { resolveHistoryRange } from '../config/historyRanges.js';
-import { commitShaFor, commitTimestampFor } from './runOrdering.js';
+import { commitShaFor, commitTimestampFor, sortRunsByCommit } from './runOrdering.js';
 import { configurationKey, hasConfiguration, THREAD_POLICIES } from './runSchema.js';
 
 const dayFor = (run) => new Date(commitTimestampFor(run)).toISOString().slice(0, 10);
@@ -8,10 +8,6 @@ const shiftDay = (day, offset) => {
   date.setUTCDate(date.getUTCDate() + offset);
   return date.toISOString().slice(0, 10);
 };
-const compareRuns = (left, right) => Date.parse(commitTimestampFor(left)) - Date.parse(commitTimestampFor(right))
-  || Date.parse(left.timestamp) - Date.parse(right.timestamp)
-  || commitShaFor(left).localeCompare(commitShaFor(right))
-  || left.runId.localeCompare(right.runId);
 
 function dateWindow(runs, generatedAt, range) {
   const anchorDay = runs.length ? dayFor(runs.at(-1)) : generatedAt ? new Date(generatedAt).toISOString().slice(0, 10) : null;
@@ -27,7 +23,7 @@ function selectRuns(runs, range) {
   if (range === '1W') return runs;
   const selected = new Map();
   for (const run of runs) selected.set(range === '1D' ? commitShaFor(run) : dayFor(run), run);
-  const values = [...selected.values()].sort(compareRuns);
+  const values = sortRunsByCommit([...selected.values()]);
   return range === '1D' ? values.slice(-56) : values;
 }
 
@@ -100,7 +96,7 @@ function createSlots(dayKeys, runs, range) {
 // candidate runs without moving the UTC window. Hover is intentionally not input.
 export function selectOverviewProjection(data, filters, { range = 'ALL', catalogId = null } = {}) {
   const resolved = resolveHistoryRange(range, { compatibility: true });
-  const developRuns = data.runs.filter((run) => run.branch === (data.canonicalBranch ?? 'develop')).sort(compareRuns);
+  const developRuns = sortRunsByCommit(data.runs.filter((run) => run.branch === (data.canonicalBranch ?? 'develop')));
   const window = dateWindow(developRuns, data.generatedAt, resolved);
   const withinWindow = developRuns.filter((run) => dayFor(run) >= window.startDay && dayFor(run) <= window.anchorDay
     && (catalogId === null || run.catalogId === catalogId));
