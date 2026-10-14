@@ -89,7 +89,7 @@ describe('static-hosted dashboard routes', () => {
   });
   it('keeps absent filters uninitialized and defaults safely without a browser', () => {
     const route = dashboardState.readDashboardRoute();
-    expect(route).toMatchObject({ tab: 'overview', historyRange: 'ALL', preferences: { targets: null, suites: null, modes: null }, comparisonCandidateId: null, comparisonBaselineId: null, routeError: '' });
+    expect(route).toMatchObject({ tab: 'overview', historyRange: '1W', preferences: { targets: null, suites: null, modes: null }, comparisonCandidateId: null, comparisonBaselineId: null, routeError: '' });
     expect(route.branchSelection).toEqual({ branch: null, candidateId: null, referenceId: null, manual: false, target: null, mode: null, detail: false });
   });
   it('round-trips repeated scopes without treating an explicit empty as absent', () => {

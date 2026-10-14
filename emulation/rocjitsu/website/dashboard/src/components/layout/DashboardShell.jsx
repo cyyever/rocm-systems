@@ -19,7 +19,7 @@ export default function DashboardShell({ data, state, loading = false, header, c
   const summary = `${targets.length} ${targets.length === 1 ? 'target' : 'targets'} / ${suites.length} ${suites.length === 1 ? 'suite' : 'suites'} / ${modes.length ? modes.join(' + ') : 'no modes'}`;
 
   return (
-    <Box data-testid="dashboard-shell" sx={{ display: { xs: 'flex', md: 'grid' }, flexDirection: 'column', gridTemplateColumns: '228px minmax(0, 1fr)', minHeight: '100vh' }}>
+    <Box data-testid="dashboard-shell" sx={{ display: { xs: 'flex', md: 'grid' }, flexDirection: 'column', gridTemplateColumns: '228px minmax(0, 1fr)', minHeight: '100vh', ...(state.tab === 'overview' ? { '@media (min-width:900px)': { zoom: 0.8, minHeight: '125vh', display: 'grid' } } : {}) }}>
       <Box component="aside" aria-label="Dashboard navigation and filters" sx={{
         bgcolor: 'action.hover', borderRight: { md: `2px solid ${theme.palette.divider}` }, borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 0 },
         px: { xs: 2, md: '14px' }, alignSelf: 'stretch', minWidth: 0,

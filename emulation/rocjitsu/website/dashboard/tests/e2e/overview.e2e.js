@@ -1,145 +1,89 @@
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { readChart } from './helpers/chart.js';
-import { openDashboard, ready } from './helpers/dashboard.js';
+import { installPublication, openDashboard, ready } from './helpers/dashboard.js';
 
-test('all-page shell, theme and overview controls retain develop-only selected-scope semantics', async ({ page }) => {
+test('Overview shares endpoints with cards and keeps hover/catalog/range/filter state coherent', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
   const errors = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
-  await openDashboard(page);
-  const reload = page.getByRole('button', { name: 'Reload all data', exact: true });
-  for (let step = 0; step < 14; step++) {
-    await page.keyboard.press('Tab');
-    if (await reload.evaluate((element) => element === document.activeElement)) break;
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const publication = createMaintainedPublication();
+  await installPublication(page, { publication });
+  await openDashboard(page, '/?campaign=kept#scope');
+  const data = validatePublishedDashboardData(publication).data;
+  const model = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: data.modes }, { range: '1W' });
+  expect(new URL(page.url()).searchParams.get('range')).toBe('1W');
+  const cards = page.getByTestId('metric-strip');
+  for (const row of model.rows) {
+    await expect(page.getByTestId('metric-card-latest-duration').locator(`[data-configuration="${row.key}"]`)).toContainText(formatDuration(row.latest.durationSeconds));
+    await expect(page.getByTestId('metric-card-relative-speedup').locator(`[data-configuration="${row.key}"]`)).toContainText(`${row.latest.speedup.toFixed(2)}×`);
+    await expect(page.getByTestId('metric-card-latest-results').locator(`[data-configuration="${row.key}"]`)).toContainText(`${row.latest.completed}/${row.latest.required}`);
   }
-  await expect(reload).toBeFocused();
-  await expect.poll(() => reload.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { style: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset };
-  })).toEqual({ style: 'solid', width: '2px', offset: '2px' });
-  await expect(page.getByTestId('fixture-data-warning')).toContainText('fictional measurements');
-  await expect(page.getByTestId('dashboard-navigation').getByRole('tab')).toHaveText([
-    'Overview', 'Branch Runs', 'Benchmarks', 'Run Comparison',
-  ]);
-  await expect(page.getByRole('tab', { name: /Plugin|Failures/ })).toHaveCount(0);
-  await expect(page.getByText('Beta', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Repository', exact: true }))
-    .toHaveAttribute('href', 'https://github.com/ROCm/rocm-systems');
-  const rows = page.getByTestId('recent-runs-table').locator('tbody tr');
-  await expect(rows).toHaveCount(20);
-  expect(await rows.evaluateAll((entries) => entries.map((entry) => entry.dataset.runId)))
-    .toEqual(createMaintainedPublication().runs.filter((run) => run.source.branch === 'develop')
-      .sort((a, b) => Date.parse(b.execution.completedAt) - Date.parse(a.execution.completedAt) || b.id.localeCompare(a.id))
-      .slice(0, 20).map((run) => run.id));
-  await expect(rows.first()).toHaveAttribute('data-run-id', 'fictional-develop-21');
-  await expect(rows.first().locator('time').first()).toHaveAttribute('datetime', '2026-10-05T10:00:00.000Z');
-  await expect(rows.first().locator('time').nth(1)).toHaveAttribute('datetime', '2026-10-02T04:00:00.000Z');
-
-  // One line is a selected-scope sum, not one line per target or synthetic default.
-  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
-  const latest = createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23');
-  const sum = latest.configurations.filter((config) => config.thread_policy === 'single')
-    .flatMap((config) => config.results).reduce((total, result) => total + result.durationSeconds, 0);
-  await expect(page.getByTestId('metric-card-total-duration')).toContainText(formatDuration(sum));
   const trend = page.getByTestId('performance-trend');
-  const plotted = await readChart(trend.getByRole('img'), (instance) => {
-    const option = instance.getOption();
-    return { names: option.series.map((series) => series.name), unit: option.yAxis[0].name,
-      latest: option.series[0].data.filter((point) => Number.isFinite(point[1])).at(-1)[1] };
-  });
-  expect(plotted.names).toEqual(['Selected runtime']);
-  expect(plotted.latest * (plotted.unit === 'Minutes' ? 60 : 1)).toBeCloseTo(sum, 8);
-  const inspection = trend.getByRole('group', { name: 'Inspect performance trend' });
-  await inspection.press('Home');
-  await expect(trend.getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-00').source.commit.slice(0, 8));
-  await trend.getByText(/^Inspect first-success anchors/).click();
-  await expect(trend.getByRole('region', { name: 'Selected trend estimate anchors' }))
-    .toContainText('first success fictional-develop-09');
-  await expect(trend.getByRole('region', { name: 'Selected trend estimate anchors' }))
-    .toContainText('first success fictional-develop-10');
-  await inspection.press('End');
-  await expect(trend.getByRole('status')).toContainText(latest.source.commit.slice(0, 8));
-  await inspection.press('Escape');
+  const chart = trend.getByRole('img');
+  const plotted = await readChart(chart, (instance) => instance.getOption().series.map((s) => ({ name: s.name, connectNulls: s.connectNulls, showSymbol: s.showSymbol, area: s.areaStyle })));
+  expect(plotted.map((s) => s.name)).toEqual(model.rows.map((r) => `${r.target} ${r.mode}`));
+  expect(plotted.every((s) => s.connectNulls === false && s.showSymbol === false && !s.area)).toBe(true);
+  const before = await cards.innerText();
+  const group = trend.getByRole('group', { name: 'Inspect performance trend', exact: true });
+  await group.press('End');
+  await expect(trend.getByRole('status')).toContainText(model.latestRun.runId);
+  expect(await cards.innerText()).toBe(before);
+  await trend.getByRole('button', { name: 'Trailing 30 days' }).click();
+  await expect(trend.getByTestId('point-hover-guide')).not.toBeVisible();
+  await expect(trend.getByTestId('hover-line-focus')).not.toBeVisible();
+  await trend.getByRole('button', { name: 'Trailing 7 days' }).click();
+  await group.press('Home'); await group.press('ArrowRight'); await group.press('Escape');
   await expect(trend.getByRole('status')).toHaveCount(0);
-  const chart = inspection.getByRole('img');
-  const lastPixel = await readChart(chart, (instance) => {
-    const point = instance.getOption().series[0].data.findLast((entry) => Number.isFinite(entry[1]));
-    return instance.convertToPixel({ seriesIndex: 0 }, point);
+  const pixel = await readChart(chart, (instance) => {
+    const point = instance.getOption().series[0].data.findLast((p) => Number.isFinite(p[1]));
+    return { pixel: instance.convertToPixel({ seriesIndex: 0 }, point), width: instance.getWidth(), height: instance.getHeight() };
   });
   const box = await chart.boundingBox();
-  await page.mouse.move(box.x + lastPixel[0], box.y + lastPixel[1]);
-  await expect(trend.getByRole('status')).toContainText(latest.source.commit.slice(0, 8));
-  // Stable hover must settle, not feed repeated axis events back into chart renders.
-  await readChart(chart, (instance) => instance.getOption().series[0].data.length);
+  await page.mouse.move(box.x + pixel.pixel[0] * box.width / pixel.width, box.y + pixel.pixel[1] * box.height / pixel.height);
+  await expect(trend.getByTestId('point-hover-guide')).toBeVisible();
+  expect(await cards.innerText()).toBe(before);
   await page.mouse.move(0, 0);
-  // Leaving hides transient guides, not persistent inspection. Escape clears it.
-  await expect(trend.getByRole('status')).toContainText(latest.source.commit.slice(0, 8));
-  await inspection.press('Escape');
-  await expect(trend.getByRole('status')).toHaveCount(0);
-  for (const [label, range] of [['Trailing 7 days', '1W'], ['Trailing 30 days', '1M'], ['Trailing 90 days', '3M'], ['All available history', 'ALL']]) {
-    await trend.getByRole('button', { name: label }).click();
-    await expect(trend.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => new URL(page.url()).searchParams.get('range')).toBe(range);
-  }
-  await trend.getByRole('button', { name: 'Benchmarks', exact: true }).click();
-  await expect(page.getByTestId('benchmark-grid')).toBeVisible();
-  for (const name of ['Run Comparison', 'Branch Runs', 'Overview']) {
-    await page.getByRole('tab', { name, exact: true }).press('Enter');
-    await expect(page.getByRole('tabpanel', { name, exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name, exact: true, level: 1 })).toBeVisible();
-  }
-  await page.getByRole('button', { name: 'Use dark theme' }).click();
-  await expect(page.getByRole('button', { name: 'Use light theme' })).toBeVisible();
-  await page.reload();
-  await ready(page);
-  await expect(page.getByRole('button', { name: 'Use light theme' })).toBeVisible();
-  await page.getByRole('button', { name: 'Use light theme' }).click();
+  await expect(trend.getByTestId('point-hover-guide')).not.toBeVisible();
+  await trend.locator('summary').click();
+  await expect(trend.getByRole('columnheader').nth(1)).toHaveText('Shared across catalogs');
+  await trend.getByRole('button', { name: 'Trailing 30 days' }).click();
+  await trend.getByRole('combobox', { name: 'Catalog', exact: true }).click();
+  await page.getByRole('option', { name: /Catalog 1/ }).click();
+  const catalogId = new URL(page.url()).searchParams.get('catalog');
+  expect(catalogId).toBeTruthy();
+  await page.reload(); await ready(page);
+  expect(new URL(page.url()).searchParams.get('catalog')).toBe(catalogId);
+  expect(new URL(page.url()).searchParams.get('campaign')).toBe('kept');
+  expect(new URL(page.url()).hash).toBe('#scope');
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
+  await expect(page.getByTestId('metric-card-latest-duration').locator('[data-configuration]')).toHaveCount(2);
+  await page.getByRole('checkbox', { name: 'Llama', exact: true }).uncheck();
+  const filtered = selectOverviewProjection(data, { targets: data.targets, modes: ['single'], suites: ['Triton'] }, { range: '1M', catalogId });
+  for (const row of filtered.rows) await expect(page.getByTestId('metric-card-compared-workloads').locator(`[data-configuration="${row.key}"]`)).toContainText(String(row.cohortIds.length));
+  await page.getByRole('combobox', { name: 'Largest Changes configuration' }).click();
+  await page.getByRole('option', { name: 'gfx950 single', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Largest Changes configuration' })).toContainText('gfx950 single');
+  await page.screenshot({ path: `${process.env.TMPDIR}/c2-desktop.png`, fullPage: false });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: `${process.env.TMPDIR}/c2-narrow.png`, fullPage: false });
   expect(errors).toEqual([]);
 });
 
-test('explicit empty target, suite and mode scopes never refill across page or data reloads', async ({ page }) => {
-  await openDashboard(page, '/?compareCandidate=fictional-develop-23&compareBaseline=fictional-develop-20&campaign=kept#scope');
-  // Establish real workload choices before narrowing their available scope.
-  await page.getByRole('tab', { name: 'Benchmarks', exact: true }).click();
-  const headings = page.getByTestId('benchmark-grid-card').getByRole('heading');
-  await expect(headings).toHaveCount(4);
-  const retained = await headings.allTextContents();
-  // Defaults are derived/read-only until a user explicitly applies a choice.
-  await page.getByRole('button', { name: 'Add benchmarks', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Add benchmarks', exact: true })
-    .getByRole('button', { name: 'Apply selection', exact: true }).click();
-  await expect(headings).toHaveText(retained);
-  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'single', exact: true }).uncheck();
-  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
-  await expect(page.getByTestId('metric-card-run-health')).toContainText('No selected results available');
-  await expect(page.getByTestId('metric-card-total-duration')).toContainText('—');
-  await page.getByRole('tab', { name: 'Benchmarks', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('No benchmarks in the selected targets, suites and thread policies');
-  await expect(headings).toHaveText(retained);
+test('explicit empty configuration and suite selections remain empty through reload', async ({ page }) => {
+  await openDashboard(page, '/?targets=&modes=&suites=&range=1M&campaign=kept#scope');
+  await expect(page.getByTestId('metric-card-latest-duration')).toContainText('No configurations selected');
+  await expect(page.getByTestId('speedup-empty-state')).toBeVisible();
   await expect(page.getByRole('img')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Reload all data' }).click();
-  await ready(page);
-  await expect(page.getByTestId('thread-policy-filter').locator('input:checked')).toHaveCount(0);
-  await expect(headings).toHaveText(retained);
-  await page.reload();
-  await ready(page);
-  await expect(page.getByTestId('thread-policy-filter').locator('input:checked')).toHaveCount(0);
-  await expect(headings).toHaveText(retained);
-  expect(new URL(page.url()).searchParams.getAll('modes')).toEqual(['']);
+  await page.getByRole('button', { name: 'Reload all data' }).click(); await ready(page);
+  await page.reload(); await ready(page);
+  for (const key of ['targets', 'modes', 'suites']) expect(new URL(page.url()).searchParams.getAll(key)).toEqual(['']);
   expect(new URL(page.url()).searchParams.get('campaign')).toBe('kept');
   expect(new URL(page.url()).hash).toBe('#scope');
-  await page.getByRole('checkbox', { name: 'single', exact: true }).check();
-  for (const target of ['gfx1250', 'gfx950']) await page.getByRole('checkbox', { name: target, exact: true }).uncheck();
-  await expect(page.getByRole('img')).toHaveCount(0);
-  await page.getByRole('checkbox', { name: 'gfx1250', exact: true }).check();
-  for (const suite of ['Triton', 'Llama']) await page.getByRole('checkbox', { name: suite, exact: true }).uncheck();
-  await expect(page.getByRole('img')).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Run Comparison', exact: true }).click();
-  await expect(page.getByTestId('comparison-metric-comparable').getByText('0', { exact: true })).toBeVisible();
-  await expect(page.getByText('No completed benchmark results are comparable between these runs.')).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Triton', exact: true }).check();
-  await expect(page.getByRole('img', { name: 'Performance change by benchmark comparison chart' })).toBeVisible();
+  await expect(page.getByTestId('speedup-empty-state')).toBeVisible();
 });

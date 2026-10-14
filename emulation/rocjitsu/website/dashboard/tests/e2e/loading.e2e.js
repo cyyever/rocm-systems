@@ -106,7 +106,7 @@ test('one invalid indexed run fails the entire publication instead of exposing p
   await page.goto('/');
   await expect(page.getByTestId('dashboard-data-error')).toContainText('fictional-develop-23');
   await expect(page.getByRole('button', { name: 'Download JSON' })).toBeDisabled();
-  await expect(page.getByTestId('metric-card-run-health')).toContainText('No selected results available');
+  await expect(page.getByTestId('metric-card-latest-results')).toContainText('No configurations selected');
   await expect(page.getByRole('img')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Branch Runs', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No published branch runs' })).toBeVisible();

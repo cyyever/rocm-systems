@@ -1,8 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
-import DurationHistory from '../../src/components/overview/DurationHistory.jsx';
-import OverviewView from '../../src/components/overview/OverviewView.jsx';
 import RecentRuns from '../../src/components/overview/RecentRuns.jsx';
 import { ThemeProvider, alpha } from '@mui/material';
 import DashboardShell from '../../src/components/layout/DashboardShell.jsx';
@@ -57,30 +55,4 @@ test('missing repository and malformed SHA render non-link commit identity', () 
   expect(renderRecent({ repository: 'https://github.com/example/source', commit: 'bad/sha' }, undefined).includes('/commit/')).toBe(false);
 });
 
-const note = 'Trend values are normalized to the latest test catalog using fixed first-success anchors for added benchmarks. Explore original per-benchmark measurements:';
-test.each(['1W', '1M', '3M', 'ALL'])('overview always exposes normalization explanation and benchmark action for %s', (range) => {
-  const onOpenBenchmarks = vi.fn();
-  const html = render(OverviewView, { data: { runs: [] }, viewModel: { history: { ...history, normalized: false }, metrics: { total: 0, estimatedBaseline: false }, changes: [] }, state: { filters: { targets: [], suites: [], modes: [] }, historyRange: range, setHistoryRange() {} }, onOpenBenchmarks });
-  expect(html).toContain(note);
-  expect(html).toMatch(/<button[^>]*type="button"[^>]*>Benchmarks<\/button>/);
-});
-
-
-const capture = vi.hoisted(() => ({ props: null }));
-vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => { capture.props = props; return null; } }));
-const history = {
-  series: [{ data: [120, null, 0, 100], baseline: 120 }],
-  slots: [0, 1, 2, 3].map((x) => ({ x, run: { runId: `run-${x}`, timestamp: '2026-10-01T12:00:00Z' } })),
-  dayKeys: [], axisMax: 3, currentDuration: 100, durationDelta: -16.67,
-};
 const render = (Component, props) => renderToStaticMarkup(createElement(Component, props));
-
-test('trend connects measured points visually without replacing null or measured-zero slots', () => {
-  const before = structuredClone(history);
-  render(DurationHistory, { history, range: 'ALL', onRangeChange() {} });
-  expect(capture.props.option.series).toHaveLength(2);
-  expect(capture.props.option.series[0].connectNulls).toBe(false);
-  expect(capture.props.option.series[0].data).toEqual([[0, 2], [1, null], [2, 0], [3, 100 / 60]]);
-  expect(capture.props.option.tooltip.formatter([{ dataIndex: 1, value: [1, null] }])).toBe('');
-  expect(history).toEqual(before);
-});

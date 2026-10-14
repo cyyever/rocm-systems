@@ -120,7 +120,7 @@ test('branch-only publications keep comparison filters usable and long linked id
   await expect(metricValue(page, 'comparable')).toHaveText('4');
   // Branch measurements must not become canonical Overview measurements.
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await expect(page.getByTestId('metric-card-total-duration')).toContainText('—');
+  await expect(page.getByTestId('metric-card-latest-duration')).toContainText('No configurations selected');
   await page.getByRole('tab', { name: 'Run Comparison', exact: true }).click();
   await expectPair(page, candidate.id, baseline.id);
   await expect(page.getByRole('checkbox', { name: 'single', exact: true })).toBeEnabled();

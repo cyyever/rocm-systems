@@ -1,15 +1,4 @@
 // Pure presentation navigation; gaps are not eligible inspection points.
-export function trendGapEndpoints(values) {
-  const bridges = [];
-  let previous = null;
-  values.forEach((value, index) => {
-    if (!Number.isFinite(value)) return;
-    if (previous != null && index > previous + 1) bridges.push([previous, index]);
-    previous = index;
-  });
-  return bridges;
-}
-
 export function trendKeyIndex(indexes, current, key) {
   if (key === 'Escape' || !indexes.length) return null;
   if (key === 'Home') return indexes[0];
@@ -25,11 +14,7 @@ export function nearestTrendIndex(history, x) {
   const nearest = history.slots.reduce((nearest, slot, index) => {
     return nearest == null || Math.abs(slot.x - x) < Math.abs(history.slots[nearest].x - x) ? index : nearest;
   }, null);
-  return nearest != null && history.slots[nearest].run && Number.isFinite(history.series[0]?.data[nearest]) ? nearest : null;
-}
-
-export function shouldHideTrendPointer(source) {
-  return source === 'mouse' || source === 'pen';
+  return nearest != null && history.slots[nearest].run && history.rows.some((row) => Number.isFinite(row.points[nearest]?.speedup)) ? nearest : null;
 }
 
 export function recentRunsPage(rowCount, requestedPage) {

@@ -22,7 +22,7 @@ import { isLoadCancelled, loadDashboardDataFiles } from './data/dashboardData';
 import { summarizeDashboardDataError } from './data/dashboardDataError';
 import { resolvePublishedDataUrls } from './data/publishedDataUrls';
 import { DASHBOARD_SITE_CONFIG } from './config/siteConfig';
-import { selectOverview } from './data/selectors';
+import { selectOverviewProjection } from './data/overviewProjection';
 import { useDashboardState } from './hooks/useDashboardState';
 import { visuallyHiddenStyles } from './theme/styles';
 import { createDashboardTheme } from './theme/theme';
@@ -110,48 +110,14 @@ const emptyDashboardData = {
   backfillRunIds: new Set(),
 };
 
-function emptyOverview(range) {
-  return {
-    candidate: null,
-    baseline: null,
-    changes: [],
-    results: [],
-    metrics: {
-      duration: null,
-      durationDelta: null,
-      completed: 0,
-      total: 0,
-      failed: 0,
-      completeness: null,
-    },
-    history: {
-      range,
-      mode: 'daily-by-commit',
-      anchorDay: null,
-      slots: [],
-      dayKeys: [],
-      axisMax: 0,
-      currentDuration: null,
-      firstRun: null,
-      latestRun: null,
-      durationDelta: null,
-      summary: '—',
-      series: [],
-    },
-  };
-}
-
 function Dashboard({ data, state, dataError = null, onRetry = null }) {
-  const hasData = data.runs.length > 0;
   const dataErrorMessage = dataError ? summarizeDashboardDataError(dataError) : null;
   // Overview derives the whole history, so it stays uncomputed while another tab owns the view.
   const overview = useMemo(
     () => (state.tab === 'overview'
-      ? hasData
-        ? selectOverview(data, state.filters, state.historyRange)
-        : emptyOverview(state.historyRange)
+      ? selectOverviewProjection(data, state.filters, { range: state.historyRange, catalogId: state.overviewCatalogId })
       : null),
-    [data, hasData, state.filters, state.historyRange, state.tab],
+    [data, state.filters, state.historyRange, state.overviewCatalogId, state.tab],
   );
   const openBranchComparison = (selection) => {
     state.openComparison(selection);

@@ -46,7 +46,8 @@ export function readDashboardRoute(href = globalThis.window?.location?.href ?? '
   };
   const route = {
     tab: field('view', 'overview', pages),
-    historyRange: field('range', 'ALL', ranges),
+    historyRange: field('range', '1W', ranges),
+    overviewCatalogId: field('catalog', null),
     preferences,
     comparisonPreferences,
     branchSelection: {
@@ -71,6 +72,7 @@ export function buildDashboardUrl(href, snapshot) {
   const fields = {
     view: snapshot.tab,
     range: snapshot.historyRange,
+    catalog: snapshot.overviewCatalogId,
     branch: snapshot.branchSelection.branch,
     run: snapshot.branchSelection.candidateId,
     reference: snapshot.branchSelection.referenceId,
@@ -166,7 +168,7 @@ export function useDashboardState(data) {
     return { ...initial, comparisonPreferences: initial.comparisonPreferences && snapshotScope(data, initial.comparisonPreferences) };
   });
   const snapshotRef = useRef(snapshot);
-  const { preferences, comparisonPreferences, branchSelection, historyRange, tab, comparisonBaselineId, comparisonCandidateId, routeError } = snapshot;
+  const { preferences, comparisonPreferences, branchSelection, historyRange, overviewCatalogId, tab, comparisonBaselineId, comparisonCandidateId, routeError } = snapshot;
   // The shell and active page share these filters; only canonical preferences
   // are stored. Comparison scope remains an independent part of the URL snapshot.
   const activePreferences = tab === 'compare' ? comparisonPreferences ?? preferences : preferences;
@@ -208,6 +210,7 @@ export function useDashboardState(data) {
   const setSuites = useCallback((next) => setFilter('suites', next), [setFilter]);
   const setModes = useCallback((next) => setFilter('modes', next), [setFilter]);
   const setHistoryRange = useCallback((next) => updateRoute((current) => ({ ...current, historyRange: resolveNext(next, current.historyRange) }), 'replaceState'), [updateRoute]);
+  const setOverviewCatalogId = useCallback((next) => updateRoute((current) => ({ ...current, overviewCatalogId: resolveNext(next, current.overviewCatalogId) })), [updateRoute]);
   const setTab = useCallback((next) => updateRoute((current) => {
     const tab = resolveNext(next, current.tab);
     return { ...current, tab, comparisonPreferences: current.comparisonPreferences ?? (tab === 'compare' ? snapshotScope(data, current.preferences) : null) };
@@ -255,6 +258,8 @@ export function useDashboardState(data) {
     filters,
     ...filters,
     historyRange,
+    overviewCatalogId,
+    setOverviewCatalogId,
     tab,
     branchSelection,
     routeError,

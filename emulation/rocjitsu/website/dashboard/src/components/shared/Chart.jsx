@@ -19,7 +19,7 @@ echarts.use([
   CanvasRenderer,
 ]);
 
-export default function Chart({ option, height = 280, ariaLabel, ariaDescribedBy, onEvents, lazyUpdate = true }) {
+export default function Chart({ option, height = 280, ariaLabel, ariaDescribedBy, onEvents, onReady, lazyUpdate = true }) {
   const theme = useTheme();
   const tooltip = option.tooltip ? {
     backgroundColor: theme.palette.background.paper,
@@ -54,6 +54,7 @@ export default function Chart({ option, height = 280, ariaLabel, ariaDescribedBy
       notMerge
       lazyUpdate={lazyUpdate}
       onEvents={onEvents}
+      onChartReady={onReady}
       opts={{ renderer: 'canvas' }}
       style={{ width: '100%', height }}
       aria-label={ariaLabel}

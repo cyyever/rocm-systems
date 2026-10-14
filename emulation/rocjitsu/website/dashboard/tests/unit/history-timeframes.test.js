@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { readDashboardRoute } from '../../src/hooks/useDashboardState.js';
-import { selectOverview } from '../../src/data/selectors.js';
+import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
+const selectOverview = (data, filters, range) => selectOverviewProjection(data, filters, { range });
 import { benchmarkRangeData } from '../../src/components/benchmarks/benchmarkExplorer.js';
 import { benchmarkData } from '../fixtures/publishedData.js';
 
@@ -22,8 +23,8 @@ test.each(expectedRanges)('$id is accepted unchanged in dashboard URLs', ({ id }
 
 test.each(['1D', '6M', 'YTD'])('%s remains selector-only rather than a URL or benchmark range', (range) => {
   const filters = { targets: benchmarkData.targets, suites: benchmarkData.suites, modes: benchmarkData.modes };
-  expect(readDashboardRoute(`https://example.test/?range=${range}`)).toMatchObject({ historyRange: 'ALL', routeError: 'Invalid range selection in this URL.' });
-  expect(selectOverview(benchmarkData, filters, range).history.slots.length).toBeGreaterThan(0);
+  expect(readDashboardRoute(`https://example.test/?range=${range}`)).toMatchObject({ historyRange: '1W', routeError: 'Invalid range selection in this URL.' });
+  expect(selectOverview(benchmarkData, filters, range).slots.length).toBeGreaterThan(0);
   expect(benchmarkRangeData(benchmarkData, range)).toBe(benchmarkData);
 });
 
