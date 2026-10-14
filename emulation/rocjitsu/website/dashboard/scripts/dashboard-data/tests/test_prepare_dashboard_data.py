@@ -68,6 +68,49 @@ def raw(policy='single'):
 
 
 class PrepareTests(unittest.TestCase):
+    def test_numeric_boundaries_and_fractional_roundtrip(self):
+        value = raw()
+        row = value['benchmark_results'][0]
+        row['problem'] = {'limits': [9007199254740991, -9007199254740991, 1.25, None, True]}
+        for samples in ([4503599627370495, 4503599627370495], [1.25], [1, 1.5], [1, 1.25, 2]):
+            with self.subTest(samples=samples):
+                row['timing_results_s'] = list(samples)
+                destination = self.root / f'accepted-{samples}'
+                self.assert_ok(self.invoke([value], extra=('--data-dir', str(destination))))
+                published = json.loads((destination / 'runs/default-branch/attempt-1.json').read_text())
+                actual = published['configurations'][0]['results'][0]
+                self.assertEqual(actual['timing_results_s'], samples)
+                self.assertGreater(actual['durationSeconds'], 0)
+
+    def test_rejects_decimal_exponent_and_underflow_tokens(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('numeric_preparer', SCRIPT)
+        producer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(producer)
+        for token in ('9007199254740993.0', '9.007199254740993e15', '1e-400', '9007199254740991.1'):
+            path = self.root / 'numeric-token.json'
+            path.write_text('{"nested":[' + token + ']}')
+            with self.subTest(token=token), self.assertRaisesRegex(ValueError, 'numeric'):
+                producer.read_json(path)
+        path.write_text('{"nested":[9007199254740991.0,5e-324,0.0,null,true]}')
+        self.assertEqual(producer.read_json(path)['nested'], [9007199254740991.0, 5e-324, 0.0, None, True])
+
+    def test_rejects_unsupported_numeric_values_before_writes(self):
+        for value, timing in ((9007199254740993, False), (10**400, False),
+                              (4503599627370496, True), (9007199254740993, True), (1e308, True)):
+            with self.subTest(value=value, timing=timing):
+                data = raw()
+                row = data['benchmark_results'][0]
+                if timing:
+                    row['timing_results_s'] = [value, value + 1 if value == 9007199254740993 else value]
+                else:
+                    row['problem'] = {'nested': [value]}
+                destination = self.root / f"numeric-{value}-{timing}"
+                process = self.invoke([data], extra=('--data-dir', str(destination)))
+                self.assertNotEqual(process.returncode, 0)
+                self.assertIn('numeric', process.stderr.lower())
+                self.assertFalse(destination.exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -1183,6 +1226,11 @@ def test_export_prepared_data_for_workflow(tmp_path):
                 timing_results_s=[],
             )
             value['benchmark_results'].append(result)
+    for samples in ([4503599627370495, 4503599627370495], [1.25], [1, 1.5], [1, 1.25, 2]):
+        numeric = copy.deepcopy(single['benchmark_results'][0])
+        numeric.update(id=f'numeric-{len(single["benchmark_results"])}', timing_results_s=list(samples),
+                       problem={'limits': [9007199254740991, -9007199254740991, 1.25, None, True]})
+        single['benchmark_results'].append(numeric)
     single['benchmark_results'].extend(multi['benchmark_results'])
     file = tmp_path / 'run.json'
     file.write_text(json.dumps(single))

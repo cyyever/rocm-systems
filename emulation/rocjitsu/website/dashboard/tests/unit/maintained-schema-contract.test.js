@@ -4,11 +4,11 @@ import { expect, test } from 'vitest';
 const document = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
 const section = (heading) => document.split(`## ${heading}\n`)[1]?.split('\n## ')[0] ?? '';
 
-test('maintained contract records implemented rejection and unresolved numeric acceptance', () => {
+test('maintained contract records implemented schema and numeric rejection', () => {
   const status = section('Implementation status');
   expect(status).toContain('shared browser/CLI validation path');
   expect(status).toContain('Historical schemas are rejected');
-  expect(status).toContain('Numeric precision remains an unresolved publication gate');
+  expect(status).toContain('Unsupported numeric values are rejected');
   expect(status).toContain('No compatibility migration is promised');
 
   const policy = section('Rejection and export boundary');

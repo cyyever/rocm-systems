@@ -17,6 +17,7 @@ Full wire-schema validation is a separate workflow step before publication.
 
 import argparse
 from datetime import datetime, timezone
+from decimal import Decimal
 import hashlib
 import json
 import math
@@ -48,7 +49,8 @@ def unique_object(pairs):
 
 
 def read_json(path):
-    return json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=unique_object)
+    return json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=unique_object,
+                      parse_float=numeric_token)
 
 
 def scalar(value):
@@ -95,8 +97,32 @@ def text(value):
     return isinstance(value, str) and bool(value.strip())
 
 
+MAX_NUMERIC_VALUE = 9007199254740991
+MAX_TIMING_SECONDS = 4503599627370495
+
+
 def number(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    # Check integer magnitude before any float conversion (huge ints can overflow).
+    return type(value) in (int, float) and abs(value) <= MAX_NUMERIC_VALUE and math.isfinite(value)
+
+
+def validate_numeric_values(value):
+    if type(value) in (int, float):
+        require(number(value), 'Unsupported numeric value: exceeds finite safe numeric domain')
+    elif isinstance(value, dict):
+        for item in value.values():
+            validate_numeric_values(item)
+    elif isinstance(value, list):
+        for item in value:
+            validate_numeric_values(item)
+
+
+def numeric_token(token):
+    exact = Decimal(token)
+    require(abs(exact) <= MAX_NUMERIC_VALUE, 'Unsupported numeric JSON token: exceeds safe magnitude')
+    value = float(token)
+    require(number(value) and (value != 0 or exact == 0), 'Unsupported numeric JSON token: overflow or underflow')
+    return value
 
 
 def instant(value):
@@ -117,6 +143,7 @@ def instant(value):
 
 def validate_raw(raw, *, expected_sha, expected_corpus_sha):
     require(isinstance(raw, dict), 'Raw run must be an object')
+    validate_numeric_values(raw)
     summary = raw['execution_summary']
     require(isinstance(summary, dict), 'execution_summary must be an object')
     for key, minimum in (('warmups', 0), ('samples', 1)):
@@ -212,8 +239,8 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
         )
         timings = result['timing_results_s']
         require(
-            isinstance(timings, list) and all(number(t) and t > 0 for t in timings),
-            'timing_results_s must contain positive finite numbers',
+            isinstance(timings, list) and all(number(t) and 0 < t <= MAX_TIMING_SECONDS for t in timings),
+            'timing_results_s must contain positive finite numbers within supported numeric timing ceiling',
         )
         if result['status'] == 'completed':
             require(
@@ -261,6 +288,7 @@ def normalize_runs(
     definitions = {}
     groups = {}
     for raw in raw_runs:
+        validate_numeric_values(raw)
         for result in raw['benchmark_results']:
             policy = result['thread_policy']
             # Corpus owns workload identity. Preserve it through future schema

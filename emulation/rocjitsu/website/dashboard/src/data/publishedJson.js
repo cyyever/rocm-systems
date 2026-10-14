@@ -1,3 +1,24 @@
+import { isSupportedNumber } from './jsonValues.js';
+
+// Check the decimal magnitude without first rounding its significant digits.
+function validateNumericToken(token) {
+  const number = Number(token);
+  const [mantissa, exponent = '0'] = token.replace(/^-/, '').toLowerCase().split('e');
+  const [whole, fraction = ''] = mantissa.split('.');
+  const raw = whole + fraction;
+  const digits = raw.replace(/^0+/, '');
+  if (!digits) return; // Genuine zero, including signed/exponent zero.
+  const point = whole.length + Number(exponent) - (raw.length - digits.length);
+  const maximum = String(Number.MAX_SAFE_INTEGER);
+  const integer = point > 0 && point <= maximum.length
+    ? digits.slice(0, point).padEnd(point, '0') : '';
+  if (!isSupportedNumber(number) || number === 0 || point > maximum.length
+    || point === maximum.length && (integer > maximum
+      || integer === maximum && /[1-9]/.test(digits.slice(point)))) {
+    throw new Error(`Unsupported numeric JSON token: ${token}`);
+  }
+}
+
 // Native JSON parsing validates syntax and produces values; this scan additionally
 // rejects duplicate decoded keys before last-write-wins can hide declarations.
 export function parsePublishedJson(text) {
@@ -48,7 +69,10 @@ export function parsePublishedJson(text) {
       position += 1;
       return;
     }
+    const start = position;
     while (position < text.length && !/[\s,}\]]/.test(text[position])) position += 1;
+    const token = text.slice(start, position);
+    if (/^-?\d/.test(token)) validateNumericToken(token);
   };
   value();
   return result;

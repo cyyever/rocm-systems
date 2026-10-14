@@ -18,6 +18,21 @@ const load = (bodies) => loadDashboardDataFiles({
   fetch: async (url) => ({ ok: true, text: async () => bodies[new URL(url).pathname.slice('/data/'.length)] }),
 });
 
+test.each(['9007199254740993', '9.007199254740993e15', '1e-400'])('all text loaders reject unsupported numeric token %s', async (token) => {
+  const bodies = publicationBodies();
+  bodies['test-catalogs/example.json'] = bodies['test-catalogs/example.json'].replace('"problem":{', `"problem":{"unsafe":${token},`);
+  await expect(load(bodies)).rejects.toThrow(/numeric/i);
+  const directory = await mkdtemp(path.join(process.env.TMPDIR ?? os.tmpdir(), 'numeric-json-'));
+  try {
+    for (const [name, body] of Object.entries(bodies)) {
+      await mkdir(path.dirname(path.join(directory, name)), { recursive: true });
+      await writeFile(path.join(directory, name), body);
+    }
+    await expect(validateDashboardDataDirectory(directory)).rejects.toThrow(/numeric/i);
+    await expect(processDashboardDataDirectory(directory)).rejects.toThrow(/numeric/i);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('browser text boundary rejects duplicate decoded object keys', async () => {
   const bodies = publicationBodies();
   bodies['test-catalogs/example.json'] = bodies['test-catalogs/example.json'].replace('"gfx950/single":', '"gfx950\\u002fsingle":["gemm"],"gfx950/single":');

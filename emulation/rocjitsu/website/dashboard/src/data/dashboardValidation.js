@@ -1,4 +1,4 @@
-import { isJsonValue, typedJsonIdentity } from './jsonValues.js';
+import { isJsonValue, isSupportedNumber, isTimingNumber, typedJsonIdentity } from './jsonValues.js';
 import { CURRENT_RUN_SCHEMA_VERSION, THREAD_POLICIES, CONFIGURATION_PATTERN, configurationKey, publishedRunPath, runSchemaVersion } from './runSchema.js';
 import { DASHBOARD_SITE_CONFIG } from '../config/siteConfig.js';
 import { backfillRunIds, compareRunExecution, sortRunsByCommit } from './runOrdering.js';
@@ -12,7 +12,7 @@ const CONFIGURATION = CONFIGURATION_PATTERN;
 const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 const hasText = (value) => typeof value === 'string' && Boolean(value.trim());
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const scalar = (value) => typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value);
+const scalar = (value) => typeof value === 'string' || typeof value === 'boolean' || isSupportedNumber(value);
 const sameSet = (left, right) => {
   if (left.length !== right.length) return false;
   const sortedLeft = [...left].sort();
@@ -81,16 +81,16 @@ export function validatePublishedResult(result) {
   if (!['completed', 'failed', 'timeout'].includes(result.status)) throw new Error(`Result ${result.testId} has invalid status`);
   if (!Object.hasOwn(result, 'durationSeconds') || !Object.hasOwn(result, 'error')) throw new Error(`Result ${result.testId} must contain durationSeconds and error`);
   if (result.status === 'completed') {
-    if (!Number.isFinite(result.durationSeconds) || result.durationSeconds <= 0) throw new Error(`Completed result ${result.testId} must contain positive finite durationSeconds`);
+    if (!isTimingNumber(result.durationSeconds)) throw new Error(`Completed result ${result.testId} must contain positive finite durationSeconds within supported numeric timing ceiling`);
     if (result.error !== null) throw new Error(`Completed result ${result.testId} cannot contain an error`);
   } else if (result.durationSeconds !== null) throw new Error(`${result.status} result ${result.testId} must have a null durationSeconds`);
   if (result.error !== null && !hasText(result.error)) throw new Error(`Result ${result.testId} error must be a non-empty string or null`);
   if (!Object.hasOwn(result, 'timing_results_s')) throw new Error(`Result ${result.testId} must contain timing_results_s`);
   {
     const samples = result.timing_results_s;
-    if (!Array.isArray(samples) || samples.some((sample) => !Number.isFinite(sample) || sample <= 0)
+    if (!Array.isArray(samples) || samples.some((sample) => !isTimingNumber(sample))
       || result.status === 'completed' && samples.length === 0) {
-      throw new Error(`Result ${result.testId} timing_results_s must contain positive finite samples, nonempty when completed`);
+      throw new Error(`Result ${result.testId} timing_results_s must contain positive finite samples within supported numeric timing ceiling, nonempty when completed`);
     }
     if (result.status === 'completed') {
       const sorted = [...samples].sort((a, b) => a - b);
@@ -115,7 +115,7 @@ function normalizeRun(run, catalog, generatedAt) {
   }
   if (Date.parse(source.committedAt) > Date.parse(execution.completedAt) || Date.parse(execution.completedAt) > Date.parse(generatedAt)) throw new Error(`Run ${run.id} must be committed before completion and completed by publication`);
   if (Object.hasOwn(source, 'base') && (!hasText(source.base?.branch) || source.base.branch === source.branch || typeof source.base?.commit !== 'string' || !SHA.test(source.base?.commit ?? ''))) throw new Error(`Run ${run.id} has an invalid source base`);
-  if (Object.hasOwn(source, 'pullRequest') && (!source.base || !Number.isInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
+  if (Object.hasOwn(source, 'pullRequest') && (!source.base || !Number.isSafeInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
     || (Object.hasOwn(source.pullRequest, 'url') && (!safeUrl(source.pullRequest.url, true) || !new URL(source.pullRequest.url).pathname.endsWith(`/pull/${source.pullRequest.number}`))))) throw new Error(`Run ${run.id} has an invalid pullRequest`);
 
   const definitions = new Map(catalog.tests.map((test) => [test.id, test]));

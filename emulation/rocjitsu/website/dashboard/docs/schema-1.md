@@ -13,11 +13,10 @@ typed problem values and required timing samples. Historical schemas are rejecte
 not migrated or silently excluded. Bundled metadata requests schema 1.
 
 This describes local implementation, not completed production rollout or real-runner
-acceptance. Numeric precision remains an unresolved publication gate: an unbounded
-Python integer can lose precision when parsed as a JavaScript number (for example,
-`9007199254740993` becomes `9007199254740992`), and cross-runtime even-sample medians
-can disagree. No rounding, tolerance or integer bound is silently imposed here;
-those semantics require an explicit contract decision before acceptance. The
+acceptance. Unsupported numeric values are rejected under the explicit conservative
+bounds in [Supported numeric domain](#supported-numeric-domain), preventing unsafe
+integer identity loss and oversized median arithmetic. No rounding or tolerance
+is applied. The
 already-parsed validation API cannot recover duplicate keys or original numeric
 lexemes; use the shared strict text boundary for browser/CLI/processor loading.
 No compatibility migration is promised.
@@ -194,6 +193,27 @@ format is separate from recursively typed workload `problem` values. Preparation
 records shared protocol facts `execution.warmups`, `execution.samples`,
 `execution.timeout_seconds`, `execution.benchmark_suite`, without policy prefixes
 or target config hashes; source revision/time lives in `source`.
+
+## Supported numeric domain
+
+All numeric publication values must be finite with magnitude at most
+`9007199254740991` (`Number.MAX_SAFE_INTEGER`). This applies recursively to
+problem values and provenance/environment facts; booleans remain booleans.
+Integer tokens outside this range reject, including decimal/exponent spellings.
+Nonzero JSON tokens that underflow to zero also reject. Fractions use ordinary
+binary64 semantics, not exact arbitrary-decimal semantics.
+
+Timing samples and completed duration must be positive and no greater than
+`4503599627370495`. This conservative ceiling keeps the existing even-median
+addition within the safe boundary. Partial failed/timeout samples obey the same
+ceiling; status and null-duration rules remain unchanged. Median equality remains
+exact: no tolerance, rounding, coercion or clamping is introduced.
+
+The producer rejects unsupported raw values before publication writes. Text loaders
+check original numeric tokens before returning parsed values, so rounded invalid
+input cannot reach export. Already-parsed object validation checks value bounds
+but cannot recover lexemes or detect information lost before that API was called.
+Accepted source export preserves parsed values, not arbitrary numeric precision.
 
 ## Rejection and export boundary
 
