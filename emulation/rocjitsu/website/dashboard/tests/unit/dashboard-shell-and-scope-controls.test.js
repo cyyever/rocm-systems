@@ -10,7 +10,7 @@ import SectionCard from '../../src/components/shared/SectionCard.jsx';
 import CategoryTag from '../../src/components/shared/CategoryTag.jsx';
 import { createDashboardTheme } from '../../src/theme/theme.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 it.each([
   ['compare', false, false],
@@ -18,7 +18,7 @@ it.each([
   ['benchmarks', false, true],
   ['compare', true, true],
 ])('UI-003 gates %s scope using its own published runs (loading=%s)', (tab, loading, disabled) => {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   publication.runs = publication.runs.filter(({ source }) => source.branch !== 'develop');
   publication.index.runFiles = publication.runs.map(fixtureRunPath);
   const branchOnly = validatePublishedDashboardData(publication).data;
@@ -30,8 +30,8 @@ it.each([
   expect(inputs.every((input) => /\bdisabled=""/.test(input))).toBe(disabled);
 });
 
-const data = { runs: [{}], targets: ['gfx1250', 'gfx950'], suites: ['Triton', 'DeepSeek'], modes: ['ST', 'MT'] };
-const state = { targets: ['gfx1250'], suites: ['Triton', 'DeepSeek'], modes: ['ST', 'MT'], setTargets() {}, setSuites() {}, setModes() {}, tab: 'overview', setTab() {} };
+const data = { runs: [{}], targets: ['gfx1250', 'gfx950'], suites: ['Triton', 'DeepSeek'], modes: ['single', 'default'] };
+const state = { targets: ['gfx1250'], suites: ['Triton', 'DeepSeek'], modes: ['single', 'default'], setTargets() {}, setSuites() {}, setModes() {}, tab: 'overview', setTab() {} };
 function markup(Component, props, mode = 'light', desktop = false) {
   const theme = createDashboardTheme(mode);
   theme.components.MuiUseMediaQuery = { defaultProps: { ssrMatchMedia: () => ({ matches: desktop }) } };
@@ -162,7 +162,7 @@ describe('v10 responsive shell', () => {
   it('starts mobile scope collapsed before reveal and keeps the full-page sidebar in normal layout', () => {
     const html = markup(DashboardShell, { data, state, children: createElement('main', null, 'Dashboard content') });
     expect(html).toMatch(/aria-expanded="false"[^>]*aria-controls="dashboard-filters"/);
-    expect(html).toContain('Filters · 1 target / 2 suites / ST + MT');
+    expect(html).toContain('Filters · 1 target / 2 suites / single + default');
     expect(html).not.toContain('type="checkbox"');
     expect(html).not.toContain('Latest commit run');
     expect(html).not.toContain('Check all');
@@ -179,7 +179,7 @@ describe('v10 responsive shell', () => {
 });
 
 describe('v10 category identity', () => {
-  it.each([['target', 'gfx1250', 'square'], ['suite', 'Triton', 'circle'], ['mode', 'MT', 'triangle']])('renders a decorative %s marker in tags and filters', (kind, label, shape) => {
+  it.each([['target', 'gfx1250', 'square'], ['suite', 'Triton', 'circle'], ['mode', 'default', 'triangle']])('renders a decorative %s marker in tags and filters', (kind, label, shape) => {
     const html = markup(CategoryTag, { kind, label });
     expect(html).toContain(`data-category-shape="${shape}"`);
     expect(html).toMatch(new RegExp(`aria-hidden="true"[^>]*data-category-shape="${shape}"`));
@@ -190,32 +190,32 @@ describe('v10 category identity', () => {
 
 describe('v10 explicit scope controls', () => {
   it('uses only published availability without thread-count/name inference or Check all rows', () => {
-    const onlyST = { ...data, modes: ['ST'] };
-    expect(filterControls({ data: onlyST, state }, 'Execution modes')).toHaveLength(1);
-    const noModes = { ...data, modes: [], runs: [{ tests: [{ name: 'MT workload' }] }] };
-    expect(filterControls({ data: noModes, state }, 'Execution modes')).toHaveLength(0);
+    const onlyST = { ...data, modes: ['single'] };
+    expect(filterControls({ data: onlyST, state }, 'Thread policy')).toHaveLength(1);
+    const noModes = { ...data, modes: [], runs: [{ tests: [{ name: 'default workload' }] }] };
+    expect(filterControls({ data: noModes, state }, 'Thread policy')).toHaveLength(0);
     const html = markup(FiltersBar, { data: noModes, state });
-    expect(html.includes('No available execution modes')).toBe(true);
+    expect(html.includes('No available thread policy')).toBe(true);
     expect(html.includes('Check all')).toBe(false);
-    expect(filterControls({ data, state, disabled: true }, 'Execution modes').every((control) => control.props.disabled)).toBe(true);
+    expect(filterControls({ data, state, disabled: true }, 'Thread policy').every((control) => control.props.disabled)).toBe(true);
   });
 
-  it('renders ST and MT as independent checkboxes and permits deliberately clearing both', () => {
+  it('renders single and default as independent checkboxes and permits deliberately clearing both', () => {
     const setModes = vi.fn();
     const props = { data, state: { ...state, setModes } };
-    let controls = filterControls(props, 'Execution modes');
+    let controls = filterControls(props, 'Thread policy');
     expect(controls).toHaveLength(2);
     expect(controls.map((control) => control.props.checked)).toEqual([true, true]);
     controls[0].props.onChange();
-    expect(setModes).toHaveBeenLastCalledWith(['MT']);
-    props.state.modes = ['MT'];
-    controls = filterControls(props, 'Execution modes');
+    expect(setModes).toHaveBeenLastCalledWith(['default']);
+    props.state.modes = ['default'];
+    controls = filterControls(props, 'Thread policy');
     controls[1].props.onChange();
     expect(setModes).toHaveBeenLastCalledWith([]);
     props.state.modes = [];
-    controls = filterControls(props, 'Execution modes');
+    controls = filterControls(props, 'Thread policy');
     expect(controls.map((control) => control.props.checked)).toEqual([false, false]);
     controls[0].props.onChange();
-    expect(setModes).toHaveBeenLastCalledWith(['ST']);
+    expect(setModes).toHaveBeenLastCalledWith(['single']);
   });
 });

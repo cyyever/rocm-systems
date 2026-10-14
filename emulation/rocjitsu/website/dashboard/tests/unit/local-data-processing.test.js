@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { writeSchema2FixtureDirectory } from '../fixtures/schema2Dataset.js';
+import { writeMaintainedFixtureDirectory } from '../fixtures/maintainedDataset.js';
 import { validateDashboardDataDirectory } from '../../scripts/validate-dashboard-data.mjs';
 const processing = await import('../../scripts/process-dashboard-data.mjs').catch(() => ({}));
 
@@ -10,7 +10,7 @@ test('local processing validates before output and preserves source, modes and s
   expect(typeof processing.processDashboardDataDirectory).toBe('function');
   const root = await mkdtemp(path.join(tmpdir(), 'schema2-processing-'));
   try {
-    const source = await writeSchema2FixtureDirectory(path.join(root, 'input'));
+    const source = await writeMaintainedFixtureDirectory(path.join(root, 'input'));
     const output = path.join(root, 'processed.json');
     const result = await processing.processDashboardDataDirectory(path.join(root, 'input'), { output });
     expect(result.sourceData).toEqual(source);
@@ -31,7 +31,7 @@ test.each([
   const root = await mkdtemp(path.join(tmpdir(), 'schema2-processing-boundary-'));
   try {
     const input = path.join(root, 'input');
-    await writeSchema2FixtureDirectory(input);
+    await writeMaintainedFixtureDirectory(input);
     const before = (await readdir(input, { recursive: true })).sort();
     const directory = inputAlias ? path.join(root, 'input-alias') : input;
     if (inputAlias) await symlink(input, directory, 'dir');
@@ -48,7 +48,7 @@ test('DATA-05 permits genuinely external symlinked output directories without ov
   const root = await mkdtemp(path.join(tmpdir(), 'schema2-processing-external-'));
   try {
     const input = path.join(root, 'input');
-    await writeSchema2FixtureDirectory(input);
+    await writeMaintainedFixtureDirectory(input);
     const outside = path.join(root, 'outside');
     await mkdir(outside);
     const alias = path.join(root, 'outside-alias');
@@ -66,7 +66,7 @@ test('local validation rejects symlink escapes and invalid snapshots never creat
   const root = await mkdtemp(path.join(tmpdir(), 'schema2-processing-security-'));
   try {
     const directory = path.join(root, 'input');
-    const source = await writeSchema2FixtureDirectory(directory);
+    const source = await writeMaintainedFixtureDirectory(directory);
     const runPath = path.join(directory, source.index.runFiles[0]);
     const outside = path.join(root, 'outside.json');
     await writeFile(outside, JSON.stringify(source.runs[0]));

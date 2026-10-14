@@ -184,7 +184,7 @@ function Dashboard({ data, state, dataError = null, onRetry = null }) {
               sx={{ mb: 1.75 }}
             >
               <Typography fontWeight={700}>No available test data</Typography>
-              {dataErrorMessage !== 'No available test data' && (hasData || !dataErrorMessage.startsWith('Dashboard schema 1 requires migration to schema 2')) && (
+              {dataErrorMessage !== 'No available test data' && (
                 <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>
                   {dataErrorMessage}
                 </Typography>

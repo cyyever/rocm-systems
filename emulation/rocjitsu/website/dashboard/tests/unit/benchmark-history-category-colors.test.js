@@ -7,7 +7,7 @@ import { createDashboardTheme } from '../../src/theme/theme.js';
 import { categoryColors } from '../../src/theme/tokens.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { selectBenchmarkSeries } from '../../src/data/selectors.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const captured = vi.hoisted(() => ({ chart: null }));
 vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
@@ -16,9 +16,9 @@ vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
 } }));
 
 function validatedTarget(target) {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   for (const catalog of Object.values(publication.catalogs)) {
-    catalog.configurations = Object.fromEntries(Object.entries(catalog.configurations).map(([key, tests]) => [key.replace('gfx1250:', `${target}:`), tests]));
+    catalog.configurations = Object.fromEntries(Object.entries(catalog.configurations).map(([key, tests]) => [key.replace('gfx1250/', `${target}/`), tests]));
   }
   for (const run of publication.runs) {
     for (const configuration of run.configurations) if (configuration.target === 'gfx1250') configuration.target = target;
@@ -31,7 +31,7 @@ function validatedTarget(target) {
 describe.each(['light', 'dark'])('%s benchmark history category colors', (mode) => {
   test.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'unknown-target', 'gfx1250'])('uses only recognized palette entries for validated target %s', (target) => {
     const data = validatedTarget(target);
-    const filters = { targets: [target, 'gfx950'], suites: ['Triton', 'Llama'], modes: ['ST', 'MT'] };
+    const filters = { targets: [target, 'gfx950'], suites: ['Triton', 'Llama'], modes: ['single', 'default'] };
     const viewModel = selectBenchmarkSeries(data, filters, 'a');
     expect(viewModel.series.some((series) => series.target === target)).toBe(true);
     renderToStaticMarkup(createElement(ThemeProvider, { theme: createDashboardTheme(mode) }, createElement(BenchmarkHistoryChart, {

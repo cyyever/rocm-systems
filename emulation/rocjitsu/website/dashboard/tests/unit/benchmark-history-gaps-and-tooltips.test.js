@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 import BenchmarkHistoryChart from '../../src/components/benchmarks/BenchmarkHistoryChart.jsx';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const captured = vi.hoisted(() => ({ chart: null }));
 vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
@@ -12,26 +13,26 @@ vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
 } }));
 
 function chartOptions() {
-  const publication = createSchema2Publication();
-  // A valid partial publication: this interior attempt has no gfx1250 MT result.
+  const publication = createMaintainedPublication();
+  // A valid partial publication: this interior attempt has no gfx1250 default result.
   const missing = publication.runs.find((run) => run.id === 'fictional-develop-10');
-  missing.configurations = missing.configurations.filter((config) => config.target !== 'gfx1250' || config.threadingMode !== 'MT');
+  setFixtureConfigurations(publication, missing, missing.configurations.filter((config) => config.target !== 'gfx1250' || config.thread_policy !== 'default'));
   const data = validatePublishedDashboardData(publication).data;
   renderToStaticMarkup(createElement(BenchmarkHistoryChart, {
     data,
-    filters: { targets: ['gfx1250', 'gfx950'], suites: ['Triton', 'Llama'], modes: ['ST', 'MT'] },
+    filters: { targets: ['gfx1250', 'gfx950'], suites: ['Triton', 'Llama'], modes: ['single', 'default'] },
     benchmark: { id: 'a', name: 'Fictional GEMM' },
   }));
   return captured.chart.option;
 }
 
-it('keeps benchmark history discontinuous across unavailable measurements while retaining measured zero', () => {
+it('keeps benchmark history discontinuous across unavailable measurements with positive measurements', () => {
   const lines = chartOptions().series.filter((series) => series.type === 'line');
   expect(lines.every((series) => series.connectNulls === false)).toBe(true);
-  const mt = lines.find((series) => series.name === 'gfx1250 MT');
+  const mt = lines.find((series) => series.name === 'gfx1250 default');
   const measured = mt.data.map((point, index) => point === null ? -1 : index).filter((index) => index >= 0);
   expect(mt.data.slice(measured[0], measured.at(-1) + 1)).toContain(null);
-  expect(lines.some((series) => series.data.some((point) => point?.value === 0))).toBe(true);
+  expect(lines.every((series) => series.data.every((point) => point === null || point.value > 0))).toBe(true);
 });
 
 it('keeps benchmark tooltip compact and leaves full metadata in result details', () => {
@@ -41,8 +42,8 @@ it('keeps benchmark tooltip compact and leaves full metadata in result details',
   }));
   const html = option.tooltip.formatter(points);
   expect(html).toContain('Commit ');
-  expect(html).toContain('gfx1250 ST');
-  expect(html).toContain('gfx950 MT');
+  expect(html).toContain('gfx1250 single');
+  expect(html).toContain('gfx950 default');
   for (const label of ['Commit name', 'Catalog', 'Commit time', 'Execution time', 'Branch']) expect(html).not.toContain(`${label} ·`);
   expect((html.match(/<br\s*\/?>/g) ?? []).length).toBeLessThanOrEqual(points.length + 1);
   expect(option.tooltip.confine).toBe(true);

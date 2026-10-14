@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { readChart } from './helpers/chart.js';
 import { openDashboard, ready } from './helpers/dashboard.js';
@@ -30,17 +30,17 @@ test('all-page shell, theme and overview controls retain develop-only selected-s
   const rows = page.getByTestId('recent-runs-table').locator('tbody tr');
   await expect(rows).toHaveCount(20);
   expect(await rows.evaluateAll((entries) => entries.map((entry) => entry.dataset.runId)))
-    .toEqual(createSchema2Publication().runs.filter((run) => run.source.branch === 'develop')
+    .toEqual(createMaintainedPublication().runs.filter((run) => run.source.branch === 'develop')
       .sort((a, b) => Date.parse(b.execution.completedAt) - Date.parse(a.execution.completedAt) || b.id.localeCompare(a.id))
       .slice(0, 20).map((run) => run.id));
   await expect(rows.first()).toHaveAttribute('data-run-id', 'fictional-develop-21');
   await expect(rows.first().locator('time').first()).toHaveAttribute('datetime', '2026-10-05T10:00:00.000Z');
   await expect(rows.first().locator('time').nth(1)).toHaveAttribute('datetime', '2026-10-02T04:00:00.000Z');
 
-  // One line is a selected-scope sum, not one line per target or synthetic MT.
-  await page.getByRole('checkbox', { name: 'MT', exact: true }).uncheck();
-  const latest = createSchema2Publication().runs.find((run) => run.id === 'fictional-develop-23');
-  const sum = latest.configurations.filter((config) => config.threadingMode === 'ST')
+  // One line is a selected-scope sum, not one line per target or synthetic default.
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
+  const latest = createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23');
+  const sum = latest.configurations.filter((config) => config.thread_policy === 'single')
     .flatMap((config) => config.results).reduce((total, result) => total + result.durationSeconds, 0);
   await expect(page.getByTestId('metric-card-total-duration')).toContainText(formatDuration(sum));
   const trend = page.getByTestId('performance-trend');
@@ -53,7 +53,7 @@ test('all-page shell, theme and overview controls retain develop-only selected-s
   expect(plotted.latest * (plotted.unit === 'Minutes' ? 60 : 1)).toBeCloseTo(sum, 8);
   const inspection = trend.getByRole('group', { name: 'Inspect performance trend' });
   await inspection.press('Home');
-  await expect(trend.getByRole('status')).toContainText(createSchema2Publication().runs.find((run) => run.id === 'fictional-develop-00').source.commit.slice(0, 8));
+  await expect(trend.getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-00').source.commit.slice(0, 8));
   await trend.getByText(/^Inspect first-success anchors/).click();
   await expect(trend.getByRole('region', { name: 'Selected trend estimate anchors' }))
     .toContainText('first success fictional-develop-09');
@@ -112,26 +112,26 @@ test('explicit empty target, suite and mode scopes never refill across page or d
     .getByRole('button', { name: 'Apply selection', exact: true }).click();
   await expect(headings).toHaveText(retained);
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'ST', exact: true }).uncheck();
-  await page.getByRole('checkbox', { name: 'MT', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'single', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
   await expect(page.getByTestId('metric-card-run-health')).toContainText('No selected results available');
   await expect(page.getByTestId('metric-card-total-duration')).toContainText('—');
   await page.getByRole('tab', { name: 'Benchmarks', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('No benchmarks in the selected targets, suites and execution modes');
+  await expect(page.getByRole('alert')).toContainText('No benchmarks in the selected targets, suites and thread policies');
   await expect(headings).toHaveText(retained);
   await expect(page.getByRole('img')).toHaveCount(0);
   await page.getByRole('button', { name: 'Reload all data' }).click();
   await ready(page);
-  await expect(page.getByTestId('execution-modes-filter').locator('input:checked')).toHaveCount(0);
+  await expect(page.getByTestId('thread-policy-filter').locator('input:checked')).toHaveCount(0);
   await expect(headings).toHaveText(retained);
   await page.reload();
   await ready(page);
-  await expect(page.getByTestId('execution-modes-filter').locator('input:checked')).toHaveCount(0);
+  await expect(page.getByTestId('thread-policy-filter').locator('input:checked')).toHaveCount(0);
   await expect(headings).toHaveText(retained);
   expect(new URL(page.url()).searchParams.getAll('modes')).toEqual(['']);
   expect(new URL(page.url()).searchParams.get('campaign')).toBe('kept');
   expect(new URL(page.url()).hash).toBe('#scope');
-  await page.getByRole('checkbox', { name: 'ST', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'single', exact: true }).check();
   for (const target of ['gfx1250', 'gfx950']) await page.getByRole('checkbox', { name: target, exact: true }).uncheck();
   await expect(page.getByRole('img')).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'gfx1250', exact: true }).check();

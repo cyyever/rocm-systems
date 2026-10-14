@@ -1,4 +1,4 @@
-import { isExcludedPluginRun } from './runSchema.js';
+import { parsePublishedJson } from './publishedJson.js';
 import { DASHBOARD_SITE_CONFIG } from '../config/siteConfig.js';
 import {
   CATALOG_FILE_PATTERN,
@@ -202,7 +202,7 @@ async function fetchJsonResource(url, {
       continue;
     }
     try {
-      return JSON.parse(body);
+      return parsePublishedJson(body);
     } catch (parseError) {
       if (signal?.aborted) throw new LoadCancelledError();
       if (timedOut) {
@@ -336,7 +336,6 @@ export async function loadDashboardDataFiles({
   });
 
   const catalogPaths = [...new Set(runResults
-    .filter((result) => !isExcludedPluginRun(result.run))
     .map((result) => result.run?.testCatalog)
     .filter((catalogPath) => hasText(catalogPath) && CATALOG_FILE_PATTERN.test(catalogPath)))];
   const catalogResults = await mapWithConcurrency(catalogPaths, concurrency, async (catalogPath) => {

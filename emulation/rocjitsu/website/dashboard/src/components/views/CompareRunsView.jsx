@@ -38,7 +38,7 @@ const NOISE_TOLERANCE = 3;
 
 function TestAvailability({ test, run, benchmark }) {
   const label = !run ? 'No run selected'
-    : !run.configurations?.some(({ target, threadingMode }) => target === benchmark.target && threadingMode === benchmark.mode)
+    : !run.configurations?.some(({ target, thread_policy }) => target === benchmark.target && thread_policy === benchmark.mode)
       ? 'Configuration not published' : 'Unavailable in catalog';
   return run && test
     ? <StatusChip status={test.status} />

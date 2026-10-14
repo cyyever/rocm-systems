@@ -22,7 +22,7 @@ vi.mock('@mui/material', async (importOriginal) => {
     } });
   } };
 });
-const run = { runId: 'fictional-exact-attempt', branch: 'topic/fictional', modes: ['MT'], timestamp: '2026-10-05T14:00:00Z', provenance: { rocjitsuCommitSha: 'a'.repeat(40) } };
+const run = { runId: 'fictional-exact-attempt', branch: 'topic/fictional', modes: ['default'], timestamp: '2026-10-05T14:00:00Z', provenance: { rocjitsuCommitSha: 'a'.repeat(40) } };
 function renderSelector(label, value, options = [run], focused = false, mode = 'light') {
   state.focused = focused;
   return renderToStaticMarkup(createElement(ThemeProvider, { theme: createDashboardTheme(mode) }, createElement(RunSelector, { label, value, options, onChange() {} })));
@@ -54,7 +54,7 @@ test.each([
   expect(empty).toContain('value=""');
   expect(focused).toContain('Mui-focused');
   expect(selected).toContain('fictional-exact-attempt');
-  expect(selected).toContain('topic/fictional · MT');
+  expect(selected).toContain('topic/fictional · default');
   expect(state.autocomplete.openOnFocus).toBe(true);
   expect(state.autocomplete.disablePortal).not.toBe(true);
   expect(state.input.slotProps.input.ref).toBeTypeOf('function');
@@ -91,8 +91,8 @@ test('unforced MUI empty labels animate on focus out of flow, not by adding cont
   }
 });
 
-const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['MT'] };
-const selection = { target: 'gfx1250', mode: 'MT' };
+const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['default'] };
+const selection = { target: 'gfx1250', mode: 'default' };
 const details = [
   { key: 'literal', label: 'Literal flag', value: '-old+literal' },
   { key: 'same', label: 'Same metadata', value: { version: 0, enabled: false } },

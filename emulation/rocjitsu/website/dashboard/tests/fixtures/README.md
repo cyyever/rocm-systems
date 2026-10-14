@@ -1,93 +1,64 @@
-# Fictional schema-2 dashboard test fixtures
+# Fictional maintained-schema dashboard fixtures
 
 Every measurement, branch, machine and commit message here is **fictional test
 input**, not a published Rocjitsu performance claim. Never publish this directory.
-The production build does not import this generator or copy fixture JSON;
-fixtures are served only through explicit test/fixtures mode (integrator verifies
-that boundary in the production build gate).
+Production builds do not import the generators or copy fixture JSON.
 
-## Small deterministic publication
+## Deterministic publication
 
-`schema2Dataset.js` generates the base publication: 24 canonical develop
-attempts, 20 original fictional non-develop branches,
-two immutable catalogs and an unversioned index. Every current run declares numeric
-`schemaVersion: 2`; catalogs carry no schema version. Develop runs live in
-`runs/default-branch/`, and every other branch uses the flat `runs/side-branches/`.
-This gives at least 20 recent canonical rows and a scrollable 20-branch picker without imposing a production
-branch-count limit. The publication time is fixed, not the viewer's clock.
-Site settings use the same bundled `src/config/metadata.json` as production and
-local-data builds; fixtures do not supply `metadata.json` or export synthetic
-site settings in raw `{index,catalogs,runs}` downloads.
+`maintainedDataset.js` generates 24 develop attempts and 20 fictional side branches.
+Each run declares `schemaVersion: 1`, literal `thread_policy: single/default`,
+ordered timing samples and positive completed median duration. Failed/timeout
+records have null duration. Definitions require operation metadata. Catalog
+configuration keys are `target/policy` and agree exactly with their run groups.
+Sparse attempts have separate equally sparse catalogs, rather than omitting a
+run group against a fully declared catalog. Indexes/catalogs have no version field.
 
-The additive overlay `createFeedbackPublication()` in `feedback-publication.js` adds
-`users/RattataKing/test-branch`, giving 21 branches without renaming the original
-20. Its wire record is `data/runs/side-branches/fictional-rattataking-test-branch.json` and the
-index includes that record. The overlay clones an existing valid test measurement
-with a unique fictional full SHA and exact develop base. `publishedData.js` retains
-a compatibility re-export. The regeneration command below composes the base and
-overlay, validates the complete publication, then writes all test JSON through
-the shared writer. No manual overlay patch is needed. The base builder and
-`writeSchema2FixtureDirectory()` remain base-only APIs; unit tests compare both forms.
+The base old/current catalogs exercise deleted/added workloads; dedicated variants
+exercise configuration absence. Tests retain chronology, late execution/backfill,
+independent machines/environments, failure/timeout, per-policy scope and exact
+branch/base/PR provenance. Explicit zero-baseline arithmetic remains isolated
+normalized test input; zero is not a valid maintained completed publication.
+Overview's legacy anchor algorithm remains tested until its separate replacement
+stage; schema compatibility is not acceptance of that comparison algorithm.
 
-Cases include explicit `threadingMode: "ST"` / `"MT"` and per-configuration
-workload membership; a deleted workload and two added workloads with different first-success anchors; measured
-zero; failures and timeouts; a whole missing configuration; exact develop-base
-and earlier-develop fallback; optional PR metadata; late execution of an older
-commit; and independent machine/environment changes. Fictional PRs intentionally
-omit URLs rather than inventing working external links.
+`createFeedbackPublication()` adds `users/RattataKing/test-branch` without renaming
+other branches. The complete static publication has 24 develop attempts and 21
+branches. `publishedData.js` re-exports that test-only overlay. The base builder
+and `writeMaintainedFixtureDirectory()` remain base-only APIs.
 
-Regenerate only test JSON with:
+Regenerate the complete checked-in test publication:
 
-```
+```bash
 node tests/fixtures/regenerate-fixtures.js
 ```
 
-The command clears its destination before writing. Its default destination is
-`tests/fixtures/data/`; an optional directory argument allows scratch regeneration.
-Never point either fixture writer at production data.
+The command validates before writing, clears its destination, and defaults to
+`tests/fixtures/data/`. An optional directory argument allows scratch regeneration.
+Never point a fixture writer at production data. The test-only
+`setFixtureConfigurations()` helper creates coherent catalog variants when a
+positive test changes configuration scope; production validation never repairs
+malformed membership this way.
 
-Task-specific execution policies may require wrapping this command in an evidence
-recorder. `syntheticDataset.js` separately supplies small in-memory schema-2 inputs
-and the retained 500-attempt queue/concurrency stress case. No stress data is
-copied into static browser fixtures.
+`syntheticDataset.js` separately generates the 500-attempt queue/concurrency case
+in memory. It is not copied into browser fixtures. Loader tests retain cache
+policy/generation, progress, retry/Retry-After, timeout/cancellation and resource
+failure coverage. A strict shared text boundary rejects duplicate decoded JSON
+keys; every consumer rejects legacy/unversioned/schema-2 shapes rather than
+migrating or silently skipping instrumented inputs. Parsed `sourceData` preserves
+published fields and values independently of selection/filtering.
 
-## Retired schema-1 coverage and replacements
+## Local consumer tools
 
-The large historical schema-1 corpus and production-looking SHA/date assertions
-are retired. No semantic coverage was removed merely to make tests green.
-
-| Retired assumption or over-specific assertion | Replacement coverage |
-| --- | --- |
-| Implicit target-only legacy results | Schema-1 Vanilla migration to MT; non-Vanilla skip with raw export retention; current schema-2 modes and configuration identities |
-| Every run must be develop on one machine | Canonical history separated from branch attempts; generic environment/machine differences preserved |
-| Zero duration rejected or treated as missing | Measured zero retained; zero-baseline percentages unavailable; tiny nonzero measurements stay nonzero |
-| Latest successful result replaces catalog anchors | First success in current catalog, independently target/mode; failures/timeouts and missing configurations remain gaps |
-| Two per-target Overview trend lines | One selected-scope sum, deleted workloads removed, estimates and anchor attempt identities disclosed |
-| 1D prior-day baseline; cards always oldest vs newest | First eligible represented-period baseline, coherent cards/series/endpoints; no comparison for a single eligible endpoint |
-| Exact historical run counts, historical SHAs, fixed values | Lightweight generated cases for chronology, backfills, reruns, catalog exclusions and coverage denominators |
-
-Useful loader concurrency, cache directives/generations, retry/Retry-After,
-progress, timeout, cancellation, malformed/missing resource and error-envelope
-tests remain. Loader checks reject unsupported run versions (not index versions)
-and accept empty snapshots. Historical schema-1 target/plugin records, with an
-explicit version or no version, migrate to MT; only those records may use old
-`runs/<id>.json` paths. Non-Vanilla records are explicitly skipped while their raw
-files remain in source exports. Unversioned current runs are rejected. Directory validation and processing tests exercise the
-same validator, input symlink escape rejection, fail-before-output and preserving
-the complete raw-export envelope.
-
-## Local consumer processing
-
-```
+```bash
 node scripts/validate-dashboard-data.mjs <data-directory>
 node scripts/process-dashboard-data.mjs <data-directory> --output <new-file-outside-input>
 ```
 
-Processing validates the full snapshot before writing, refuses to overwrite an
-existing output or place it in the input directory, and emits `{data,sourceData}`.
-Only `backfillRunIds` changes representation to a JSON array. Normalized `data`
-is an output for inspection and downstream tools, not a supported dashboard input;
-there is no normalized-JSON re-import API. The dashboard consumes published
-index, run and catalog files, including supported schema-1 migration. Without
-`--output`, processing prints JSON to stdout. These are local consumer tools,
-not a producer or publisher.
+Processing validates before writing, refuses output inside the input directory or
+an existing output file, and emits `{data,sourceData}`. Only `backfillRunIds`
+changes representation to a JSON array. Normalized `data` is inspection output,
+not a supported dashboard re-import format. Without `--output`, processing prints
+JSON to stdout. These tools do not publish or fabricate benchmark measurements.
+See the [maintained contract](../../docs/schema-1.md), including its unresolved
+numeric precision gate; fictional fixture success is not real-runner acceptance.

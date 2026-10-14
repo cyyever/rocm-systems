@@ -2,9 +2,9 @@ import { expect, test } from 'vitest';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { compareRunExecution, compareCommitPosition, sortRunsByCommit } from '../../src/data/runOrdering.js';
 import { selectBenchmarkSeries, selectOverview, periodKey } from '../../src/data/selectors.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
-const data = validatePublishedDashboardData(createSchema2Publication()).data;
-const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['ST'] };
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single'] };
 
 // Keep chronology/coverage behaviors, without tying tests to historical production-like SHAs.
 test('late backfill is recent by execution but remains in its source commit position', () => {

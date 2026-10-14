@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { validatePublishedDashboardData, validatePublishedResult } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const invalidCases = [
   ['unsafe repository', (s) => { s.siteConfig = { repository: 'javascript:alert(1)', isBeta: true, canonicalBranch: 'develop' }; }, /repository URL/],
@@ -23,8 +23,8 @@ const invalidCases = [
   ['duplicate result', (s) => { const r = s.runs[0].configurations[0].results; r.push(r[0]); }, /exactly one result/],
   ['unknown workload', (s) => { s.runs[0].configurations[0].results[0].testId = 'unknown'; }, /exactly one result/],
   ['duplicate configuration', (s) => { s.runs[0].configurations.push(s.runs[0].configurations[0]); }, /duplicate configuration/],
-  ['missing explicit mode', (s) => { delete s.runs[0].configurations[0].threadingMode; }, /configuration/],
-  ['negative duration', (s) => { s.runs[0].configurations[0].results[0].durationSeconds = -1; }, /nonnegative/],
+  ['missing explicit mode', (s) => { delete s.runs[0].configurations[0].thread_policy; }, /configuration/],
+  ['negative duration', (s) => { s.runs[0].configurations[0].results[0].durationSeconds = -1; }, /positive/],
   ['completed error', (s) => { s.runs[0].configurations[0].results[0].error = 'invalid'; }, /cannot contain an error/],
   ['failure duration', (s) => { s.runs[0].configurations[0].results[0].status = 'failed'; }, /null durationSeconds/],
   ['future execution', (s) => { s.runs[0].execution.completedAt = '2026-10-06T00:00:00Z'; }, /publication/],
@@ -36,13 +36,13 @@ const invalidCases = [
   ['conflicting commit time', (s) => { s.runs[1].source.commit = s.runs[0].source.commit; }, /conflicting committedAt/],
 ];
 
-test.each(invalidCases)('schema 2 rejects %s', (_, mutate, expected) => {
-  const source = createSchema2Publication(); mutate(source);
+test.each(invalidCases)('maintained schema 1 rejects %s', (_, mutate, expected) => {
+  const source = createMaintainedPublication(); mutate(source);
   expect(() => validatePublishedDashboardData(source)).toThrow(expected);
 });
 
 test('independent branch machines and scalar environments remain disclosed', () => {
-  const source = createSchema2Publication(); source.runs[0].environment = [];
+  const source = createMaintainedPublication(); source.runs[0].environment = [];
   const { data } = validatePublishedDashboardData(source);
   expect(data.allRuns.at(-1).machineId).toBe('fictional-branch-node');
   expect(data.allRuns.at(-1).provenance.details).toEqual(source.runs[43].environment);
@@ -50,9 +50,9 @@ test('independent branch machines and scalar environments remain disclosed', () 
   expect(data.allRuns).toHaveLength(44);
 });
 
-test('result status/error distinction preserves zero and failure/timeout diagnostics', () => {
-  expect(validatePublishedResult({ testId: 'zero', status: 'completed', durationSeconds: 0, error: null }).durationSeconds).toBe(0);
-  for (const status of ['failed', 'timeout']) expect(validatePublishedResult({ testId: status, status, durationSeconds: null, error: 'diagnostic' }).status).toBe(status);
+test('result status/error distinction rejects zero and preserves failure/timeout diagnostics', () => {
+  expect(() => validatePublishedResult({ testId: 'zero', status: 'completed', durationSeconds: 0, timing_results_s: [0], error: null })).toThrow(/positive/);
+  for (const status of ['failed', 'timeout']) expect(validatePublishedResult({ testId: status, status, durationSeconds: null, timing_results_s: [], error: 'diagnostic' }).status).toBe(status);
   expect(() => validatePublishedResult({ testId: 'missing', status: 'completed', error: null })).toThrow(/durationSeconds/);
   expect(() => validatePublishedResult({ testId: 'bad', status: 'failed', durationSeconds: null, error: '' })).toThrow(/non-empty/);
   expect(() => validatePublishedResult({ testId: 'bad', status: 'completed', durationSeconds: Infinity, error: null })).toThrow(/finite/);

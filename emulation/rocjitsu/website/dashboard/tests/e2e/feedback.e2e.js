@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { readChart } from './helpers/chart.js';
 import { expectNoDocumentOverflow, openDashboard, ready } from './helpers/dashboard.js';
 
@@ -103,11 +103,11 @@ test('feedback: cursor sweeps keep native guides visible without replacing the t
   }
 });
 
-test('feedback: static trend explanation, interrupted solid line, blue commit links and fresh ST+MT defaults', async ({ page }) => {
+test('feedback: static trend explanation, interrupted solid line, blue commit links and fresh single+default defaults', async ({ page }) => {
   const errors = errorsFor(page);
   await openDashboard(page);
-  await expect(page.getByRole('checkbox', { name: 'ST', exact: true })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'MT', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'single', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'default', exact: true })).toBeChecked();
   const trend = page.getByTestId('performance-trend');
   const chart = await readChart(trend.getByRole('img'), (instance) => {
     const series = instance.getOption().series[0];
@@ -126,7 +126,7 @@ test('feedback: static trend explanation, interrupted solid line, blue commit li
   }
   const row = page.getByTestId('recent-runs-table').locator('tbody tr').first();
   const runId = await row.getAttribute('data-run-id');
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   const source = publication.runs.find((run) => run.id === runId).source;
   const commit = row.locator('td').first().getByRole('link');
   await expect(commit).toHaveAttribute('href', `${source.repository ?? 'https://github.com/ROCm/rocm-systems'}/commit/${source.commit}`);
@@ -137,13 +137,13 @@ test('feedback: static trend explanation, interrupted solid line, blue commit li
   await expect(commit).toBeFocused();
   const colors = await commit.evaluate((element) => ({ link: getComputedStyle(element).color, normal: getComputedStyle(element.closest('td')).color }));
   expect(colors.link).not.toBe(colors.normal);
-  await page.getByRole('checkbox', { name: 'ST', exact: true }).uncheck();
-  await page.getByRole('checkbox', { name: 'MT', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'single', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
   await expect(trend).toContainText(note);
   await expect(trend.getByRole('button', { name: 'Benchmarks', exact: true })).toBeVisible();
   await page.reload();
   await ready(page);
-  await expect(page.getByRole('checkbox', { name: 'MT', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'default', exact: true })).not.toBeChecked();
   expect(errors).toEqual([]);
 });
 
@@ -234,7 +234,7 @@ test('feedback: exact fictional branch, no heading count badge and leftward coll
 test('feedback: Abs/Pct headers sort raw deltas and full comparison navigation returns to page top', async ({ page }) => {
   const errors = errorsFor(page);
   await page.setViewportSize({ width: 1440, height: 600 });
-  await openDashboard(page, '/?view=branch&branch=fictional/optimization-01&run=fictional-branch-01&target=gfx1250&mode=ST');
+  await openDashboard(page, '/?view=branch&branch=fictional/optimization-01&run=fictional-branch-01&target=gfx1250&mode=single');
   const region = page.getByRole('region', { name: 'Benchmark differences', exact: true });
   await expect(page.getByLabel('Sort by magnitude')).toHaveCount(0);
   const rows = region.locator('tbody tr[data-abs-change]');

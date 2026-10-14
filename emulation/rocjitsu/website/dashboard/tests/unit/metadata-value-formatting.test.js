@@ -10,7 +10,7 @@ test.each([
   ['', ''],
   ['literal <value>', 'literal <value>'],
   [{ enabled: false, count: 0 }, '{"enabled":false,"count":0}'],
-  [['ST', 'MT'], '["ST","MT"]'],
+  [['single', 'default'], '["single","default"]'],
 ])('formats metadata %j without replacing literal values', (value, expected) => {
   expect(formatters.formatMetadataValue).toBeTypeOf('function');
   expect(formatters.formatMetadataValue(value)).toBe(expected);

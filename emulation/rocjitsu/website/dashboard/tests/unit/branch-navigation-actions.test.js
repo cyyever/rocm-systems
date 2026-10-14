@@ -11,13 +11,13 @@ function nodes(element) {
   if (!isValidElement(element)) return [];
   return [element, ...nodes(element.props.children)];
 }
-const candidate = { runId: 'fictional-candidate-exact', configurations: [{ target: 'gfx950', threadingMode: 'MT' }], tests: [] };
+const candidate = { runId: 'fictional-candidate-exact', configurations: [{ target: 'gfx950', thread_policy: 'default' }], tests: [] };
 const reference = { ...candidate, runId: 'fictional-manual-reference-exact' };
-const selection = { branch: 'fictional/branch', candidateId: candidate.runId, referenceId: reference.runId, manual: true, target: 'gfx950', mode: 'MT', detail: true };
+const selection = { branch: 'fictional/branch', candidateId: candidate.runId, referenceId: reference.runId, manual: true, target: 'gfx950', mode: 'default', detail: true };
 
 const tree = (suites, baseline, onOpenComparison) => {
-  const comparison = selectConfigurationComparison(candidate, baseline, { target: 'gfx950', mode: 'MT', suites });
-  return BenchmarkDifferences({ comparison, summary: configurationState(candidate, baseline, comparison, 'gfx950', 'MT'), candidate, reference: baseline, selection,
+  const comparison = selectConfigurationComparison(candidate, baseline, { target: 'gfx950', mode: 'default', suites });
+  return BenchmarkDifferences({ comparison, summary: configurationState(candidate, baseline, comparison, 'gfx950', 'default'), candidate, reference: baseline, selection,
     suites, suiteOptions: ['Fictional suite'], query: '', sort: 'seconds', onOpenComparison,
   });
 };
@@ -28,7 +28,7 @@ test('full comparison action forwards the exact pair and configuration with expl
     const action = nodes(tree(suites, reference, (payload) => calls.push(payload))).find((node) => node.props['data-testid'] === 'branch-open-comparison');
     expect(action?.props.disabled).toBe(false);
     action.props.onClick();
-    expect(calls).toEqual([{ candidateId: candidate.runId, baselineId: reference.runId, target: 'gfx950', mode: 'MT', suites }]);
+    expect(calls).toEqual([{ candidateId: candidate.runId, baselineId: reference.runId, target: 'gfx950', mode: 'default', suites }]);
   }
 });
 
@@ -53,10 +53,10 @@ test('branch list exposes its scroll position and selects exact entry through ke
 
 test('all configuration cells including unpublished ones remain inspectable and emit an exact target/mode pair', () => {
   const scope = [];
-  const runs = [candidate, reference, { configurations: [{ target: 'gfx1250', threadingMode: 'ST' }] }];
+  const runs = [candidate, reference, { configurations: [{ target: 'gfx1250', thread_policy: 'single' }] }];
   const matrix = ConfigurationMatrix({ candidate, reference, runs, selection, suites: [], onSelect: (target, mode) => scope.push([target, mode]) });
   const cells = nodes(matrix).filter((node) => node.props['data-testid']?.startsWith('branch-config-'));
   expect(cells).toHaveLength(4);
   for (const cell of cells) { expect(cell.props.disabled).not.toBe(true); cell.props.onClick(); }
-  expect(scope).toEqual([['gfx1250', 'ST'], ['gfx950', 'ST'], ['gfx1250', 'MT'], ['gfx950', 'MT']]);
+  expect(scope).toEqual([['gfx1250', 'single'], ['gfx950', 'single'], ['gfx1250', 'default'], ['gfx950', 'default']]);
 });

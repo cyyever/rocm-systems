@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import App from '../../src/App.jsx';
 import { useDashboardState } from '../../src/hooks/useDashboardState.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const loader = vi.hoisted(() => ({ requests: [] }));
 vi.mock('../../src/data/publishedDataUrls.js', () => ({ resolvePublishedDataUrls: () => ({ indexUrl: 'https://example.test/data/index.json' }) }));
@@ -21,14 +21,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const options = { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST', 'MT'] };
+const options = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single', 'default'] };
 it.each([
-  ['fresh defaults', '', null, ['ST', 'MT']],
-  ['saved ST', '', ['ST'], ['ST']],
-  ['saved MT', '', ['MT'], ['MT']],
+  ['fresh defaults', '', null, ['single', 'default']],
+  ['saved single', '', ['single'], ['single']],
+  ['saved default', '', ['default'], ['default']],
   ['saved empty', '', [], []],
-  ['URL overrides saved ST', '?modes=MT', ['ST'], ['MT']],
-  ['URL empty overrides saved modes', '?modes=', ['ST', 'MT'], []],
+  ['URL overrides saved single', '?modes=default', ['single'], ['default']],
+  ['URL empty overrides saved modes', '?modes=', ['single', 'default'], []],
 ])('v11 global modes preserve %s', (label, query, saved, expected) => {
   vi.stubGlobal('window', {
     location: { href: `https://example.test/${query}` },
@@ -73,14 +73,14 @@ it('v11 full branch comparison preserves the atomic pair and scrolls to the top 
   roots.push(root);
   act(() => root.render(createElement(StrictMode, null, createElement(CaptureApp))));
   const request = loader.requests.findLast(({ options: requestOptions }) => !requestOptions.signal.aborted);
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
   await act(async () => request.resolve({ data, sourceData: {}, cacheGeneration: null }));
   const branch = nodes(dashboardTree).find((node) => node.type?.name === 'BranchRunsView');
   expect(branch).toBeDefined();
   browser.history.pushState.mockClear();
-  act(() => branch.props.onOpenComparison({ candidateId: 'fictional-branch-01', baselineId: 'fictional-develop-21', target: 'gfx1250', mode: 'MT' }));
+  act(() => branch.props.onOpenComparison({ candidateId: 'fictional-branch-01', baselineId: 'fictional-develop-21', target: 'gfx1250', mode: 'default' }));
   const state = nodes(appTree).find((node) => node.type?.name === 'DashboardShell').props.state;
-  expect(state).toMatchObject({ tab: 'compare', comparisonCandidateId: 'fictional-branch-01', comparisonBaselineId: 'fictional-develop-21', filters: { targets: ['gfx1250'], modes: ['MT'] } });
+  expect(state).toMatchObject({ tab: 'compare', comparisonCandidateId: 'fictional-branch-01', comparisonBaselineId: 'fictional-develop-21', filters: { targets: ['gfx1250'], modes: ['default'] } });
   expect(browser.history.pushState).toHaveBeenCalledTimes(1);
   expect(new URL(browser.location.href).searchParams.get('campaign')).toBe('keep');
   expect(browser.requestAnimationFrame).toHaveBeenCalledTimes(1);

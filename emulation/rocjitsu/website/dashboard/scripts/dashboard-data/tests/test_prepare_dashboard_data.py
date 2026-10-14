@@ -125,6 +125,21 @@ class PrepareTests(unittest.TestCase):
             if p.is_file()
         }
 
+    def test_typed_problem_values_survive_preparation_and_consumer_export(self):
+        value = raw()
+        problem = {'array': [1, {'z': None, 'flag': False}], 'object': {'b': 2, 'a': 1}, 'null': None, 'text': '[1,2]'}
+        value['benchmark_results'][0]['problem'] = problem
+        self.assert_ok(self.invoke([value]))
+        run = self.read('runs/default-branch/attempt-1.json')
+        catalog = self.read(run['testCatalog'])
+        self.assertEqual(catalog['tests'][0]['problem'], problem)
+        self.assert_ok(subprocess.run([sys.executable, str(UPDATE), '--data-dir', str(self.data), '--run-path', 'runs/default-branch/attempt-1.json'], capture_output=True, text=True))
+        processed = subprocess.run(['node', str(HERE.parents[1] / 'process-dashboard-data.mjs'), str(self.data)], capture_output=True, text=True)
+        self.assert_ok(processed)
+        exported = json.loads(processed.stdout)
+        self.assertEqual(exported['sourceData']['catalogs'][run['testCatalog']]['tests'][0]['problem'], problem)
+        self.assertEqual(exported['data']['runs'][0]['tests'][0]['problem'], problem)
+
     def test_cli_omits_unused_website_metadata_arguments(self):
         result = subprocess.run(
             [sys.executable, str(SCRIPT), '--help'], text=True, capture_output=True
@@ -309,14 +324,22 @@ class PrepareTests(unittest.TestCase):
             ['case-1', 'case-2'],
         )
 
-    def test_raw_target_and_policy_strings_are_preserved_without_token_grammar(self):
+    def test_unsupported_policy_and_unsafe_target_reject_before_writes(self):
+        for key, invalid in (('thread_policy', 'ST'), ('thread_policy', 'MT'), ('thread_policy', 'Adaptive / workers'), ('target', 'Target / variant')):
+            with self.subTest(key=key, value=invalid):
+                value = raw()
+                value['benchmark_results'][0][key] = invalid
+                result = self.invoke([value])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.data.exists())
+
+    def test_literal_target_and_policy_strings_are_preserved(self):
         value = raw()
         value['benchmark_results'] = []
         pairs = [
             ('gfx950', 'default'),
             ('gfx950', 'single'),
-            ('gfx950', 'Adaptive / workers?x=1&y=2'),
-            ('Target / variant?x=1', ' single '),
+            ('gfx950-variant', 'single'),
         ]
         for target, policy in pairs:
             result = copy.deepcopy(raw()['benchmark_results'][0])
@@ -345,7 +368,7 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_mixed_policies_survive_consumer_normalization_for_same_workload(self):
-        policies = ['single', 'default', 'Adaptive / workers?x=1&y=2']
+        policies = ['single', 'default']
         value = raw()
         value['benchmark_results'] = [
             raw(policy)['benchmark_results'][0] for policy in policies
@@ -656,8 +679,8 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(
             definition['problem'],
             {
-                'nested': '{"a":[1,false],"z":null}',
-                'nil': 'null',
+                'nested': {'a': [1, False], 'z': None},
+                'nil': None,
                 'bool': False,
                 'zero': 0,
                 'text': 'value',

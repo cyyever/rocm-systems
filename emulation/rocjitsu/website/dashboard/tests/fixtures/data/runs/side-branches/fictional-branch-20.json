@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "id": "fictional-branch-20",
   "testCatalog": "test-catalogs/fictional-current.json",
   "source": {
@@ -33,29 +33,45 @@
   "configurations": [
     {
       "target": "gfx1250",
-      "threadingMode": "ST",
+      "thread_policy": "single",
       "results": [
         {
           "testId": "a",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            16.79
+          ],
           "durationSeconds": 16.79,
           "error": null
         },
         {
           "testId": "b",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            27.69
+          ],
           "durationSeconds": 27.69,
           "error": null
         },
         {
           "testId": "d",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            38.59
+          ],
           "durationSeconds": 38.59,
           "error": null
         },
         {
           "testId": "e",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            49.49
+          ],
           "durationSeconds": 49.49,
           "error": null
         }
@@ -63,29 +79,45 @@
     },
     {
       "target": "gfx1250",
-      "threadingMode": "MT",
+      "thread_policy": "default",
       "results": [
         {
           "testId": "a",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            22.24
+          ],
           "durationSeconds": 22.24,
           "error": null
         },
         {
           "testId": "b",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            33.14
+          ],
           "durationSeconds": 33.14,
           "error": null
         },
         {
           "testId": "d",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            44.04
+          ],
           "durationSeconds": 44.04,
           "error": null
         },
         {
           "testId": "e",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            54.94
+          ],
           "durationSeconds": 54.94,
           "error": null
         }
@@ -93,29 +125,45 @@
     },
     {
       "target": "gfx950",
-      "threadingMode": "ST",
+      "thread_policy": "single",
       "results": [
         {
           "testId": "a",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            27.69
+          ],
           "durationSeconds": 27.69,
           "error": null
         },
         {
           "testId": "b",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            38.59
+          ],
           "durationSeconds": 38.59,
           "error": null
         },
         {
           "testId": "d",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            49.49
+          ],
           "durationSeconds": 49.49,
           "error": null
         },
         {
           "testId": "e",
+          "thread_policy": "single",
           "status": "completed",
+          "timing_results_s": [
+            60.39
+          ],
           "durationSeconds": 60.39,
           "error": null
         }
@@ -123,23 +171,35 @@
     },
     {
       "target": "gfx950",
-      "threadingMode": "MT",
+      "thread_policy": "default",
       "results": [
         {
           "testId": "a",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            33.14
+          ],
           "durationSeconds": 33.14,
           "error": null
         },
         {
           "testId": "b",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            44.04
+          ],
           "durationSeconds": 44.04,
           "error": null
         },
         {
           "testId": "d",
+          "thread_policy": "default",
           "status": "completed",
+          "timing_results_s": [
+            54.94
+          ],
           "durationSeconds": 54.94,
           "error": null
         }

@@ -52,7 +52,7 @@ test('branch search stays centered with a normal floating label and visible sear
 });
 
 test('exact requested fictional branch is schema-valid and preserves all original twenty branches', () => {
-  expect(fixtures.publishedResult.data.schemaVersion).toBe(2);
+  expect(fixtures.publishedResult.data.schemaVersion).toBe(1);
   const branch = 'users/RattataKing/test-branch';
   const wire = fixtures.publishedRuns.find((run) => run.source.branch === branch);
   expect(wire).toBeDefined();
@@ -93,7 +93,7 @@ test('sorting remains monotonic across real suite boundaries, including unavaila
 test('separate sortable change headers expose active aria-sort and emit both directions; mobile retains sort controls', () => {
   const calls = [];
   const props = { comparison: { comparable: [pair('negative', 100, 80), pair('positive', 1, 2)], notComparable: [], baselineDuration: 101, candidateDuration: 82 }, summary: { available: true, matched: 2, excluded: 0 },
-    candidate: { configurations: [] }, reference: { configurations: [] }, selection: { target: 'gfx1250', mode: 'ST' }, suites: ['Suite'], suiteOptions: ['Suite'], query: '', onSort: (sort) => calls.push(sort),
+    candidate: { configurations: [] }, reference: { configurations: [] }, selection: { target: 'gfx1250', mode: 'single' }, suites: ['Suite'], suiteOptions: ['Suite'], query: '', onSort: (sort) => calls.push(sort),
   };
   for (const sort of [{ key: 'seconds', direction: 'desc' }, { key: 'seconds', direction: 'asc' }, { key: 'percent', direction: 'desc' }]) {
     const tree = BenchmarkDifferences({ ...props, sort });

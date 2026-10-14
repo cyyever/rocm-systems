@@ -4,7 +4,7 @@ import { selectRecentRunAttempts, selectRecentRunSummaries } from '../../src/dat
 import { createRecentRunsHistory } from '../fixtures/recent-runs-history.js';
 
 const { data } = createRecentRunsHistory();
-const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST'] };
+const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single'] };
 
 test('page bounds clamp shrinking, short and empty histories without overlapping ranges', () => {
   expect(presentation.recentRunsPage?.(65, 0)).toEqual({ page: 0, start: 0, end: 20 });

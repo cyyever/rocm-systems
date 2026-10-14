@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
-const data = validatePublishedDashboardData(createSchema2Publication()).data;
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+const data = validatePublishedDashboardData(createMaintainedPublication()).data;
 const selectors = await import('../../src/data/branchSelectors.js').catch(() => ({}));
 
 test('published branches use the inclusive publication-relative 30-day window and searchable branch/PR/SHA', () => {
@@ -53,17 +53,17 @@ test('configuration comparison is one exact pair and scope, including symmetric 
   expect(typeof selectors.selectConfigurationComparison).toBe('function');
   const candidate = data.allRuns.find(({ runId }) => runId === 'fictional-branch-03');
   const baseline = data.runs.find(({ runId }) => runId === 'fictional-develop-23');
-  const result = selectors.selectConfigurationComparison(candidate, baseline, { target: 'gfx1250', mode: 'ST', suites: data.suites });
+  const result = selectors.selectConfigurationComparison(candidate, baseline, { target: 'gfx1250', mode: 'single', suites: data.suites });
   expect(result.comparable).toHaveLength(3);
   expect(result.notComparable).toHaveLength(1);
-  expect(result.comparable.every(({ candidateTest }) => candidateTest.target === 'gfx1250' && candidateTest.mode === 'ST')).toBe(true);
+  expect(result.comparable.every(({ candidateTest }) => candidateTest.target === 'gfx1250' && candidateTest.mode === 'single')).toBe(true);
   const seconds = result.comparable.map(({ deltaSeconds }) => Math.abs(deltaSeconds));
   expect(seconds).toEqual([...seconds].sort((a, b) => b - a));
-  const search = selectors.selectConfigurationComparison(candidate, baseline, { target: 'gfx1250', mode: 'ST', suites: data.suites, query: 'decode' });
+  const search = selectors.selectConfigurationComparison(candidate, baseline, { target: 'gfx1250', mode: 'single', suites: data.suites, query: 'decode' });
   expect(search.comparable).toHaveLength(1);
   expect(search.notComparable).toHaveLength(0);
   const missing = data.allRuns.find(({ runId }) => runId === 'fictional-branch-02');
-  const unavailable = selectors.selectConfigurationComparison(missing, baseline, { target: 'gfx1250', mode: 'MT', suites: data.suites });
+  const unavailable = selectors.selectConfigurationComparison(missing, baseline, { target: 'gfx1250', mode: 'default', suites: data.suites });
   expect(unavailable.comparable).toHaveLength(0);
   expect(unavailable.notComparable).toHaveLength(4);
   expect(unavailable.candidateDuration).toBeNull();

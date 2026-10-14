@@ -6,7 +6,7 @@ import RunMetadataDiff from '../../src/components/compare/RunMetadataDiff.jsx';
 it('compares relevant configuration/environment facts without noisy per-execution bookkeeping rows', () => {
   const run = {
     runId: 'fictional-reference', tests: [], catalogId: 'fictional-catalog',
-    machineId: 'fictional-machine', configurations: [{ target: 'gfx1250', threadingMode: 'MT' }],
+    machineId: 'fictional-machine', configurations: [{ target: 'gfx1250', thread_policy: 'default' }],
     provenance: { rocjitsuCommitSha: 'a'.repeat(40) },
     timestamp: '2026-10-01T12:00:00Z',
     trigger: 'schedule', environmentId: 'fictional-env-1',
@@ -17,7 +17,7 @@ it('compares relevant configuration/environment facts without noisy per-executio
     environment: [{ key: 'sdk', label: 'ROCm SDK', value: 'fictional-new' }],
   };
   const html = renderToStaticMarkup(createElement(RunMetadataDiff, {
-    baseline: run, candidate, filters: { targets: ['gfx1250'], modes: ['MT'], suites: [] },
+    baseline: run, candidate, filters: { targets: ['gfx1250'], modes: ['default'], suites: [] },
   }));
   for (const key of ['runId', 'commit', 'message', 'branch', 'base', 'pullRequest', 'commitTime', 'runTime', 'trigger', 'plugin', 'workflow', 'comparisonId', 'environmentId']) {
     expect(html.includes(`data-testid="metadata-row-${key}"`), `${key} is bookkeeping, not a comparison row`).toBe(false);

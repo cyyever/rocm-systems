@@ -7,16 +7,20 @@ schema-1 target/plugin layout.
 
 ## Implementation status
 
-This documentation precedes the coordinated consumer transition. At this revision,
-`src/config/metadata.json` still requests schema 2; `runSchema.js` migrates the old
-schema-1 shape; `dashboardValidation.js` expects `target:ST`/`target:MT` and scalar
-problem values. The preparer also still stringifies nested/null problem values.
-Therefore the maintained examples below are **not yet accepted by the current
-browser/CLI validator**. Required-field tightening, exact configuration-key
-agreement, recursive typed-definition comparison and legacy rejection are required
-consumer/producer follow-up work, not existing guarantees. Do not publish a new
-maintained dataset with this old client/validator. No compatibility migration is
-promised.
+The preparer and shared browser/CLI validation path now use this maintained shape:
+required definitions, exact configuration membership, literal policies, recursive
+typed problem values and required timing samples. Historical schemas are rejected,
+not migrated or silently excluded. Bundled metadata requests schema 1.
+
+This describes local implementation, not completed production rollout or real-runner
+acceptance. Numeric precision remains an unresolved publication gate: an unbounded
+Python integer can lose precision when parsed as a JavaScript number (for example,
+`9007199254740993` becomes `9007199254740992`), and cross-runtime even-sample medians
+can disagree. No rounding, tolerance or integer bound is silently imposed here;
+those semantics require an explicit contract decision before acceptance. The
+already-parsed validation API cannot recover duplicate keys or original numeric
+lexemes; use the shared strict text boundary for browser/CLI/processor loading.
+No compatibility migration is promised.
 
 ## Files and metadata
 

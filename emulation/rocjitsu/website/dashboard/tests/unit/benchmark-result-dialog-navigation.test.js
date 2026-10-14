@@ -24,8 +24,8 @@ const nodes = (element) => {
   return result;
 };
 const workload = { id: 'llama', name: 'Llama long workload', suite: 'Llama', problem: {} };
-const runs = ['first', 'second'].map((runId, index) => ({ runId, timestamp: `2026-10-0${index + 1}T12:00:00Z`, commitTimestamp: `2026-10-0${index + 1}T11:00:00Z`, provenance: { rocjitsuCommitSha: String(index).repeat(40) }, tests: [{ logicalTestId: 'llama', name: workload.name, target: 'gfx1250', mode: 'ST', suite: 'Llama', status: 'completed', durationSeconds: index + 1 }] }));
-const props = { data: { testCatalog: [workload], runs }, filters: { targets: ['gfx1250'], modes: ['ST'], suites: ['Llama'] } };
+const runs = ['first', 'second'].map((runId, index) => ({ runId, timestamp: `2026-10-0${index + 1}T12:00:00Z`, commitTimestamp: `2026-10-0${index + 1}T11:00:00Z`, provenance: { rocjitsuCommitSha: String(index).repeat(40) }, tests: [{ logicalTestId: 'llama', name: workload.name, target: 'gfx1250', mode: 'single', suite: 'Llama', status: 'completed', durationSeconds: index + 1 }] }));
+const props = { data: { testCatalog: [workload], runs }, filters: { targets: ['gfx1250'], modes: ['single'], suites: ['Llama'] } };
 const render = () => { hooks.cursor = 0; return BenchmarksView(props); };
 const inspector = (tree) => nodes(tree).find((node) => node.type === Dialog && node.props['aria-labelledby'] === 'inspect-results-title');
 const selector = (tree) => nodes(tree).find((node) => node.type === ChartPointSelector);

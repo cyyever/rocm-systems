@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { openDashboard, ready } from './helpers/dashboard.js';
 
-const options = ['gfx1250', 'gfx950', 'ST', 'MT', 'Triton', 'Llama'];
+const options = ['gfx1250', 'gfx950', 'single', 'default', 'Triton', 'Llama'];
 async function expectScope(page, selected) {
   for (const name of options) {
     await expect(page.getByRole('checkbox', { name, exact: true })).toBeChecked({ checked: selected.includes(name) });
@@ -17,9 +17,9 @@ test('fresh scope selects every published target, suite and mode without persist
 });
 
 test('stored scope stays narrow and explicit empty URL scope takes precedence after reload', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('rocjitsu-dashboard-filters', JSON.stringify({ targets: ['gfx950'], suites: ['Triton'], modes: ['MT'] })));
+  await page.addInitScript(() => localStorage.setItem('rocjitsu-dashboard-filters', JSON.stringify({ targets: ['gfx950'], suites: ['Triton'], modes: ['default'] })));
   await openDashboard(page);
-  await expectScope(page, ['gfx950', 'Triton', 'MT']);
+  await expectScope(page, ['gfx950', 'Triton', 'default']);
   await openDashboard(page, '/?targets=&suites=&modes=');
   await expectScope(page, []);
   await page.reload();

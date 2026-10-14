@@ -52,7 +52,7 @@ export default function BenchmarkHistoryChart({ data, filters, benchmark, range 
     series: viewModel.series.map((series) => ({
       name: series.name, type: 'line', data: series.points, smooth: false,
       showSymbol: true, symbol: 'circle', symbolSize: compact ? 4 : 5, connectNulls: false,
-      lineStyle: { ...chartLineStyle(colorFor(series), 2), type: series.mode === 'MT' ? 'dashed' : 'solid' },
+      lineStyle: { ...chartLineStyle(colorFor(series), 2), type: series.mode === 'default' ? 'dashed' : 'solid' },
       itemStyle: chartPointStyle(colorFor(series), theme.palette.background.paper),
       emphasis: { focus: 'series', scale: 1.4 }, z: 3,
     })).concat(viewModel.series.map((series) => ({

@@ -3,7 +3,7 @@ import { validatePublishedDashboardData } from '../../src/data/dashboardValidati
 import { provenanceDetails } from '../../src/data/provenance.js';
 import { escapeHtml } from '../../src/utils/formatters.js';
 import { changeTone, classifyDurationChange } from '../../src/utils/performance.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 test('duration change color is gray at zero and signed otherwise', () => {
   expect(classifyDurationChange(0)).toBe('neutral');
@@ -21,7 +21,7 @@ test('escapes every HTML-significant character in published text', () => {
 });
 
 test('omits optional provenance fields that a run does not publish', () => {
-  const source = createSchema2Publication();
+  const source = createMaintainedPublication();
   source.runs.forEach((run) => {
     delete run.source.message;
     run.environment = [];

@@ -9,7 +9,7 @@ function configurationDefaults(snapshot, runs) {
   const preferred = runs.find((run) => run?.configurations?.length);
   const target = snapshot.target ?? configurationTargets(preferred ? [preferred] : runs)[0] ?? null;
   const configurations = runs.find((run) => run?.configurations?.some((c) => c.target === target))?.configurations ?? [];
-  const mode = snapshot.mode ?? ['ST', 'MT'].find((value) => configurations.some((c) => c.target === target && c.threadingMode === value)) ?? 'ST';
+  const mode = snapshot.mode ?? ['single', 'default'].find((value) => configurations.some((c) => c.target === target && c.thread_policy === value)) ?? 'single';
   return { target, mode };
 }
 

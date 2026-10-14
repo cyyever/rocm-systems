@@ -1,13 +1,14 @@
-import { CURRENT_RUN_SCHEMA_VERSION, isExcludedPluginRun, migrateSchema1Run, publishedRunPath, runSchemaVersion } from './runSchema.js';
+import { isJsonValue, typedJsonIdentity } from './jsonValues.js';
+import { CURRENT_RUN_SCHEMA_VERSION, THREAD_POLICIES, CONFIGURATION_PATTERN, configurationKey, publishedRunPath, runSchemaVersion } from './runSchema.js';
 import { DASHBOARD_SITE_CONFIG } from '../config/siteConfig.js';
 import { backfillRunIds, compareRunExecution, sortRunsByCommit } from './runOrdering.js';
 
 export const CURRENT_SCHEMA_VERSION = CURRENT_RUN_SCHEMA_VERSION;
-export const RUN_FILE_PATTERN = /^runs\/(?:(?:default-branch|side-branches)\/)?[A-Za-z0-9._-]+\.json$/;
+export const RUN_FILE_PATTERN = /^runs\/(?:default-branch|side-branches)\/[A-Za-z0-9._-]+\.json$/;
 export const CATALOG_FILE_PATTERN = /^test-catalogs\/[A-Za-z0-9._-]+\.json$/;
 const SHA = /^[0-9a-f]{40}$/;
 const TOKEN = /^[A-Za-z0-9._-]+$/;
-const CONFIGURATION = /^([A-Za-z0-9._-]+):(ST|MT)$/;
+const CONFIGURATION = CONFIGURATION_PATTERN;
 const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 const hasText = (value) => typeof value === 'string' && Boolean(value.trim());
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20,7 +21,7 @@ const sameSet = (left, right) => {
 };
 const identity = (value) => JSON.stringify(value);
 const environmentIdentity = (environment) => identity(environment.map(({ key, value }) => [key, value]).sort(([a], [b]) => a.localeCompare(b)));
-const definitionIdentity = (test) => identity([test.suite, test.name, Object.entries(test.problem).sort(([a], [b]) => a.localeCompare(b))]);
+const definitionIdentity = (test) => typedJsonIdentity([test.suite, test.name, test.operation, test.problem]);
 
 function isIsoTimestamp(value) {
   if (typeof value !== 'string') return false;
@@ -38,7 +39,7 @@ function safeUrl(value, github = false) {
   try {
     const url = new URL(value);
     return !url.username && !url.password && ['http:', 'https:'].includes(url.protocol)
-      && (!github || url.protocol === 'https:' && url.hostname === 'github.com');
+      && (!github || url.protocol === 'https:' && url.hostname === 'github.com' && !url.search && !url.hash);
   } catch { return false; }
 }
 
@@ -57,13 +58,13 @@ export function validateDashboardSiteConfig(siteConfig) {
 
 function validateCatalog(catalog, file) {
   if (!CATALOG_FILE_PATTERN.test(file) || !object(catalog) || catalog.id !== file.slice(14, -5)
-    || !Array.isArray(catalog.tests) || !object(catalog.configurations) || Object.keys(catalog.configurations).length === 0) {
-    throw new Error(`Test catalog ${file} does not match the schema-2 catalog contract`);
+    || Object.hasOwn(catalog, 'targets') || !Array.isArray(catalog.tests) || !object(catalog.configurations) || Object.keys(catalog.configurations).length === 0) {
+    throw new Error(`Test catalog ${file} does not match the maintained schema-1 catalog contract`);
   }
   const ids = catalog.tests.map((test) => test?.id);
   if (new Set(ids).size !== ids.length || catalog.tests.some((test) => !hasText(test?.id) || !hasText(test.suite) || !hasText(test.name)
-    || Object.hasOwn(test, 'operation') && !hasText(test.operation)
-    || !object(test.problem) || Object.entries(test.problem).some(([key, value]) => !hasText(key) || !scalar(value)))) {
+    || !hasText(test.operation)
+    || !object(test.problem) || Object.entries(test.problem).some(([key, value]) => !hasText(key) || !isJsonValue(value)))) {
     throw new Error(`Test catalog ${file} contains an invalid or duplicate test definition`);
   }
   for (const [key, members] of Object.entries(catalog.configurations)) {
@@ -73,26 +74,6 @@ function validateCatalog(catalog, file) {
   return catalog;
 }
 
-function mergeCatalogConfigurations(file, previous, current) {
-  if (!previous) return current;
-  if (previous.id !== current.id || identity(previous.tests) !== identity(current.tests)) {
-    throw new Error(`Test catalog ${file} has inconsistent migrated definitions`);
-  }
-  const configurations = new Map(Object.entries(previous.configurations));
-  for (const [key, members] of Object.entries(current.configurations)) {
-    if (configurations.has(key) && !sameSet(configurations.get(key), members)) {
-      throw new Error(`Test catalog ${file} has conflicting migrated configuration ${key}`);
-    }
-    configurations.set(key, members);
-  }
-  return {
-    ...current,
-    configurations: Object.fromEntries(
-      [...configurations].sort(([left], [right]) => left.localeCompare(right)),
-    ),
-  };
-}
-
 export function validatePublishedResult(result) {
   if (!object(result) || !hasText(result.testId)) throw new Error('Result must contain a testId');
   const removed = ['exitCode', 'findings'].find((key) => Object.hasOwn(result, key));
@@ -100,11 +81,12 @@ export function validatePublishedResult(result) {
   if (!['completed', 'failed', 'timeout'].includes(result.status)) throw new Error(`Result ${result.testId} has invalid status`);
   if (!Object.hasOwn(result, 'durationSeconds') || !Object.hasOwn(result, 'error')) throw new Error(`Result ${result.testId} must contain durationSeconds and error`);
   if (result.status === 'completed') {
-    if (!Number.isFinite(result.durationSeconds) || result.durationSeconds < 0) throw new Error(`Completed result ${result.testId} must contain nonnegative finite durationSeconds`);
+    if (!Number.isFinite(result.durationSeconds) || result.durationSeconds <= 0) throw new Error(`Completed result ${result.testId} must contain positive finite durationSeconds`);
     if (result.error !== null) throw new Error(`Completed result ${result.testId} cannot contain an error`);
   } else if (result.durationSeconds !== null) throw new Error(`${result.status} result ${result.testId} must have a null durationSeconds`);
   if (result.error !== null && !hasText(result.error)) throw new Error(`Result ${result.testId} error must be a non-empty string or null`);
-  if (Object.hasOwn(result, 'timing_results_s')) {
+  if (!Object.hasOwn(result, 'timing_results_s')) throw new Error(`Result ${result.testId} must contain timing_results_s`);
+  {
     const samples = result.timing_results_s;
     if (!Array.isArray(samples) || samples.some((sample) => !Number.isFinite(sample) || sample <= 0)
       || result.status === 'completed' && samples.length === 0) {
@@ -123,50 +105,53 @@ export function validatePublishedResult(result) {
 function normalizeRun(run, catalog, generatedAt) {
   const source = run?.source; const execution = run?.execution;
   const environment = run?.environment;
-  if (typeof run?.id !== 'string' || !TOKEN.test(run.id)
+  if (typeof run?.id !== 'string' || !TOKEN.test(run.id) || ['.', '..'].includes(run.id)
     || !hasText(source?.branch) || typeof source.commit !== 'string' || !SHA.test(source.commit ?? '') || !isIsoTimestamp(source.committedAt)
     || (Object.hasOwn(source, 'message') && !hasText(source.message))
     || !isIsoTimestamp(execution?.completedAt) || !['auto', 'manual'].includes(execution.trigger) || !hasText(execution.machine)
     || !Array.isArray(environment) || environment.some((detail) => !hasText(detail?.key) || !hasText(detail?.label) || !scalar(detail?.value))
     || new Set(environment.map(({ key }) => key)).size !== environment.length || !Array.isArray(run.configurations) || run.configurations.length === 0) {
-    throw new Error(`Run ${run?.id ?? '(unknown)'} does not match the schema-2 run contract`);
+    throw new Error(`Run ${run?.id ?? '(unknown)'} does not match the maintained schema-1 run contract`);
   }
   if (Date.parse(source.committedAt) > Date.parse(execution.completedAt) || Date.parse(execution.completedAt) > Date.parse(generatedAt)) throw new Error(`Run ${run.id} must be committed before completion and completed by publication`);
-  if (Object.hasOwn(source, 'base') && (!hasText(source.base?.branch) || typeof source.base?.commit !== 'string' || !SHA.test(source.base?.commit ?? ''))) throw new Error(`Run ${run.id} has an invalid source base`);
-  if (Object.hasOwn(source, 'pullRequest') && (!Number.isInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
+  if (Object.hasOwn(source, 'base') && (!hasText(source.base?.branch) || source.base.branch === source.branch || typeof source.base?.commit !== 'string' || !SHA.test(source.base?.commit ?? ''))) throw new Error(`Run ${run.id} has an invalid source base`);
+  if (Object.hasOwn(source, 'pullRequest') && (!source.base || !Number.isInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
     || (Object.hasOwn(source.pullRequest, 'url') && (!safeUrl(source.pullRequest.url, true) || !new URL(source.pullRequest.url).pathname.endsWith(`/pull/${source.pullRequest.number}`))))) throw new Error(`Run ${run.id} has an invalid pullRequest`);
 
   const definitions = new Map(catalog.tests.map((test) => [test.id, test]));
   const seen = new Set();
   const tests = run.configurations.flatMap((configuration) => {
-    const { target, threadingMode, results } = configuration;
-    if (typeof threadingMode !== 'string' || !['ST', 'MT'].includes(threadingMode)) throw new Error(`Run ${run.id} has an invalid configuration threadingMode`);
-    const key = `${target}:${threadingMode}`;
+    const { target, thread_policy, results } = configuration;
+    if (!THREAD_POLICIES.includes(thread_policy) || Object.hasOwn(configuration, 'threadingMode')) throw new Error(`Run ${run.id} has an invalid configuration thread_policy`);
+    const key = configurationKey(target, thread_policy);
     if (!hasText(target) || !CONFIGURATION.test(key) || !Object.hasOwn(catalog.configurations, key) || seen.has(key) || !Array.isArray(results)) throw new Error(`Run ${run.id} has an invalid or duplicate configuration ${key}`);
 
     seen.add(key);
-    results.forEach(validatePublishedResult);
+    results.forEach((result) => {
+      validatePublishedResult(result);
+      if (result.thread_policy !== thread_policy) throw new Error(`Run ${run.id} result ${result.testId} has mismatched thread_policy`);
+    });
     const ids = results.map(({ testId }) => testId);
     if (new Set(ids).size !== ids.length || !sameSet(ids, catalog.configurations[key])) throw new Error(`Run ${run.id} must contain exactly one result per ${key} catalog workload`);
     return results.map(({ testId, status, durationSeconds, error, timing_results_s }) => ({ ...definitions.get(testId), status, durationSeconds, error,
       ...(timing_results_s !== undefined ? { timing_results_s: [...timing_results_s] } : {}),
-      testId: `${key}:${testId}`, logicalTestId: testId, target, mode: threadingMode }));
+      testId: `${key}:${testId}`, logicalTestId: testId, target, thread_policy, mode: thread_policy }));
   });
+  if (!sameSet([...seen], Object.keys(catalog.configurations))) throw new Error(`Run ${run.id} must contain exactly the catalog configuration keys`);
   return {
     runId: run.id, testCatalog: run.testCatalog, catalogId: catalog.id,
     timestamp: execution.completedAt, commitTimestamp: source.committedAt, trigger: execution.trigger, machineId: execution.machine,
-    targets: [...new Set(run.configurations.map(({ target }) => target))], modes: ['ST', 'MT'].filter((mode) => run.configurations.some((c) => c.threadingMode === mode)),
+    targets: [...new Set(run.configurations.map(({ target }) => target))], modes: THREAD_POLICIES.filter((mode) => run.configurations.some((c) => c.thread_policy === mode)),
     branch: source.branch, ...(source.base ? { sourceBase: { ...source.base } } : {}), ...(source.pullRequest ? { pullRequest: { ...source.pullRequest } } : {}),
     environmentId: environmentIdentity(environment),
     provenance: { rocjitsuCommitSha: source.commit, ...(source.message ? { commitMessage: source.message } : {}), details: environment },
-    configurations: run.configurations.map(({ target, threadingMode }) => ({ target, threadingMode })), tests,
+    configurations: run.configurations.map(({ target, thread_policy }) => ({ target, thread_policy })), tests,
   };
 }
 
 function buildDashboardData(raw) {
-  if (raw?.schemaVersion === 1) throw new Error('Dashboard schema 1 requires migration to schema 2');
   const sourceRuns = raw?.allRuns ?? raw?.runs;
-  if (raw?.schemaVersion !== 2 || !Array.isArray(sourceRuns) || !Array.isArray(raw.testCatalog)) throw new Error('Expected schema-2 normalized data with runs and testCatalog');
+  if (raw?.schemaVersion !== 1 || !Array.isArray(sourceRuns) || !Array.isArray(raw.testCatalog)) throw new Error('Expected maintained schema-1 normalized data with runs and testCatalog');
   for (const run of sourceRuns) {
     if (!hasText(run?.runId) || !Array.isArray(run.tests) || !Array.isArray(run.configurations) || !isIsoTimestamp(run.timestamp)
       || !isIsoTimestamp(run.commitTimestamp) || !hasText(run.branch)) throw new Error('Invalid normalized dashboard run');
@@ -174,7 +159,7 @@ function buildDashboardData(raw) {
   const allRuns = [...sourceRuns].sort(compareRunExecution);
   const runs = allRuns.filter(({ branch }) => branch === (raw.canonicalBranch ?? 'develop'));
   return { ...raw, canonicalBranch: raw.canonicalBranch ?? 'develop', allRuns, runs,
-    targets: [...new Set(allRuns.flatMap(({ targets }) => targets))].sort(), suites: [...new Set(raw.testCatalog.map(({ suite }) => suite))].sort(), modes: ['ST', 'MT'],
+    targets: [...new Set(allRuns.flatMap(({ targets }) => targets))].sort(), suites: [...new Set(raw.testCatalog.map(({ suite }) => suite))].sort(), modes: [...THREAD_POLICIES],
     latestRun: runs.at(-1) ?? null, latestCommitRun: sortRunsByCommit(runs).at(-1) ?? null, backfillRunIds: backfillRunIds(runs) };
 }
 
@@ -188,7 +173,7 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
     try {
       if (runErrors[indexPosition]) throw runErrors[indexPosition];
       const sourceRun = runs[indexPosition];
-      if (typeof sourceRun?.id !== 'string' || !TOKEN.test(sourceRun.id)) throw new Error('Run does not match the schema-2 run contract: invalid ID');
+      if (typeof sourceRun?.id !== 'string' || !TOKEN.test(sourceRun.id) || ['.', '..'].includes(sourceRun.id)) throw new Error('Run does not match the maintained schema-1 run contract: invalid ID');
       if (sourceIds.has(sourceRun.id)) throw new Error(`Duplicate run ID ${sourceRun.id}`);
       sourceIds.add(sourceRun.id);
       if (file.split('/').at(-1) !== `${sourceRun.id}.json`) throw new Error(`Run ${sourceRun.id} filename must match its ID`);
@@ -196,27 +181,15 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
       if (typeof catalogFile === 'string' && CATALOG_FILE_PATTERN.test(catalogFile) && Object.hasOwn(catalogs, catalogFile)) {
         sourceCatalogs.set(catalogFile, catalogs[catalogFile]);
       }
-      if (isExcludedPluginRun(sourceRun)) return;
-      const version = runSchemaVersion(sourceRun);
-      if (file !== publishedRunPath(sourceRun, siteConfig.canonicalBranch)
-        && !(version === 1 && file === `runs/${sourceRun.id}.json`)) {
+      runSchemaVersion(sourceRun);
+      if (file !== publishedRunPath(sourceRun, siteConfig.canonicalBranch)) {
         throw new Error(`Run ${sourceRun.id} filename must match its ID and branch directory`);
       }
       if (typeof catalogFile !== 'string' || !CATALOG_FILE_PATTERN.test(catalogFile)) throw new Error(`Run ${sourceRun.id} references an invalid test catalog`);
       if (catalogErrors[catalogFile]) throw catalogErrors[catalogFile];
-      const migrated = version === 1 ? migrateSchema1Run(sourceRun, catalogs[catalogFile])
-        : { run: sourceRun, catalog: catalogs[catalogFile] };
-      if (migrated.run.schemaVersion !== CURRENT_RUN_SCHEMA_VERSION) {
-        throw new Error(`Run ${sourceRun.id} has no migration from schema ${version} to requested schema ${CURRENT_RUN_SCHEMA_VERSION}`);
-      }
-      const validatedCatalog = validateCatalog(migrated.catalog, catalogFile);
-      const catalog = version === 1
-        ? mergeCatalogConfigurations(
-          catalogFile, normalizedCatalogs.get(catalogFile), validatedCatalog,
-        )
-        : validatedCatalog;
+      const catalog = validateCatalog(catalogs[catalogFile], catalogFile);
       normalizedCatalogs.set(catalogFile, catalog);
-      normalizedRuns.push(normalizeRun(migrated.run, catalog, index.generatedAt));
+      normalizedRuns.push(normalizeRun(sourceRun, catalog, index.generatedAt));
     } catch (error) { failures.push(`- ${file}: ${error.message}`); }
   });
   if (failures.length) throw new Error(`Dashboard data failed validation:\n${failures.join('\n')}`);
@@ -231,10 +204,8 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
   for (const [file, catalog] of normalizedCatalogs) for (const definition of catalog.tests) {
     const previous = definitions.get(definition.id);
     if (previous && (definitionIdentity(previous) !== definitionIdentity(definition)
-      || previous.operation !== undefined && definition.operation !== undefined && previous.operation !== definition.operation)) throw new Error(`Test ${definition.id} is defined differently in ${file}; publish a new test ID`);
-    // Historical catalogs may lack operation. Preserve richer catalog metadata without
-    // rewriting old run results or mapping corpus-owned workload identities.
-    definitions.set(definition.id, { ...previous, ...definition });
+     )) throw new Error(`Test ${definition.id} is defined differently in ${file}; publish a new test ID`);
+    definitions.set(definition.id, definition);
   }
   const sourceData = { index, catalogs: Object.fromEntries(sourceCatalogs), runs };
   const data = buildDashboardData({ repository: siteConfig.repository, isBeta: siteConfig.isBeta, canonicalBranch: siteConfig.canonicalBranch, schemaVersion: CURRENT_SCHEMA_VERSION, generatedAt: index.generatedAt, testCatalog: [...definitions.values()], catalogs: Object.fromEntries(normalizedCatalogs), runs: normalizedRuns });

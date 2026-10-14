@@ -1,6 +1,6 @@
 import { fixtureRunPath } from '../fixtures/runPath.js';
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { clickLastCompletedChartPoint, readChart, selectedRunIds } from './helpers/chart.js';
 import { ensureGridBenchmark, inspectResult, installPublication, openDashboard, ready } from './helpers/dashboard.js';
@@ -9,17 +9,17 @@ const gemm = 'Fictional GEMM';
 const card = (page, name) => page.getByTestId('benchmark-grid-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
 
 test('grid picker bounds search and eight slots while draft cancel, pointer removal and empty recovery work', async ({ page }) => {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   // One fictional run is enough to test a catalog larger than the visible window.
   const run = publication.runs.find((entry) => entry.id === 'fictional-develop-23');
   publication.runs = [run];
   publication.index.runFiles = [fixtureRunPath(run)];
   const catalog = publication.catalogs[run.testCatalog];
-  const extras = Array.from({ length: 55 }, (_, index) => ({ id: `picker-${index}`, name: `Fictional picker ${String(index).padStart(2, '0')}`, suite: 'Triton', problem: { size: index, ...(index === 54 ? { dataType: 64 } : {}) } }));
+  const extras = Array.from({ length: 55 }, (_, index) => ({ id: `picker-${index}`, name: `Fictional picker ${String(index).padStart(2, '0')}`, suite: 'Triton', operation: 'Fictional computation', problem: { size: index, ...(index === 54 ? { dataType: 64 } : {}) } }));
   catalog.tests.push(...extras);
-  catalog.configurations['gfx1250:ST'].push(...extras.map((entry) => entry.id));
-  run.configurations.find((config) => config.target === 'gfx1250' && config.threadingMode === 'ST')
-    .results.push(...extras.map((entry) => ({ testId: entry.id, status: 'failed', durationSeconds: null, error: 'Fictional picker-only diagnostic' })));
+  catalog.configurations['gfx1250/single'].push(...extras.map((entry) => entry.id));
+  run.configurations.find((config) => config.target === 'gfx1250' && config.thread_policy === 'single')
+    .results.push(...extras.map((entry) => ({ testId: entry.id, thread_policy: 'single', status: 'failed', timing_results_s: [], durationSeconds: null, error: 'Fictional picker-only diagnostic' })));
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=benchmarks');
   const headings = page.getByTestId('benchmark-grid-card').getByRole('heading');
@@ -116,20 +116,20 @@ test('grid point selection survives timeframe and scope changes without legacy m
   const clickedPoint = await clickLastCompletedChartPoint(chart);
   let dialog = page.getByRole('dialog');
   await expect(dialog.getByText('fictional-develop-23', { exact: true })).toBeVisible();
-  expect(['ST', 'MT']).toContain(clickedPoint.mode);
-  await expect(dialog.getByText('Execution mode', { exact: true }).locator('..')).toContainText(clickedPoint.mode);
+  expect(['single', 'default']).toContain(clickedPoint.mode);
+  await expect(dialog.getByText('Thread policy', { exact: true }).locator('..')).toContainText(clickedPoint.mode);
   await expect(dialog.getByText('Simulator threads', { exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Close details', exact: true }).click();
   expect(await selectedRunIds(chart)).toEqual(['fictional-develop-23']);
   await page.getByRole('button', { name: 'Trailing 7 days' }).click();
   await expect(page.getByRole('button', { name: 'Trailing 7 days' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('checkbox', { name: 'MT', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
   expect(await selectedRunIds(chart)).toEqual(['fictional-develop-23']);
   const series = await readChart(chart, (instance) => {
     const option = instance.getOption();
     return { zoom: option.dataZoom ?? [], lines: option.series.filter((series) => series.type === 'line').map((series) => series.name) };
   });
-  expect(series).toEqual({ zoom: [], lines: ['gfx1250 ST', 'gfx950 ST'] });
+  expect(series).toEqual({ zoom: [], lines: ['gfx1250 single', 'gfx950 single'] });
   // Re-open after an explicit clear: clicking an already-selected run toggles
   // that run off; detail inspection itself is not a promise to keep it selected.
   await page.getByRole('button', { name: 'Clear selected runs (1)', exact: true }).click();
@@ -142,7 +142,7 @@ test('grid point selection survives timeframe and scope changes without legacy m
   expect(await selectedRunIds(chart)).toEqual([]);
 });
 
-test('keyboard result details distinguish completed zero, failed, timeout and unpublished configurations', async ({ page }) => {
+test('keyboard result details distinguish positive completion, failed, timeout and unpublished configurations', async ({ page }) => {
   await openDashboard(page, '/?view=benchmarks');
   await page.getByRole('checkbox', { name: 'gfx950', exact: true }).check();
   await ensureGridBenchmark(page, gemm);
@@ -153,9 +153,9 @@ test('keyboard result details distinguish completed zero, failed, timeout and un
   await page.keyboard.press('Escape');
   await inspector.getByRole('button', { name: 'Close', exact: true }).click();
   for (const [name, runId, mode, status] of [
-    [gemm, 'fictional-develop-14', 'ST', 'Completed'],
-    ['Fictional added workload D', 'fictional-develop-08', 'ST', 'Failed'],
-    ['Fictional added workload E', 'fictional-develop-08', 'MT', 'Timeout'],
+    [gemm, 'fictional-develop-14', 'single', 'Completed'],
+    ['Fictional added workload D', 'fictional-develop-08', 'single', 'Failed'],
+    ['Fictional added workload E', 'fictional-develop-08', 'default', 'Timeout'],
   ]) {
     await ensureGridBenchmark(page, name);
     const dialog = await inspectResult(page, name, runId, 'gfx1250', mode);
@@ -164,8 +164,8 @@ test('keyboard result details distinguish completed zero, failed, timeout and un
     await expect(dialog.getByText('Run Provenance', { exact: true })).toBeVisible();
     await expect(dialog.getByText('Environment', { exact: true })).toBeVisible();
     await expect(dialog.getByText('Fictional SDK', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('Execution mode', { exact: true }).locator('..')).toContainText(mode);
-    await expect(dialog.getByText('Duration', { exact: true }).locator('..')).toContainText(status === 'Completed' ? formatDuration(0) : '—');
+    await expect(dialog.getByText('Thread policy', { exact: true }).locator('..')).toContainText(mode);
+    await expect(dialog.getByText('Duration', { exact: true }).locator('..')).toContainText(status === 'Completed' ? formatDuration(createMaintainedPublication().runs.find(({ id }) => id === runId).configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === mode).results.find(({ testId }) => testId === 'a').durationSeconds) : '—');
     if (status !== 'Completed') await expect(dialog.getByText('Fictional diagnostic', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close details', exact: true }).click();
     await expect(dialog).toHaveCount(0);
@@ -174,11 +174,11 @@ test('keyboard result details distinguish completed zero, failed, timeout and un
     await parent.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(parent).toHaveCount(0);
   }
-  await inspectResult(page, gemm, 'fictional-develop-12', 'gfx950', 'MT');
+  await inspectResult(page, gemm, 'fictional-develop-12', 'gfx950', 'default');
   // Unpublished results stay in the inspector; no nested details are invented.
   const absent = page.locator('[role="dialog"][aria-labelledby="inspect-results-title"]');
   await expect(page.getByRole('button', { name: 'Close details', exact: true })).toHaveCount(0);
-  await expect(absent.getByRole('alert')).toContainText('Unavailable · gfx950 · MT · fictional-develop-12');
+  await expect(absent.getByRole('alert')).toContainText('Unavailable · gfx950 · default · fictional-develop-12');
   await expect(absent.getByRole('alert')).toContainText('not a failed or zero-duration measurement');
   await expect(absent.getByText('Run Provenance', { exact: true })).toHaveCount(0);
 });

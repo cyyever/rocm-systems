@@ -6,7 +6,7 @@ import RecentRuns from '../../src/components/overview/RecentRuns.jsx';
 import { selectRecentRunAttempts, selectRecentRunSummaries } from '../../src/data/selectors.js';
 import { createRecentRunsHistory } from '../fixtures/recent-runs-history.js';
 
-const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST'] };
+const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single'] };
 const roots = [];
 afterEach(() => { for (const root of roots.splice(0)) act(() => root.unmount()); vi.unstubAllGlobals(); });
 

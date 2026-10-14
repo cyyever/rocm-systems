@@ -1,9 +1,9 @@
 import { fixtureRunPath } from './runPath.js';
-import { createSchema2Publication } from './schema2Dataset.js';
+import { createMaintainedPublication } from './maintainedDataset.js';
 
 // Additive v11 fixture overlay; never imported by production application code.
 export function createFeedbackPublication() {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   const run = structuredClone(publication.runs.find((run) => run.id === 'fictional-branch-01'));
   run.id = 'fictional-rattataking-test-branch';
   run.source = { branch: 'users/RattataKing/test-branch', commit: 'f1c7'.repeat(10),

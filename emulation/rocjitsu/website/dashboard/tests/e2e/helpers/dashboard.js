@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect } from '@playwright/test';
-import { createSchema2Publication } from '../../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../../fixtures/maintainedDataset.js';
 
 export const RAW_DATA_PREFIX = 'https://raw.githubusercontent.com/ROCm/rocm-systems/refs/heads/gh-pages-rocjitsu/rocjitsu-dashboard/data/';
 
@@ -35,7 +35,7 @@ export async function downloadSource(page) {
 // All interception is test-only, at the real consumer's HTTP boundary. No live
 // publisher or timing measurements are implied. Keep handlers until teardown.
 export async function installPublication(page, {
-  publication = createSchema2Publication(), prefix = '/data/', beforeResponse,
+  publication = createMaintainedPublication(), prefix = '/data/', beforeResponse,
 } = {}) {
   const files = {
     'index.json': publication.index,
@@ -87,7 +87,7 @@ export async function ensureGridBenchmark(page, name) {
   await dialog.getByRole('button', { name: 'Apply selection' }).click();
 }
 
-export async function inspectResult(page, name, runId, target = 'gfx1250', mode = 'ST') {
+export async function inspectResult(page, name, runId, target = 'gfx1250', mode = 'single') {
   await page.getByRole('button', { name: `Inspect ${name} results`, exact: true }).click();
   const dialog = page.getByRole('dialog');
   const picker = dialog.getByRole('combobox', { name: `${name} result`, exact: true });

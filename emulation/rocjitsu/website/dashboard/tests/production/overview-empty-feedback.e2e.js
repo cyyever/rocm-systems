@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { installPublication } from '../e2e/helpers/dashboard.js';
 import { PUBLISHED_DATA_BASE_URL } from '../../scripts/dashboard-data-source.mjs';
 
 test('empty production dashboard suppresses migration detail and makes all four icons gray', async ({ page }) => {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   publication.runs[0].schemaVersion = 99;
   await installPublication(page, { publication, prefix: PUBLISHED_DATA_BASE_URL });
   await page.goto('/');
@@ -24,7 +24,7 @@ test('empty production dashboard suppresses migration detail and makes all four 
 
 for (const [factor, tone] of [[1, 'success'], [3, 'error']]) {
   test(`production Overview Perf change value and icon use ${tone} colors`, async ({ page }) => {
-    const publication = createSchema2Publication();
+    const publication = createMaintainedPublication();
     const latest = publication.runs.find((run) => run.id === 'fictional-develop-23');
     latest.configurations.forEach((configuration) => configuration.results.forEach((result) => {
       if (result.status === 'completed') result.durationSeconds *= factor;

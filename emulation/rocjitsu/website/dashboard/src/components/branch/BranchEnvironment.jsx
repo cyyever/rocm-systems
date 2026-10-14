@@ -11,7 +11,7 @@ export default function BranchEnvironment({ candidate, reference, selection, rep
     baseline: baselineFacts.get(key)?.value, candidate: candidateFacts.get(key)?.value,
     baselineLabel: baselineFacts.get(key)?.label, candidateLabel: candidateFacts.get(key)?.label,
   }));
-  const configuration = (run) => run?.configurations.find((item) => item.target === selection.target && item.threadingMode === selection.mode);
+  const configuration = (run) => run?.configurations.find((item) => item.target === selection.target && item.thread_policy === selection.mode);
   const sourceFacts = [
     ['attempt', 'Exact attempt', (run) => run?.runId], ['branch', 'Source branch', (run) => run?.branch],
     ['commit', 'Source SHA', (run) => run?.provenance?.rocjitsuCommitSha], ['message', 'Commit message', (run) => run?.provenance?.commitMessage],

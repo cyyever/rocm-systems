@@ -15,13 +15,13 @@ test('attempt selector labels and search identify branch, full SHA, PR, message,
 });
 
 test('configuration availability uses explicit published modes and positive matched coverage, while measured zero is not an absent result', () => {
-  const run = { configurations: [{ target: 'gfx1250', threadingMode: 'ST' }] };
+  const run = { configurations: [{ target: 'gfx1250', thread_policy: 'single' }] };
   const noPairs = { comparable: [], notComparable: [], baselineDuration: 0, candidateDuration: 0, aggregateDelta: null };
-  expect(presentation.configurationState?.(run, run, noPairs, 'gfx1250', 'ST')).toMatchObject({ available: false, deltaSeconds: null, deltaPercent: null });
-  expect(presentation.configurationState(run, run, noPairs, 'gfx950', 'MT').reason).toContain('Candidate configuration not published');
-  expect(presentation.configurationState(run, null, noPairs, 'gfx1250', 'ST').reason).toContain('No reference selected');
+  expect(presentation.configurationState?.(run, run, noPairs, 'gfx1250', 'single')).toMatchObject({ available: false, deltaSeconds: null, deltaPercent: null });
+  expect(presentation.configurationState(run, run, noPairs, 'gfx950', 'default').reason).toContain('Candidate configuration not published');
+  expect(presentation.configurationState(run, null, noPairs, 'gfx1250', 'single').reason).toContain('No reference selected');
   const measured = { ...noPairs, comparable: [{ candidateTest: { durationSeconds: 0 }, baselineTest: { durationSeconds: 0 } }] };
-  expect(presentation.configurationState(run, run, measured, 'gfx1250', 'ST')).toMatchObject({ available: true, matched: 1, deltaSeconds: 0, deltaPercent: null });
+  expect(presentation.configurationState(run, run, measured, 'gfx1250', 'single')).toMatchObject({ available: true, matched: 1, deltaSeconds: 0, deltaPercent: null });
 });
 
 test('real suite grouping sorts signed measured seconds by default and signed percentages on request', () => {

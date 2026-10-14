@@ -1,10 +1,10 @@
 import { fixtureRunPath } from './runPath.js';
-// Fictional, test-only attempts derived from the schema-2 publication.
-import { createSchema2Publication } from './schema2Dataset.js';
+// Fictional, test-only attempts derived from the maintained schema-1 publication.
+import { createMaintainedPublication } from './maintainedDataset.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 
 export function createRecentRunsHistory(count = 65) {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   const canonical = publication.runs.filter((run) => run.source.branch === 'develop');
   const attempts = Array.from({ length: count }, (_, index) => {
     const run = structuredClone(canonical[index % canonical.length]);

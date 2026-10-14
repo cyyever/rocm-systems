@@ -22,7 +22,8 @@ test.each(['light', 'dark'])('%s baseline metric reads purple from the shared pa
   }
 });
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 const captured = vi.hoisted(() => ({ chart: null, selectors: [], swap: null, pair: null }));
 vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => { captured.chart = props; return createElement('div'); } }));
 vi.mock('../../src/components/compare/RunSelector.jsx', () => ({ default: (props) => { captured.selectors.push(props); return createElement('div', null, props.value?.runId ?? 'No run selected'); } }));
@@ -34,9 +35,9 @@ vi.mock('../../src/data/selectors.js', async (importOriginal) => {
   const original = await importOriginal();
   return { ...original, selectRunComparison: (...args) => { captured.pair = args; return original.selectRunComparison(...args); } };
 });
-const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST'] };
-const testResult = { testId: 'gfx1250:ST:a', logicalTestId: 'a', name: 'Fictional GEMM', target: 'gfx1250', mode: 'ST', suite: 'Triton', status: 'completed', durationSeconds: 10 };
-const run = (runId, duration, branch = 'develop') => ({ runId, branch, timestamp: '2026-10-05T14:00:00Z', commitTimestamp: '2026-10-05T13:00:00Z', modes: ['ST'], targets: ['gfx1250'], provenance: { rocjitsuCommitSha: runId.padEnd(40, 'a') }, tests: [{ ...testResult, durationSeconds: duration }] });
+const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single'] };
+const testResult = { testId: 'gfx1250/single:a', logicalTestId: 'a', name: 'Fictional GEMM', target: 'gfx1250', mode: 'single', suite: 'Triton', status: 'completed', durationSeconds: 10 };
+const run = (runId, duration, branch = 'develop') => ({ runId, branch, timestamp: '2026-10-05T14:00:00Z', commitTimestamp: '2026-10-05T13:00:00Z', modes: ['single'], targets: ['gfx1250'], provenance: { rocjitsuCommitSha: runId.padEnd(40, 'a') }, tests: [{ ...testResult, durationSeconds: duration }] });
 const baseline = run('fictional-base', 10);
 const candidate = run('fictional-next', 8, 'topic/fictional');
 const data = { runs: [baseline], allRuns: [baseline, candidate], latestRun: baseline };
@@ -68,18 +69,18 @@ test('comparison metrics use five real badge icons with signed delta, neutral em
   expect(excluded).not.toContain('Every selected benchmark has completed data');
 });
 
-test.each(['baseline', 'candidate'])('ST-only %s reports unpublished MT before catalog absence', (side) => {
-  const source = createSchema2Publication();
-  // Different catalogs also exercise genuinely absent ST workloads.
+test.each(['baseline', 'candidate'])('single-only %s reports unpublished default before catalog absence', (side) => {
+  const source = createMaintainedPublication();
+  // Different catalogs also exercise genuinely absent single workloads.
   const stOnly = source.runs[0];
-  stOnly.configurations = stOnly.configurations.filter(({ threadingMode }) => threadingMode === 'ST');
+  setFixtureConfigurations(source, stOnly, stOnly.configurations.filter(({ thread_policy }) => thread_policy === 'single'));
   const both = source.runs[8];
   source.runs = [stOnly, both];
   source.index.runFiles = source.runs.map(fixtureRunPath);
   const normalized = validatePublishedDashboardData(source).data;
   const props = {
     data: normalized,
-    filters: { targets: ['gfx1250'], suites: ['Triton', 'Llama'], modes: ['ST', 'MT'] },
+    filters: { targets: ['gfx1250'], suites: ['Triton', 'Llama'], modes: ['single', 'default'] },
     selectedBaselineId: side === 'baseline' ? stOnly.id : both.id,
     selectedCandidateId: side === 'candidate' ? stOnly.id : both.id,
   };
@@ -89,14 +90,14 @@ test.each(['baseline', 'candidate'])('ST-only %s reports unpublished MT before c
   const missingIndex = side === 'baseline' ? 3 : 4;
   const publishedIndex = side === 'baseline' ? 4 : 3;
   for (const name of ['Fictional GEMM', 'Fictional added workload D']) {
-    const cells = cellsFor(name, 'MT');
+    const cells = cellsFor(name, 'default');
     expect(cells[missingIndex]).toContain('Configuration not published');
     expect(cells[missingIndex]).not.toContain('Unavailable in catalog');
     expect(cells[publishedIndex]).toContain('Completed');
   }
-  expect(cellsFor('Fictional added workload D', 'ST')[missingIndex]).toContain('Unavailable in catalog');
-  expect(cellsFor('Fictional added workload D', 'ST')[publishedIndex]).toContain('Failed');
-  expect(cellsFor('Fictional added workload E', 'ST')[publishedIndex]).toContain('Timeout');
+  expect(cellsFor('Fictional added workload D', 'single')[missingIndex]).toContain('Unavailable in catalog');
+  expect(cellsFor('Fictional added workload D', 'single')[publishedIndex]).toContain('Failed');
+  expect(cellsFor('Fictional added workload E', 'single')[publishedIndex]).toContain('Timeout');
   const noRun = render({ ...props, [side === 'baseline' ? 'selectedBaselineId' : 'selectedCandidateId']: null });
   expect(noRun).toContain('No run selected');
   expect(noRun).not.toContain('Configuration not published');
@@ -109,7 +110,7 @@ test('swap invokes an atomic explicit pair callback and benchmark chart options 
   captured.swap.onClick();
   expect(onSwap).toHaveBeenCalledExactlyOnceWith({ baselineId: candidate.runId, candidateId: baseline.runId });
   expect(captured.chart.option.textStyle.fontFamily).toBeTruthy();
-  expect(captured.chart.option.yAxis.data[0]).toContain('ST');
+  expect(captured.chart.option.yAxis.data[0]).toContain('single');
   expect(captured.chart.option.xAxis.axisLabel.fontFamily).toBeTruthy();
 });
 

@@ -5,6 +5,7 @@
       "id": "a",
       "suite": "Triton",
       "name": "Fictional GEMM",
+      "operation": "GEMM",
       "problem": {
         "operation": "GEMM",
         "m": 1024
@@ -14,6 +15,7 @@
       "id": "b",
       "suite": "Llama",
       "name": "Fictional decode",
+      "operation": "Fictional computation",
       "problem": {
         "tokens": 128
       }
@@ -22,6 +24,7 @@
       "id": "d",
       "suite": "Triton",
       "name": "Fictional added workload D",
+      "operation": "Fictional computation",
       "problem": {
         "size": 256
       }
@@ -30,31 +33,32 @@
       "id": "e",
       "suite": "Llama",
       "name": "Fictional added workload E",
+      "operation": "Fictional computation",
       "problem": {
         "size": 512
       }
     }
   ],
   "configurations": {
-    "gfx1250:ST": [
+    "gfx1250/single": [
       "a",
       "b",
       "d",
       "e"
     ],
-    "gfx1250:MT": [
+    "gfx1250/default": [
       "a",
       "b",
       "d",
       "e"
     ],
-    "gfx950:ST": [
+    "gfx950/single": [
       "a",
       "b",
       "d",
       "e"
     ],
-    "gfx950:MT": [
+    "gfx950/default": [
       "a",
       "b",
       "d"

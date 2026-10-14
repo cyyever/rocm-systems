@@ -8,7 +8,7 @@ import App from '../../src/App.jsx';
 import BenchmarksView from '../../src/components/views/BenchmarksView.jsx';
 import { BenchmarkGridPicker } from '../../src/components/benchmarks/BenchmarkPicker.jsx';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const loader = vi.hoisted(() => ({ requests: [] }));
 vi.mock('../../src/data/publishedDataUrls.js', () => ({ resolvePublishedDataUrls: () => ({ indexUrl: 'https://example.test/data/index.json' }) }));
@@ -87,8 +87,14 @@ function mountApp(storage = new Map(), blockedStorage = false) {
   };
 }
 
+it('typed workload definitions survive fresh App persistence restoration', () => {
+  const selected = [{ id: 'typed', name: 'Typed workload', suite: 'Triton', operation: 'GEMM', problem: { shape: [1, 2], options: { nested: [false, null] }, note: null } }];
+  const probe = mountApp(new Map([['rocjitsu-dashboard-benchmarks', JSON.stringify(selected)]]));
+  expect(probe.state.selectedBenchmarks).toEqual(selected);
+});
+
 it.each(['empty', 'unavailable'])('UI-004 restores %s full workload selection on a fresh App root', async (choice) => {
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
   const selected = choice === 'empty' ? [] : [{ id: `fictional-exact-${'z'.repeat(240)}`, name: 'Fictional retained name', suite: 'Triton', problem: { dataType: false, size: 16 } }];
   const first = mountApp();
   await first.settle(data);
@@ -105,7 +111,7 @@ it.each(['empty', 'unavailable'])('UI-004 restores %s full workload selection on
 });
 
 it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice through real App navigation and data reload', async (choice) => {
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
   const before = structuredClone(data);
   const probe = mountApp();
   await probe.settle(data);
@@ -122,7 +128,7 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
     const retained = data.testCatalog.find((test) => test.id === 'c');
     probe.apply([retained]);
     expected = [retained.id];
-    const publication = createSchema2Publication();
+    const publication = createMaintainedPublication();
     publication.runs = publication.runs.filter((run) => run.testCatalog !== 'test-catalogs/fictional-old.json');
     publication.index.runFiles = publication.runs.map(fixtureRunPath);
     nextData = validatePublishedDashboardData(publication).data;
@@ -146,7 +152,7 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
 });
 
 it('UI-004 derives first-four defaults only while unchosen, without history or workload preference writes', async () => {
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
   const probe = mountApp();
   const replacements = probe.browser.history.replaceState.mock.calls.length;
   expect(probe.state.selectedBenchmarks).toBeNull();
@@ -164,7 +170,7 @@ it('UI-004 derives first-four defaults only while unchosen, without history or w
 });
 
 it('UI-004 retains in-memory choices when optional storage is denied', async () => {
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
   const probe = mountApp(new Map(), true);
   await probe.settle(data);
   probe.apply([]);
@@ -176,14 +182,14 @@ it('UI-004 retains in-memory choices when optional storage is denied', async () 
   expect(probe.state.selectedBenchmarks).toEqual([]);
 });
 
-it.each(['{broken', '{}', '[null]', '[{"id":"missing-name"}]', '[{"id":"a","name":"A","suite":"S","problem":{"bad":[]}}]'])('UI-004 treats malformed stored workload definitions as unchosen: %s', (value) => {
+it.each(['{broken', '{}', '[null]', '[{"id":"missing-name"}]', '[{"id":"a","name":"A","suite":"S","problem":[]}]'])('UI-004 treats malformed stored workload definitions as unchosen: %s', (value) => {
   const probe = mountApp(new Map([['rocjitsu-dashboard-benchmarks', value]]));
   expect(probe.state.selectedBenchmarks).toBeNull();
 });
 
 it('UI-004 preserves standalone initialBenchmarkIds and distinguishes controlled null from empty', () => {
-  const data = validatePublishedDashboardData(createSchema2Publication()).data;
-  const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['ST', 'MT'] };
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single', 'default'] };
   const onBenchmarksChange = vi.fn();
   const markup = (props) => renderToStaticMarkup(createElement(BenchmarksView, { data, filters, onBenchmarksChange, ...props }));
   const initialEmpty = markup({ initialBenchmarkIds: [] });

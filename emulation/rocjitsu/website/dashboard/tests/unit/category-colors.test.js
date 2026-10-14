@@ -6,12 +6,12 @@ import CategoryTag, { CategoryMarker } from '../../src/components/shared/Categor
 import { createDashboardTheme } from '../../src/theme/theme.js';
 import { categoryColors } from '../../src/theme/tokens.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const inheritedNames = ['constructor', 'toString', '__proto__', 'hasOwnProperty'];
 
 function validatedSuite(suite) {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   for (const catalog of Object.values(publication.catalogs)) {
     for (const test of catalog.tests) if (test.suite === 'Triton') test.suite = suite;
   }

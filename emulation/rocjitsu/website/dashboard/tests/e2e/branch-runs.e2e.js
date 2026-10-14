@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { benchmarkData } from '../fixtures/publishedData.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { selectPublishedBranches } from '../../src/data/branchSelectors.js';
@@ -18,7 +19,7 @@ test('published branch search and PR filters preserve exact selection through em
   await expect(branchRows).toHaveCount(branches.length);
   await expect(branchRows.first()).toContainText(branches[0].branch);
   const search = page.getByRole('searchbox', { name: 'Search branch, PR or SHA' });
-  for (const query of ['optimization-01', '#1000', createSchema2Publication().runs.find((run) => run.id === 'fictional-branch-01').source.commit]) {
+  for (const query of ['optimization-01', '#1000', createMaintainedPublication().runs.find((run) => run.id === 'fictional-branch-01').source.commit]) {
     await search.fill(query);
     await expect(branchRows).toHaveCount(1);
     await expect(branchButton(page, '01')).toBeVisible();
@@ -45,7 +46,7 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   await branchButton(page, '02').click();
   await expect(page.getByTestId('branch-reference-reason')).toContainText('Latest develop execution completed before this candidate');
   await expect(page.getByTestId('reference-selected-identity')).toContainText('fictional-develop-21');
-  const missing = page.getByTestId('branch-config-gfx1250-MT');
+  const missing = page.getByTestId('branch-config-gfx1250-default');
   await expect(missing).toHaveAttribute('data-comparison-state', 'unavailable');
   await missing.press('Enter');
   await expect(missing).toHaveAttribute('aria-pressed', 'true');
@@ -55,7 +56,7 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   await expect(page.getByTestId('branch-exclusions')).toContainText('Configuration not published');
 
   await branchButton(page, '03').click();
-  await page.getByTestId('branch-config-gfx1250-ST').click();
+  await page.getByTestId('branch-config-gfx1250-single').click();
   await expect(results(page).getByRole('status')).toContainText('3 matched · 1 excluded');
   await expect(page.getByTestId('branch-exclusions')).toContainText('Candidate diagnostic: Fictional branch failure');
   await branchButton(page, '01').click();
@@ -65,8 +66,8 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   expect(new URL(page.url()).searchParams.get('manual')).toBe('1');
   await page.getByRole('button', { name: 'Restore automatic base' }).click();
   await expect(page.getByTestId('reference-selected-identity')).toContainText('fictional-develop-20');
-  await page.getByTestId('branch-config-gfx950-MT').click();
-  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx950MT');
+  await page.getByTestId('branch-config-gfx950-default').click();
+  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx950default');
   await results(page).getByRole('combobox', { name: 'Suites', exact: true }).click();
   await page.getByRole('option', { name: 'Llama', exact: true }).click();
   await page.keyboard.press('Escape');
@@ -85,7 +86,7 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   await expect(page.getByTestId('baseline-run-selected-identity')).toContainText('fictional-develop-20');
   const params = new URL(page.url()).searchParams;
   expect(params.getAll('compareTargets')).toEqual(['gfx950']);
-  expect(params.getAll('compareModes')).toEqual(['MT']);
+  expect(params.getAll('compareModes')).toEqual(['default']);
   expect(params.getAll('compareSuites')).toEqual(['Triton']);
   for (const key of ['targets', 'modes', 'suites']) expect(params.getAll(key)).toEqual(['']);
   await expect(page.getByTestId('comparison-metric-comparable').getByText('2', { exact: true })).toBeVisible();
@@ -94,7 +95,7 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   await page.goBack();
   await expect(page.getByRole('tab', { name: 'Branch Runs' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('candidate-selected-identity')).toContainText('fictional-branch-01');
-  await expect(page.getByTestId('branch-config-gfx950-MT')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('branch-config-gfx950-default')).toHaveAttribute('aria-pressed', 'true');
   await page.goForward();
   await expect(page.getByTestId('candidate-run-selected-identity')).toContainText('fictional-branch-01');
 });
@@ -109,13 +110,13 @@ test('branch layout stays within the document at normal 1280px and CSS zoom 2 at
   await page.locator('body').evaluate((body) => { body.style.zoom = '2'; });
   await expect(page.locator('body')).toHaveCSS('zoom', '2');
   await expectNoDocumentOverflow(page);
-  await expect(page.getByTestId('branch-config-gfx1250-ST')).toBeVisible();
-  await page.getByTestId('branch-config-gfx1250-ST').press('Enter');
-  await expect(page.getByTestId('branch-config-gfx1250-ST')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('branch-config-gfx1250-single')).toBeVisible();
+  await page.getByTestId('branch-config-gfx1250-single').press('Enter');
+  await expect(page.getByTestId('branch-config-gfx1250-single')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('missing published identities stay inspectable instead of being replaced by defaults', async ({ page }) => {
-  await openDashboard(page, '/?view=branch&branch=fictional/optimization-01&run=fictional-branch-01&reference=fictional-missing&manual=1&target=gfx950&mode=MT&detail=1');
+  await openDashboard(page, '/?view=branch&branch=fictional/optimization-01&run=fictional-branch-01&reference=fictional-missing&manual=1&target=gfx950&mode=default&detail=1');
   await expect(page.getByTestId('reference-selected-identity')).toContainText('fictional-missing');
   await expect(page.getByTestId('branch-reference-reason')).toContainText('Saved reference attempt is unavailable');
   await expect(page.getByTestId('branch-open-comparison')).toBeDisabled();
@@ -129,15 +130,11 @@ test('missing published identities stay inspectable instead of being replaced by
 });
 
 function otherTargetPublication(onlyOther = false) {
-  const publication = createSchema2Publication();
-  for (const catalog of Object.values(publication.catalogs)) {
-    const entries = Object.entries(catalog.configurations).filter(([key]) => key.startsWith('gfx1250:'));
-    if (onlyOther) catalog.configurations = {};
-    for (const [key, ids] of entries) catalog.configurations[key.replace('gfx1250:', 'gfx1201:')] = ids;
-  }
+  const publication = createMaintainedPublication();
   for (const [index, run] of publication.runs.entries()) {
+    if (!onlyOther && index !== 0) continue;
     const other = run.configurations.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));
-    run.configurations = onlyOther ? other : [...run.configurations, ...(index === 0 ? other : [])];
+    setFixtureConfigurations(publication, run, onlyOther ? other : [...run.configurations, ...other]);
   }
   validatePublishedDashboardData(publication);
   return publication;
@@ -147,32 +144,32 @@ test('entering Branch Runs exposes all published architectures and third-target 
   await installPublication(page, { publication: otherTargetPublication() });
   await openDashboard(page);
   await page.getByRole('tab', { name: 'Branch Runs', exact: true }).click();
-  for (const target of ['gfx1201', 'gfx1250', 'gfx950']) for (const mode of ['ST', 'MT']) {
+  for (const target of ['gfx1201', 'gfx1250', 'gfx950']) for (const mode of ['single', 'default']) {
     await expect(page.getByTestId(`branch-config-${target}-${mode}`)).toBeVisible();
   }
   // Published elsewhere, absent from this pair: the cell must still be inspectable.
-  await page.getByTestId('branch-config-gfx1201-MT').click();
-  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx1201MT');
+  await page.getByTestId('branch-config-gfx1201-default').click();
+  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx1201default');
   await expect(results(page)).toContainText('Candidate configuration not published');
   expect(new URL(page.url()).searchParams.get('target')).toBe('gfx1201');
-  await page.getByTestId('branch-config-gfx1250-ST').click();
+  await page.getByTestId('branch-config-gfx1250-single').click();
   await page.goBack();
-  await expect(page.getByTestId('branch-config-gfx1201-MT')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('branch-config-gfx1201-default')).toHaveAttribute('aria-pressed', 'true');
   await expectNoDocumentOverflow(page);
 });
 
 test('single-other-target publication defaults correctly and preserves explicit unavailable targets on narrow screens', async ({ page }) => {
   await installPublication(page, { publication: otherTargetPublication(true) });
   await openDashboard(page, '/?view=branch&detail=1');
-  await expect(page.getByTestId('branch-config-gfx1201-ST')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('branch-config-gfx1250-ST')).toHaveCount(0);
-  await expect(page.getByTestId('branch-config-gfx950-ST')).toHaveCount(0);
+  await expect(page.getByTestId('branch-config-gfx1201-single')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('branch-config-gfx1250-single')).toHaveCount(0);
+  await expect(page.getByTestId('branch-config-gfx950-single')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await openDashboard(page, '/?view=branch&detail=1&target=gfx9999&mode=MT');
-  const missing = page.getByTestId('branch-config-gfx9999-MT');
+  await openDashboard(page, '/?view=branch&detail=1&target=gfx9999&mode=default');
+  const missing = page.getByTestId('branch-config-gfx9999-default');
   await expect(missing).toHaveAttribute('aria-pressed', 'true');
   await expect(missing).toHaveAttribute('data-comparison-state', 'unavailable');
-  await expect(page.getByTestId('branch-config-gfx1201-ST')).toBeVisible();
+  await expect(page.getByTestId('branch-config-gfx1201-single')).toBeVisible();
   await page.reload();
   await expect(missing).toHaveAttribute('aria-pressed', 'true');
   await expectNoDocumentOverflow(page);

@@ -12,7 +12,7 @@ const catalog = ['st', 'mt', 'absent', 'other-suite', 'other-target'].map((id) =
 }));
 const data = { testCatalog: catalog, runs: [{ tests: catalog.filter(({ id }) => id !== 'absent').map((test) => ({
   logicalTestId: test.id, suite: test.suite, target: test.id === 'other-target' ? 'gfx950' : 'gfx1250',
-  mode: test.id === 'mt' ? 'MT' : 'ST', status: test.id === 'mt' ? 'failed' : 'completed',
+  mode: test.id === 'mt' ? 'default' : 'single', status: test.id === 'mt' ? 'failed' : 'completed',
 })) }] };
 const filters = { targets: ['gfx1250'], suites: ['Triton'] };
 const roots = [];
@@ -27,9 +27,9 @@ test.each([
   const before = structuredClone(input);
   for (const [scope, ids] of [
     [filters, ['st', 'mt']],
-    [{ ...filters, modes: ['ST'] }, ['st']],
-    [{ ...filters, modes: ['MT'] }, ['mt']],
-    [{ ...filters, modes: ['ST', 'MT'] }, ['st', 'mt']],
+    [{ ...filters, modes: ['single'] }, ['st']],
+    [{ ...filters, modes: ['default'] }, ['mt']],
+    [{ ...filters, modes: ['single', 'default'] }, ['st', 'mt']],
     [{ ...filters, modes: [] }, []],
     [{ ...filters, suites: ['Llama'] }, ['other-suite']],
     [{ ...filters, suites: [] }, []],
@@ -81,15 +81,15 @@ function mountPicker() {
   };
 }
 
-test('mounted benchmark picker defaults omitted modes to ST and MT and keeps explicit empty scopes empty', () => {
+test('mounted benchmark picker defaults omitted modes to single and default and keeps explicit empty scopes empty', () => {
   const picker = mountPicker();
   expect(picker.options()).toEqual(['st', 'mt']);
   picker.choose('mt');
   picker.apply();
   expect(picker.cards()).toEqual(['mt']);
   for (const [scope, expected] of [
-    [{ ...filters, modes: ['ST'] }, ['st']],
-    [{ ...filters, modes: ['MT'] }, ['mt']],
+    [{ ...filters, modes: ['single'] }, ['st']],
+    [{ ...filters, modes: ['default'] }, ['mt']],
     [{ ...filters, modes: [] }, []],
     [{ ...filters, targets: [] }, []],
     [{ ...filters, suites: [] }, []],

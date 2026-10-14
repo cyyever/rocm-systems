@@ -105,7 +105,7 @@ test('keyboard inspection uses native pointer actions and explicitly clears its 
 });
 
 test('mouse inspection and anchor disclosure remain reachable after leaving the graph', () => {
-  const probe = mountTrend({ estimates: [{ estimatedRunId: 'fictional-1', runId: 'fictional-anchor', target: 'gfx1250', mode: 'ST', logicalTestId: 'added-workload', durationSeconds: 4, timestamp: '2026-10-01T12:00:00Z' }] });
+  const probe = mountTrend({ estimates: [{ estimatedRunId: 'fictional-1', runId: 'fictional-anchor', target: 'gfx1250', mode: 'single', logicalTestId: 'added-workload', durationSeconds: 4, timestamp: '2026-10-01T12:00:00Z' }] });
   const dispatchAction = vi.fn();
   act(() => probe.chart().props.onEvents.finished({}, { isDisposed: () => false, dispatchAction }));
   act(() => probe.chart().props.onEvents.updateAxisPointer({ axesInfo: [{ value: 1 }] }));

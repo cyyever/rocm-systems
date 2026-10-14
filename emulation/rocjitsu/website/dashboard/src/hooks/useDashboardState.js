@@ -1,3 +1,4 @@
+import { isJsonObject, isJsonValue } from '../data/jsonValues.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { historyRanges } from '../config/historyRanges.js';
 import { dashboardPages } from '../config/dashboardPages.js';
@@ -23,7 +24,7 @@ export function readDashboardRoute(href = globalThis.window?.location?.href ?? '
     let selection;
     if (!values.length) selection = null;
     else if (values.length === 1 && values[0] === '') selection = [];
-    else if (values.some((value) => !value || (key === 'modes' && !['ST', 'MT'].includes(value))) || new Set(values).size !== values.length) {
+    else if (values.some((value) => !value || (key === 'modes' && !['single', 'default'].includes(value))) || new Set(values).size !== values.length) {
       selection = [];
       errors.push(`Invalid ${name} selection in this URL.`);
     } else selection = values;
@@ -55,7 +56,7 @@ export function readDashboardRoute(href = globalThis.window?.location?.href ?? '
       referenceId: field('reference', null),
       manual: field('manual', '0', new Set(['0', '1'])) === '1',
       target: field('target', null),
-      mode: field('mode', null, new Set(['ST', 'MT'])),
+      mode: field('mode', null, new Set(['single', 'default'])),
       detail: field('detail', '0', new Set(['0', '1'])) === '1',
     },
     comparisonCandidateId: field('compareCandidate', null),
@@ -102,7 +103,7 @@ function readFilters() {
   try {
     const saved = JSON.parse(globalThis.window?.localStorage?.getItem(FILTER_STORAGE_KEY) ?? 'null');
     for (const key of Object.keys(preferences)) {
-      if (Array.isArray(saved?.[key]) && saved[key].every((item) => typeof item === 'string' && item.length > 0 && (key !== 'modes' || ['ST', 'MT'].includes(item))) && new Set(saved[key]).size === saved[key].length) {
+      if (Array.isArray(saved?.[key]) && saved[key].every((item) => typeof item === 'string' && item.length > 0 && (key !== 'modes' || ['single', 'default'].includes(item))) && new Set(saved[key]).size === saved[key].length) {
         preferences[key] = saved[key];
       }
     }
@@ -115,8 +116,7 @@ function readBenchmarkSelection() {
     const saved = JSON.parse(globalThis.window?.localStorage?.getItem(BENCHMARK_STORAGE_KEY) ?? 'null');
     if (Array.isArray(saved) && saved.length <= 8
       && saved.every((test) => test && ['id', 'name', 'suite'].every((key) => typeof test[key] === 'string' && test[key].trim())
-        && (test.problem === undefined || test.problem !== null && typeof test.problem === 'object' && !Array.isArray(test.problem)
-          && Object.values(test.problem).every((value) => typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value))))
+        && (test.problem === undefined || isJsonObject(test.problem) && isJsonValue(test.problem)))
       && new Set(saved.map((test) => test.id)).size === saved.length) return saved;
   } catch { /* Storage is optional; missing/malformed preferences are unchosen. */ }
   return null;

@@ -53,7 +53,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
     <Box data-testid="benchmark-explorer" sx={{ minWidth: 0 }}>
       <SectionCard title="Benchmark history" subtitle="Selected workloads across the configurations checked in the sidebar" sx={{ minWidth: 0 }} action={<Button variant="outlined" size="small" startIcon={<AddRoundedIcon />} disabled={!catalog.all.length} onClick={() => setDraft(selected)}>Add benchmarks</Button>}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <Typography variant="caption" color="text.secondary">{filters.targets.length} targets · {filters.suites.length} suites · {(filters.modes ?? []).length} execution modes · develop only</Typography>
+          <Typography variant="caption" color="text.secondary">{filters.targets.length} targets · {filters.suites.length} suites · {(filters.modes ?? []).length} thread policies · develop only</Typography>
           <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Typography role="status" variant="caption" color="text.secondary">{selected.length} of 8 charts{selected.length === 8 ? ' · Remove a workload to free a slot' : ''}</Typography>
             <ToggleButtonGroup exclusive size="small" value={range} onChange={(_, next) => next && changeRange(next)} aria-label="Benchmark history timeframe">
@@ -63,12 +63,12 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
         </Stack>
         <Stack direction="row" aria-label="Chart category and mode legend" sx={{ flexWrap: 'wrap', alignItems: 'center', gap: 1.25, borderTop: 1, borderColor: 'divider', pt: 1.5, mb: 2 }}>
           {filters.targets.map((target) => <CategoryTag key={target} kind="target" label={target} />)}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box component="span" aria-hidden="true" sx={{ width: 24, borderTop: '2px solid' }} />ST · solid</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box component="span" aria-hidden="true" sx={{ width: 24, borderTop: '2px dashed' }} />MT · dashed</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box component="span" aria-hidden="true" sx={{ width: 24, borderTop: '2px solid' }} />single · solid</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><Box component="span" aria-hidden="true" sx={{ width: 24, borderTop: '2px dashed' }} />default · dashed</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: 'auto' } }}>Wall-clock seconds · measured results</Typography>
         </Stack>
         {!catalog.all.length && <Alert severity="info">No benchmarks available in the published catalog.</Alert>}
-        {catalog.all.length > 0 && !catalog.available.length && <Alert severity="info" sx={{ mb: 1.5 }}>No benchmarks in the selected targets, suites and execution modes. Retained workloads are shown as unavailable.</Alert>}
+        {catalog.all.length > 0 && !catalog.available.length && <Alert severity="info" sx={{ mb: 1.5 }}>No benchmarks in the selected targets, suites and thread policies. Retained workloads are shown as unavailable.</Alert>}
         <Box data-testid="benchmark-grid" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', '@media (min-width:600px) and (max-width:899px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1200px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1800px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
           {selected.map((benchmark) => <Paper data-testid="benchmark-grid-card" key={benchmark.id} variant="outlined" sx={{ p: 1.75, minWidth: 0, borderRadius: '8px' }}>
             <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1 }}>
@@ -90,7 +90,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
       </SectionCard>
       <Dialog open={draft !== null} onClose={() => setDraft(null)} fullWidth maxWidth="sm" aria-labelledby="add-benchmarks-title">
         <DialogTitle id="add-benchmarks-title">Add benchmarks</DialogTitle>
-        <DialogContent><Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose up to eight workloads. Options follow the selected targets, suites and execution modes.</Typography><BenchmarkGridPicker allOptions={catalog.all} availableOptions={catalog.available} hiddenCount={0} selected={draft ?? []} showingAll={false} maxSelected={8} onChange={setDraft} /></DialogContent>
+        <DialogContent><Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose up to eight workloads. Options follow the selected targets, suites and thread policies.</Typography><BenchmarkGridPicker allOptions={catalog.all} availableOptions={catalog.available} hiddenCount={0} selected={draft ?? []} showingAll={false} maxSelected={8} onChange={setDraft} /></DialogContent>
         <DialogActions><Button color="inherit" onClick={() => setDraft(null)}>Cancel</Button><Button variant="contained" onClick={() => { changeSelection(draft ?? []); setDraft(null); }}>Apply selection</Button></DialogActions>
       </Dialog>
       <Dialog open={Boolean(inspectedBenchmark)} disableEnforceFocus={Boolean(selectedRecord)} onClose={closeInspector} fullWidth maxWidth="sm" aria-labelledby="inspect-results-title">

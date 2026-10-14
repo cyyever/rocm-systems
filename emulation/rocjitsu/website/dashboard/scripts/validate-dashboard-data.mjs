@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { parsePublishedJson } from '../src/data/publishedJson.js';
 
-import { isExcludedPluginRun } from '../src/data/runSchema.js';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,7 +30,7 @@ async function readJson(file, label, root) {
     if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
       throw new Error('Resource resolves outside the data directory');
     }
-    return JSON.parse(await readFile(resolved, 'utf8'));
+    return parsePublishedJson(await readFile(resolved, 'utf8'));
   } catch (error) {
     throw new Error(`Unable to read ${label} ${file}: ${error.message}`, { cause: error });
   }
@@ -61,7 +61,6 @@ export async function validateDashboardDataDirectory(directory) {
   }));
 
   const catalogPaths = [...new Set(runResults
-    .filter((result) => !isExcludedPluginRun(result.run))
     .map((result) => result.run?.testCatalog)
     .filter((catalogPath) => (
       typeof catalogPath === 'string' && CATALOG_FILE_PATTERN.test(catalogPath)
@@ -100,7 +99,7 @@ async function main() {
   }
 
   const result = await validateDashboardDataDirectory(directory);
-  console.log(`Dashboard schema 2 is valid (${result.sourceData.runs.length} run files; ${result.data.runs.length} develop attempts).`);
+  console.log(`Dashboard maintained schema 1 is valid (${result.sourceData.runs.length} run files; ${result.data.runs.length} develop attempts).`);
 }
 
 const invokedAsScript = process.argv[1]

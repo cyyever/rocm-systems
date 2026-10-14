@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { readChart } from './helpers/chart.js';
 import { expectDialogTypographyContained } from './helpers/dialog.js';
 import { ensureGridBenchmark, expectLocalScroll, expectNoDocumentOverflow, inspectResult, openDashboard } from './helpers/dashboard.js';
@@ -11,13 +11,13 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   await openDashboard(page, '/?compareCandidate=fictional-develop-23&compareBaseline=fictional-develop-20');
   const filters = page.getByRole('button', { name: /^Filters ·/ });
   await expect(filters).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('checkbox', { name: 'MT', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'default', exact: true })).toHaveCount(0);
   await filters.tap();
   await expect(filters).toHaveAttribute('aria-expanded', 'true');
-  await page.getByRole('checkbox', { name: 'MT', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'default', exact: true }).uncheck();
   await page.getByRole('checkbox', { name: 'gfx950', exact: true }).check();
   await filters.tap();
-  await expect(filters).toContainText('2 targets / 2 suites / ST');
+  await expect(filters).toContainText('2 targets / 2 suites / single');
   await expect(filters).toHaveAttribute('aria-expanded', 'false');
   await expectNoDocumentOverflow(page);
   const recent = page.getByRole('region', { name: 'Recent runs scroll area' });
@@ -36,7 +36,7 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   });
   await trend.tap({ position: { x: pixel[0], y: pixel[1] } });
   await trend.dispatchEvent('pointerleave', { pointerType: 'touch' });
-  await expect(page.getByTestId('performance-trend').getByRole('status')).toContainText(createSchema2Publication().runs.find((run) => run.id === 'fictional-develop-23').source.commit.slice(0, 8));
+  await expect(page.getByTestId('performance-trend').getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23').source.commit.slice(0, 8));
   await trend.press('Escape');
   await expect(page.getByTestId('performance-trend').getByRole('status')).toHaveCount(0);
 
@@ -51,7 +51,7 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
     }
   }
   await filters.tap();
-  await expect(page.getByRole('checkbox', { name: 'MT', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'default', exact: true })).not.toBeChecked();
   await filters.tap();
   await page.getByRole('tab', { name: 'Benchmarks', exact: true }).tap();
   await ensureGridBenchmark(page, 'Fictional GEMM');
@@ -91,8 +91,8 @@ test('phone branch list/detail restores local scroll, focus and exact selections
   await expect(page.getByRole('heading', { name: 'fictional/optimization-01', exact: true })).toBeFocused();
   await expect(page.getByTestId('branch-mobile-results')).toBeVisible();
   await expect(page.getByRole('table', { name: 'Branch benchmark differences', exact: true })).toBeHidden();
-  await page.getByTestId('branch-config-gfx950-MT').tap();
-  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx950MT');
+  await page.getByTestId('branch-config-gfx950-default').tap();
+  await expect(page.getByTestId('branch-selected-configuration')).toHaveText('gfx950default');
   await expectNoDocumentOverflow(page);
   await page.getByRole('button', { name: '← Back to branches', exact: true }).tap();
   await expect(view).toHaveAttribute('data-screen', 'list');
@@ -101,7 +101,7 @@ test('phone branch list/detail restores local scroll, focus and exact selections
   await page.goBack();
   await expect(view).toHaveAttribute('data-screen', 'detail');
   await expect(page.getByTestId('candidate-selected-identity')).toContainText('fictional-branch-01');
-  await expect(page.getByTestId('branch-config-gfx950-MT')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('branch-config-gfx950-default')).toHaveAttribute('aria-pressed', 'true');
   await page.goForward();
   await expect(view).toHaveAttribute('data-screen', 'list');
   await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeCloseTo(listPosition, 0);

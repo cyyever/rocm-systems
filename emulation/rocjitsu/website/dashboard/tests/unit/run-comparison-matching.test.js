@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest';
 import { compareRuns, selectRunComparison } from '../../src/data/selectors.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
-const data = validatePublishedDashboardData(createSchema2Publication()).data;
-const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['ST'] };
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single'] };
 const older = data.runs.find(({ catalogId }) => catalogId === 'fictional-old');
 const current = data.latestCommitRun;
 

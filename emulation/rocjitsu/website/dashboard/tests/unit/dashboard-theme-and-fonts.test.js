@@ -78,7 +78,7 @@ describe('v10 Carbon theme', () => {
   });
 
   it('shares approved category colors for targets, suites and explicit simulator modes', () => {
-    expect(categoryColors.light).toMatchObject({ gfx1250: '#0f62fe', gfx950: '#8a3800', Triton: '#8a3ffc', DeepSeek: '#007d79', TensileLite: '#0043ce', ST: '#525252', MT: '#9f1853' });
-    expect(categoryColors.dark).toMatchObject({ gfx1250: '#78a9ff', gfx950: '#ff832b', Triton: '#be95ff', DeepSeek: '#3ddbd9', TensileLite: '#a6c8ff', ST: '#c6c6c6', MT: '#ff7eb6' });
+    expect(categoryColors.light).toMatchObject({ gfx1250: '#0f62fe', gfx950: '#8a3800', Triton: '#8a3ffc', DeepSeek: '#007d79', TensileLite: '#0043ce', single: '#525252', default: '#9f1853' });
+    expect(categoryColors.dark).toMatchObject({ gfx1250: '#78a9ff', gfx950: '#ff832b', Triton: '#be95ff', DeepSeek: '#3ddbd9', TensileLite: '#a6c8ff', single: '#c6c6c6', default: '#ff7eb6' });
   });
 });

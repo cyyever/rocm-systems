@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { downloadSource, fetchPolicies, installPublication, openDashboard, ready, recordFetchPolicies } from './helpers/dashboard.js';
 
 test('loading shell reports partial progress and disables data actions until all indexed runs settle', async ({ page }) => {
@@ -35,7 +35,7 @@ test('loading shell reports partial progress and disables data actions until all
   await expect(page.getByTestId('benchmark-grid-card')).toHaveCount(4);
 });
 
-test('fatal load and failed refresh discard stale exports; Retry restores raw schema 2 and cache generations', async ({ page }) => {
+test('fatal load and failed refresh discard stale exports; Retry restores raw maintained schema 1 and cache generations', async ({ page }) => {
   let status = 404;
   let indexFailures = 0;
   const { publication } = await installPublication(page, { beforeResponse: ({ relative }) => {
@@ -60,7 +60,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw sc
   const source = await downloadSource(page);
   expect(source).toEqual(publication);
   expect(source.index).not.toHaveProperty('schemaVersion');
-  expect(source.runs.every((run) => run.schemaVersion === 2)).toBe(true);
+  expect(source.runs.every((run) => run.schemaVersion === 1)).toBe(true);
   expect(source).not.toHaveProperty('metadata');
   expect(source).not.toHaveProperty('siteConfig');
   expect(source.runs.every((run) => !('plugin' in run) && !('comparisonId' in run))).toBe(true);
@@ -100,7 +100,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw sc
 });
 
 test('one invalid indexed run fails the entire publication instead of exposing partial measurements', async ({ page }) => {
-  const publication = createSchema2Publication();
+  const publication = createMaintainedPublication();
   publication.runs.find((run) => run.id === 'fictional-develop-23').configurations[0].results[0].durationSeconds = -1;
   await installPublication(page, { publication });
   await page.goto('/');
@@ -110,7 +110,7 @@ test('one invalid indexed run fails the entire publication instead of exposing p
   await expect(page.getByRole('img')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Branch Runs', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No published branch runs' })).toBeVisible();
-  await expect(page.getByTestId('branch-config-gfx1250-ST')).toHaveCount(0);
+  await expect(page.getByTestId('branch-config-gfx1250-single')).toHaveCount(0);
 });
 
 test('optional storage failure cannot discard a successfully refreshed publication', async ({ page }) => {
@@ -126,5 +126,5 @@ test('optional storage failure cannot discard a successfully refreshed publicati
   await ready(page);
   const source = await downloadSource(page);
   expect(source.index).not.toHaveProperty('schemaVersion');
-  expect(source.runs.every((run) => run.schemaVersion === 2)).toBe(true);
+  expect(source.runs.every((run) => run.schemaVersion === 1)).toBe(true);
 });

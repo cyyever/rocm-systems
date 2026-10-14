@@ -31,8 +31,8 @@ test('grid selections deduplicate, cap at eight, and allow removal and re-additi
 });
 
 test('accessible choices retain failures, timeouts, unavailable cells and immutable run identity', () => {
-  const runs = ['completed', 'failed', 'timeout', 'missing'].map((status, i) => ({ runId: `run-${i}`, timestamp: `2026-01-0${i + 1}T00:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' }, tests: status === 'missing' ? [] : [{ target: 'gfx950', mode: 'ST', suite: 'A', logicalTestId: 'a', status, durationSeconds: status === 'completed' ? 2 : null }] }));
-  const vm = selectBenchmarkSeries({ runs }, { targets: ['gfx950'], suites: ['A'], modes: ['ST'] }, 'a');
+  const runs = ['completed', 'failed', 'timeout', 'missing'].map((status, i) => ({ runId: `run-${i}`, timestamp: `2026-01-0${i + 1}T00:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' }, tests: status === 'missing' ? [] : [{ target: 'gfx950', mode: 'single', suite: 'A', logicalTestId: 'a', status, durationSeconds: status === 'completed' ? 2 : null }] }));
+  const vm = selectBenchmarkSeries({ runs }, { targets: ['gfx950'], suites: ['A'], modes: ['single'] }, 'a');
   const choices = model.benchmarkResultChoices?.(vm);
   expect(choices?.map((o) => o.status)).toEqual(['unavailable', 'timeout', 'failed', 'completed']);
   expect(choices?.[0].record).toBeNull();
@@ -42,10 +42,10 @@ test('accessible choices retain failures, timeouts, unavailable cells and immuta
 
 test('catalog respects target membership as well as suites without hiding failures', () => {
   const data = { testCatalog: [{ id: 'a', suite: 'A' }, { id: 'b', suite: 'A' }, { id: 'c', suite: 'B' }], runs: [{ tests: [
-    { logicalTestId: 'a', target: 'gfx950', mode: 'ST', status: 'failed' },
-    { logicalTestId: 'b', target: 'gfx1250', mode: 'ST', status: 'completed' },
-    { logicalTestId: 'c', target: 'gfx950', mode: 'ST', status: 'timeout' },
+    { logicalTestId: 'a', target: 'gfx950', mode: 'single', status: 'failed' },
+    { logicalTestId: 'b', target: 'gfx1250', mode: 'single', status: 'completed' },
+    { logicalTestId: 'c', target: 'gfx950', mode: 'single', status: 'timeout' },
   ] }] };
-  expect(model.explorerCatalog?.(data, { targets: ['gfx950'], suites: ['A'], modes: ['ST'] })).toMatchObject({ available: [{ id: 'a' }], hiddenCount: 2 });
-  expect(model.explorerCatalog?.(data, { targets: [], suites: ['A'], modes: ['ST'] }).available).toEqual([]);
+  expect(model.explorerCatalog?.(data, { targets: ['gfx950'], suites: ['A'], modes: ['single'] })).toMatchObject({ available: [{ id: 'a' }], hiddenCount: 2 });
+  expect(model.explorerCatalog?.(data, { targets: [], suites: ['A'], modes: ['single'] }).available).toEqual([]);
 });

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 import { useDashboardState } from '../../src/hooks/useDashboardState';
 
-const data = { targets: ['gfx950', 'gfx1250'], suites: ['gemm', 'memory'], modes: ['ST', 'MT'] };
+const data = { targets: ['gfx950', 'gfx1250'], suites: ['gemm', 'memory'], modes: ['single', 'default'] };
 function readState(dataset = data) {
   let state;
   function Probe() { state = useDashboardState(dataset); return null; }
@@ -64,12 +64,12 @@ function mountState({ href = 'https://example.test/app/?campaign=keep#anchor', s
 }
 
 it('snapshots global scope on first ordinary comparison visit and then keeps both scopes independent', () => {
-  const global = { targets: ['gfx950'], suites: ['memory'], modes: ['ST'] };
+  const global = { targets: ['gfx950'], suites: ['memory'], modes: ['single'] };
   const probe = mountState({ saved: global });
   probe.update((state) => state.setTab('compare'));
   expect(probe.state.filters).toEqual(global);
-  probe.update((state) => { state.setTargets(['gfx1250']); state.setModes(['MT']); state.setSuites([]); });
-  const comparison = { targets: ['gfx1250'], suites: [], modes: ['MT'] };
+  probe.update((state) => { state.setTargets(['gfx1250']); state.setModes(['default']); state.setSuites([]); });
+  const comparison = { targets: ['gfx1250'], suites: [], modes: ['default'] };
   expect(probe.state.filters).toEqual(comparison);
   expect(JSON.parse(probe.browser.localStorage.getItem('rocjitsu-dashboard-filters'))).toEqual(global);
   probe.update((state) => state.setTab('overview'));
@@ -85,20 +85,20 @@ it('snapshots global scope on first ordinary comparison visit and then keeps bot
 });
 
 it('scoped comparison opening never edits global filters or their storage', () => {
-  const global = { targets: ['gfx950'], suites: ['memory'], modes: ['ST'] };
+  const global = { targets: ['gfx950'], suites: ['memory'], modes: ['single'] };
   const probe = mountState({ saved: global });
-  probe.update((state) => state.openComparison({ candidateId: 'c', baselineId: 'b', target: 'gfx1250', mode: 'MT', suites: ['gemm'] }));
-  expect(probe.state.filters).toEqual({ targets: ['gfx1250'], suites: ['gemm'], modes: ['MT'] });
+  probe.update((state) => state.openComparison({ candidateId: 'c', baselineId: 'b', target: 'gfx1250', mode: 'default', suites: ['gemm'] }));
+  expect(probe.state.filters).toEqual({ targets: ['gfx1250'], suites: ['gemm'], modes: ['default'] });
   expect(JSON.parse(probe.browser.localStorage.getItem('rocjitsu-dashboard-filters'))).toEqual(global);
   probe.update((state) => state.setTab('benchmarks'));
   expect(probe.state.filters).toEqual(global);
 });
 
 it('separate comparison URL scope preserves intentional empties and survives Back/Forward', () => {
-  const probe = mountState({ href: 'https://example.test/?view=compare&targets=gfx950&modes=ST&suites=memory&compareTargets=&compareModes=&compareSuites=' });
+  const probe = mountState({ href: 'https://example.test/?view=compare&targets=gfx950&modes=single&suites=memory&compareTargets=&compareModes=&compareSuites=' });
   expect(probe.state.filters).toEqual({ targets: [], modes: [], suites: [] });
   probe.update((state) => state.setTab('overview'));
-  expect(probe.state.filters).toEqual({ targets: ['gfx950'], modes: ['ST'], suites: ['memory'] });
+  expect(probe.state.filters).toEqual({ targets: ['gfx950'], modes: ['single'], suites: ['memory'] });
   probe.go(-1);
   expect(probe.state.filters).toEqual({ targets: [], modes: [], suites: [] });
   probe.go(1);
@@ -128,7 +128,7 @@ it('does not expose retired benchmark mode or global search state', () => {
 
 it('pushes one coherent branch selection even under StrictMode', () => {
   const probe = mountState();
-  const selection = { branch: 'feat/a', candidateId: 'missing-attempt', referenceId: 'missing-reference', manual: true, target: 'gfx950', mode: 'MT', detail: true };
+  const selection = { branch: 'feat/a', candidateId: 'missing-attempt', referenceId: 'missing-reference', manual: true, target: 'gfx950', mode: 'default', detail: true };
   probe.update((state) => state.setBranchSelection(selection));
   expect(probe.state.branchSelection).toEqual(selection);
   expect(probe.browser.history.pushState).toHaveBeenCalledTimes(1);
@@ -144,14 +144,14 @@ it('pushes one coherent branch selection even under StrictMode', () => {
 });
 it('opens comparison with one atomic pair and scope while preserving deliberate empty suites', () => {
   const probe = mountState({ saved: { suites: [], modes: [] } });
-  const branch = { branch: 'feat/x', candidateId: 'attempt-x', referenceId: 'develop-x', manual: true, target: 'gfx1250', mode: 'ST', detail: true };
+  const branch = { branch: 'feat/x', candidateId: 'attempt-x', referenceId: 'develop-x', manual: true, target: 'gfx1250', mode: 'single', detail: true };
   probe.update((state) => state.setBranchSelection(branch));
   probe.browser.history.pushState.mockClear();
   probe.renders.length = 0;
-  probe.update((state) => state.openComparison({ candidateId: 'missing-candidate', baselineId: 'missing-baseline', target: 'gfx950', mode: 'MT' }));
+  probe.update((state) => state.openComparison({ candidateId: 'missing-candidate', baselineId: 'missing-baseline', target: 'gfx950', mode: 'default' }));
   expect(probe.browser.history.pushState).toHaveBeenCalledTimes(1);
   expect(probe.state).toMatchObject({ tab: 'compare', comparisonCandidateId: 'missing-candidate', comparisonBaselineId: 'missing-baseline', branchSelection: branch });
-  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['MT'] });
+  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['default'] });
   for (const rendered of probe.renders) {
     expect(rendered.tab).toBe('compare');
     expect(rendered.comparisonCandidateId).toBe('missing-candidate');
@@ -162,20 +162,20 @@ it('opens comparison with one atomic pair and scope while preserving deliberate 
   expect(url.searchParams.get('compareCandidate')).toBe('missing-candidate');
   expect(url.searchParams.get('compareBaseline')).toBe('missing-baseline');
   expect(url.searchParams.getAll('compareTargets')).toEqual(['gfx950']);
-  expect(url.searchParams.getAll('compareModes')).toEqual(['MT']);
+  expect(url.searchParams.getAll('compareModes')).toEqual(['default']);
   expect(url.searchParams.getAll('compareSuites')).toEqual(['']);
   expect(url.searchParams.getAll('targets')).toEqual([]);
   expect(url.searchParams.getAll('modes')).toEqual(['']);
-  probe.update((state) => state.openComparison({ candidateId: 'attempt-2', baselineId: 'attempt-1', target: 'gfx1250', mode: 'ST', suites: ['memory'] }));
+  probe.update((state) => state.openComparison({ candidateId: 'attempt-2', baselineId: 'attempt-1', target: 'gfx1250', mode: 'single', suites: ['memory'] }));
   expect(probe.state.filters.suites).toEqual(['memory']);
 });
 
 it('restores the entire route on Back/Forward without pushing or losing local page state', () => {
-  const probe = mountState({ saved: { targets: ['gfx950'], suites: [], modes: ['ST'] } });
-  const branch = { branch: 'feat/back', candidateId: 'absent-candidate', referenceId: 'absent-reference', manual: true, target: 'gfx950', mode: 'MT', detail: true };
+  const probe = mountState({ saved: { targets: ['gfx950'], suites: [], modes: ['single'] } });
+  const branch = { branch: 'feat/back', candidateId: 'absent-candidate', referenceId: 'absent-reference', manual: true, target: 'gfx950', mode: 'default', detail: true };
   probe.update((state) => state.setTab('branch'));
   probe.update((state) => state.setBranchSelection(branch));
-  probe.update((state) => state.openComparison({ candidateId: 'compare-c', baselineId: 'compare-b', target: 'gfx1250', mode: 'MT' }));
+  probe.update((state) => state.openComparison({ candidateId: 'compare-c', baselineId: 'compare-b', target: 'gfx1250', mode: 'default' }));
   probe.update((state) => {
     state.setTargets([]);
     state.setSuites([]);
@@ -187,15 +187,15 @@ it('restores the entire route on Back/Forward without pushing or losing local pa
   const replacements = probe.browser.history.replaceState.mock.calls.length;
   probe.go(-1);
   expect(probe.state).toMatchObject({ tab: 'branch', branchSelection: branch, comparisonCandidateId: null, comparisonBaselineId: null, historyRange: 'ALL' });
-  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['ST'] });
+  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['single'] });
   probe.go(-1);
   expect(probe.state.branchSelection.candidateId).toBeNull();
   probe.go(-1);
   expect(probe.state.tab).toBe('overview');
-  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['ST'] });
+  expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['single'] });
   probe.go(3);
   expect(probe.state).toMatchObject({ tab: 'compare', branchSelection: branch, comparisonCandidateId: 'compare-c', comparisonBaselineId: 'compare-b', historyRange: '1M', explorerRunIds: ['unpublished-id'] });
-  expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: ['MT'] });
+  expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: ['default'] });
   expect(probe.browser.history.pushState).toHaveBeenCalledTimes(pushes);
   expect(probe.browser.history.replaceState).toHaveBeenCalledTimes(replacements);
   expect(probe.browser.history.state).toEqual({ external: 'retained' });
@@ -206,13 +206,13 @@ it('replaces filter/range entries and resolves consecutive mode updaters against
   probe.browser.history.replaceState.mockClear();
   probe.update((state) => {
     state.setModes([]);
-    state.setModes((current) => [...current, 'ST']);
-    state.setModes((current) => [...current, 'MT']);
+    state.setModes((current) => [...current, 'single']);
+    state.setModes((current) => [...current, 'default']);
     state.setTargets([]);
     state.setSuites([]);
     state.setHistoryRange((current) => current === 'ALL' ? '1W' : 'ALL');
   });
-  expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: ['ST', 'MT'] });
+  expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: ['single', 'default'] });
   expect(probe.state.historyRange).toBe('1W');
   expect(probe.browser.history.pushState).not.toHaveBeenCalled();
   expect(probe.browser.history.replaceState).toHaveBeenCalledTimes(6);
@@ -221,7 +221,7 @@ it('replaces filter/range entries and resolves consecutive mode updaters against
   const url = new URL(probe.browser.location.href);
   expect(url.searchParams.getAll('targets')).toEqual(['']);
   expect(url.searchParams.getAll('suites')).toEqual(['']);
-  expect(url.searchParams.getAll('modes')).toEqual(['ST', 'MT']);
+  expect(url.searchParams.getAll('modes')).toEqual(['single', 'default']);
 });
 
 it('changes a comparison pair atomically without navigating away from the current tab', () => {
@@ -242,7 +242,7 @@ it('changes a comparison pair atomically without navigating away from the curren
 });
 
 it('clears a malformed route error without resetting its empty scope or chosen missing identity', () => {
-  const probe = mountState({ href: 'https://example.test/app/?campaign=keep&view=branch&run=missing&modes=invalid&suites=#anchor', saved: { modes: ['ST'], suites: ['gemm'] } });
+  const probe = mountState({ href: 'https://example.test/app/?campaign=keep&view=branch&run=missing&modes=invalid&suites=#anchor', saved: { modes: ['single'], suites: ['gemm'] } });
   expect(probe.state.routeError).toContain('modes');
   expect(probe.state.filters).toEqual({ targets: data.targets, suites: [], modes: [] });
   expect(probe.browser.history.replaceState).not.toHaveBeenCalled();
@@ -265,7 +265,7 @@ it('waits for declared data options without locking bootstrap emptiness in as pr
   expect(JSON.parse(probe.browser.localStorage.getItem('rocjitsu-dashboard-filters'))).toEqual({ targets: null, suites: null, modes: null });
   probe.rerender(data);
   expect(probe.state.filters).toEqual(data);
-  expect(probe.state.targets.flatMap((target) => probe.state.modes.map((mode) => `${target}:${mode}`))).toEqual(['gfx950:ST', 'gfx950:MT', 'gfx1250:ST', 'gfx1250:MT']);
+  expect(probe.state.targets.flatMap((target) => probe.state.modes.map((mode) => `${target}/${mode}`))).toEqual(['gfx950/single', 'gfx950/default', 'gfx1250/single', 'gfx1250/default']);
   probe.update((state) => { state.setTargets([]); state.setSuites([]); state.setModes([]); });
   probe.rerender(bootstrap);
   probe.rerender(data);
@@ -275,8 +275,8 @@ it('waits for declared data options without locking bootstrap emptiness in as pr
 });
 
 it('defaults to all and only declared available options', () => {
-  const available = { targets: ['gfx950'], suites: ['memory'], modes: ['MT'] };
-  expect(readState(available).filters).toEqual({ targets: ['gfx950'], suites: ['memory'], modes: ['MT'] });
+  const available = { targets: ['gfx950'], suites: ['memory'], modes: ['default'] };
+  expect(readState(available).filters).toEqual({ targets: ['gfx950'], suites: ['memory'], modes: ['default'] });
 });
 
 it('keeps navigation and filters usable when the storage getter is denied', () => {
@@ -289,8 +289,8 @@ it('keeps navigation and filters usable when the storage getter is denied', () =
 });
 
 it('preserves exact URL scopes and missing comparison IDs across empty reload data', () => {
-  const probe = mountState({ href: 'https://example.test/?view=compare&targets=gfx950&suites=memory&modes=MT&compareCandidate=unpublished-c&compareBaseline=unpublished-b', saved: { targets: ['gfx1250'], suites: ['gemm'], modes: ['ST'] } });
-  const expected = { targets: ['gfx950'], suites: ['memory'], modes: ['MT'] };
+  const probe = mountState({ href: 'https://example.test/?view=compare&targets=gfx950&suites=memory&modes=default&compareCandidate=unpublished-c&compareBaseline=unpublished-b', saved: { targets: ['gfx1250'], suites: ['gemm'], modes: ['single'] } });
+  const expected = { targets: ['gfx950'], suites: ['memory'], modes: ['default'] };
   expect(probe.state.filters).toEqual(expected);
   probe.rerender({ targets: [], suites: [], modes: [] });
   expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: [] });
@@ -310,7 +310,7 @@ it('keeps user choices when a storage write fails', () => {
 });
 
 it('takes explicit URL modes over stored preferences and exposes an atomic branch selection', () => {
-  vi.stubGlobal('window', { location: { href: 'https://example.test/?view=branch&modes=&branch=feat%2Fa&run=exact' }, localStorage: { getItem: () => JSON.stringify({ modes: ['ST'] }) } });
+  vi.stubGlobal('window', { location: { href: 'https://example.test/?view=branch&modes=&branch=feat%2Fa&run=exact' }, localStorage: { getItem: () => JSON.stringify({ modes: ['single'] }) } });
   const state = readState();
   expect(state.filters.modes).toEqual([]);
   expect(state.tab).toBe('branch');

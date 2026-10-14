@@ -1,9 +1,10 @@
+import { configurationKey, hasConfiguration, THREAD_POLICIES } from './runSchema.js';
 import { targetColor } from '../utils/chartColors.js';
 import { resolveHistoryRange } from '../config/historyRanges.js';
 import { commitShaFor, commitTimestampFor, compareRunExecution, sortRunsByCommit } from './runOrdering.js';
 
 
-const modesFor = (filters) => filters.modes ?? ['ST', 'MT'];
+const modesFor = (filters) => filters.modes ?? THREAD_POLICIES;
 const completed = (test) => test?.status === 'completed' && Number.isFinite(test.durationSeconds);
 const sum = (tests) => tests.reduce((total, test) => total + test.durationSeconds, 0);
 const round = (value) => Number(value.toPrecision(15));
@@ -11,8 +12,7 @@ const percentage = (candidate, baseline) => Number.isFinite(candidate) && Number
 const resultMap = (run) => new Map((run?.tests ?? []).map((test) => [test.testId, test]));
 const testMatches = (test, filters) => filters.targets.includes(test.target) && filters.suites.includes(test.suite) && modesFor(filters).includes(test.mode);
 const selected = (run, filters) => (run?.tests ?? []).filter((test) => testMatches(test, filters));
-const pairsFor = (filters) => filters.targets.flatMap((target) => modesFor(filters).map((mode) => ({ target, mode, key: `${target}:${mode}` })));
-const hasConfiguration = (run, target, mode) => (run?.configurations ?? []).some((c) => c.target === target && c.threadingMode === mode);
+const pairsFor = (filters) => filters.targets.flatMap((target) => modesFor(filters).map((mode) => ({ target, mode, key: configurationKey(target, mode) })));
 
 export function periodKey(timestamp, period = 'weekly') {
   const date = new Date(timestamp);

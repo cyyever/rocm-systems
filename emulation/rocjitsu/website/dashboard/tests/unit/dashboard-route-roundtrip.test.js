@@ -2,10 +2,10 @@ import { fixtureRunPath } from '../fixtures/runPath.js';
 import { describe, expect, it } from 'vitest';
 import * as dashboardState from '../../src/hooks/useDashboardState.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 it('UI-002 round-trips exact long validated attempt and branch identities', () => {
-  const source = createSchema2Publication();
+  const source = createMaintainedPublication();
   const run = source.runs.find(({ id }) => id === 'fictional-branch-01');
   run.id = `fictional-${'x'.repeat(192)}`;
   run.source.branch = `fictional/${'b'.repeat(192)}`;
@@ -23,7 +23,7 @@ it('UI-002 round-trips exact long validated attempt and branch identities', () =
 });
 
 it.each(['targets', 'suites'])('round-trips validated long %s through URL serialization and restoration', (key) => {
-  const source = createSchema2Publication();
+  const source = createMaintainedPublication();
   const longTarget = `gfx${'9'.repeat(240)}`;
   const longSuite = `Suite ${'workload '.repeat(30)}& details + / test`;
   for (const catalog of Object.values(source.catalogs)) {
@@ -31,7 +31,7 @@ it.each(['targets', 'suites'])('round-trips validated long %s through URL serial
       for (const test of catalog.tests) if (test.suite === 'Triton') test.suite = longSuite;
     } else {
       catalog.configurations = Object.fromEntries(Object.entries(catalog.configurations)
-        .map(([name, ids]) => [name.replace('gfx1250:', `${longTarget}:`), ids]));
+        .map(([name, ids]) => [name.replace('gfx1250/', `${longTarget}/`), ids]));
     }
   }
   if (key === 'targets') {
@@ -57,9 +57,9 @@ it.each(['targets', 'suites'])('round-trips validated long %s through URL serial
 
 describe('static-hosted dashboard routes', () => {
   it('round-trips independent comparison scope, exact URL-special suites and intentional empties', () => {
-    const route = dashboardState.readDashboardRoute('https://example.test/?view=compare&targets=gfx950&modes=ST&suites=global&compareTargets=gfx1250&compareModes=&compareSuites=A%26B+%2F+C');
+    const route = dashboardState.readDashboardRoute('https://example.test/?view=compare&targets=gfx950&modes=single&suites=global&compareTargets=gfx1250&compareModes=&compareSuites=A%26B+%2F+C');
     expect(route.comparisonPreferences).toEqual({ targets: ['gfx1250'], modes: [], suites: ['A&B / C'] });
-    expect(route.preferences).toEqual({ targets: ['gfx950'], modes: ['ST'], suites: ['global'] });
+    expect(route.preferences).toEqual({ targets: ['gfx950'], modes: ['single'], suites: ['global'] });
     expect(dashboardState.readDashboardRoute(dashboardState.buildDashboardUrl('https://example.test/', route))).toEqual(route);
   });
   it.each([
@@ -67,14 +67,14 @@ describe('static-hosted dashboard routes', () => {
     ['compareSuites=&compareSuites=gemm', 'suites'],
     ['compareModes=invalid', 'modes'],
   ])('fails closed for malformed comparison scope without changing globals: %s', (query, key) => {
-    const route = dashboardState.readDashboardRoute(`https://example.test/?targets=gfx950&suites=gemm&modes=ST&${query}`);
+    const route = dashboardState.readDashboardRoute(`https://example.test/?targets=gfx950&suites=gemm&modes=single&${query}`);
     expect(route.comparisonPreferences[key]).toEqual([]);
-    expect(route.preferences).toEqual({ targets: ['gfx950'], suites: ['gemm'], modes: ['ST'] });
+    expect(route.preferences).toEqual({ targets: ['gfx950'], suites: ['gemm'], modes: ['single'] });
     expect(route.routeError).toContain('Invalid compare');
   });
   it('writes an atomic selection while preserving unrelated query parameters and hash', () => {
     expect(typeof dashboardState.buildDashboardUrl).toBe('function');
-    const snapshot = dashboardState.readDashboardRoute('https://example.test/app/?view=branch&branch=feat%2Fx&run=run-2&reference=run-1&manual=1&detail=1&target=gfx950&mode=MT&modes=');
+    const snapshot = dashboardState.readDashboardRoute('https://example.test/app/?view=branch&branch=feat%2Fx&run=run-2&reference=run-1&manual=1&detail=1&target=gfx950&mode=default&modes=');
     const url = new URL(dashboardState.buildDashboardUrl('https://example.test/app/?campaign=keep&view=overview#anchor', snapshot));
     expect(url.searchParams.get('campaign')).toBe('keep');
     expect(url.hash).toBe('#anchor');
@@ -82,9 +82,9 @@ describe('static-hosted dashboard routes', () => {
   });
   it('reads an exact branch attempt pair and explicit empty mode selection', () => {
     expect(typeof dashboardState.readDashboardRoute).toBe('function');
-    const route = dashboardState.readDashboardRoute('https://example.test/app/?view=branch&branch=feat%2Fscheduler&run=attempt-2&reference=attempt-1&manual=1&target=gfx950&mode=MT&detail=1&modes=');
+    const route = dashboardState.readDashboardRoute('https://example.test/app/?view=branch&branch=feat%2Fscheduler&run=attempt-2&reference=attempt-1&manual=1&target=gfx950&mode=default&detail=1&modes=');
     expect(route.tab).toBe('branch');
-    expect(route.branchSelection).toMatchObject({ branch: 'feat/scheduler', candidateId: 'attempt-2', referenceId: 'attempt-1', manual: true, target: 'gfx950', mode: 'MT', detail: true });
+    expect(route.branchSelection).toMatchObject({ branch: 'feat/scheduler', candidateId: 'attempt-2', referenceId: 'attempt-1', manual: true, target: 'gfx950', mode: 'default', detail: true });
     expect(route.preferences.modes).toEqual([]);
   });
   it('keeps absent filters uninitialized and defaults safely without a browser', () => {
@@ -93,8 +93,8 @@ describe('static-hosted dashboard routes', () => {
     expect(route.branchSelection).toEqual({ branch: null, candidateId: null, referenceId: null, manual: false, target: null, mode: null, detail: false });
   });
   it('round-trips repeated scopes without treating an explicit empty as absent', () => {
-    const route = dashboardState.readDashboardRoute('https://example.test/app/?targets=gfx950&targets=gfx1250&suites=gemm&suites=memory&modes=ST&modes=MT&compareCandidate=unpublished-c&compareBaseline=unpublished-b');
-    expect(route.preferences).toEqual({ targets: ['gfx950', 'gfx1250'], suites: ['gemm', 'memory'], modes: ['ST', 'MT'] });
+    const route = dashboardState.readDashboardRoute('https://example.test/app/?targets=gfx950&targets=gfx1250&suites=gemm&suites=memory&modes=single&modes=default&compareCandidate=unpublished-c&compareBaseline=unpublished-b');
+    expect(route.preferences).toEqual({ targets: ['gfx950', 'gfx1250'], suites: ['gemm', 'memory'], modes: ['single', 'default'] });
     expect(dashboardState.readDashboardRoute(dashboardState.buildDashboardUrl('https://example.test/app/', route))).toEqual(route);
     const empty = dashboardState.readDashboardRoute('https://example.test/?targets=&suites=&modes=');
     expect(empty.preferences).toEqual({ targets: [], suites: [], modes: [] });
@@ -104,7 +104,7 @@ describe('static-hosted dashboard routes', () => {
     ['targets=gfx950&targets=gfx950', 'targets'],
     ['suites=&suites=gemm', 'suites'],
     ['modes=st', 'modes'],
-    ['modes=ST&MT=keep&modes=ST', 'modes'],
+    ['modes=single&default=keep&modes=single', 'modes'],
   ])('fails closed for malformed repeated scope %s', (query, key) => {
     const route = dashboardState.readDashboardRoute(`https://example.test/?${query}`);
     expect(route.preferences[key]).toEqual([]);

@@ -13,7 +13,7 @@ function FilterGroup({ label, options, value, onChange, disabled, kind }) {
           label={<Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><CategoryMarker label={option} kind={kind} /><Typography component="span" sx={{ fontSize: 14, lineHeight: '20px', fontWeight: 500, color: disabled ? 'text.disabled' : 'text.primary' }}>{option}</Typography></Box>} />
       ))}
       {!options.length && <Typography variant="caption" color="text.secondary">No available {label.toLowerCase()}</Typography>}
-      {kind === 'mode' && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25, fontSize: 11 }}>ST · single-threaded<br />MT · multi-threaded</Typography>}
+      {kind === 'mode' && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.25, fontSize: 11 }}>single · single-threaded<br />default · automatic policy</Typography>}
     </Box>
   );
 }
@@ -23,7 +23,7 @@ export default function FiltersBar({ data, state, disabled = false }) {
     <Box sx={{ mt: 2, display: { xs: 'block', sm: 'grid', md: 'block' }, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
       <FilterGroup label="Targets" kind="target" options={data.targets ?? []} value={state.targets ?? []} onChange={state.setTargets} disabled={disabled} />
       <FilterGroup label="Suites" kind="suite" options={data.suites ?? []} value={state.suites ?? []} onChange={state.setSuites} disabled={disabled} />
-      <FilterGroup label="Execution modes" kind="mode" options={data.modes ?? []} value={state.modes ?? []} onChange={state.setModes} disabled={disabled} />
+      <FilterGroup label="Thread policy" kind="mode" options={data.modes ?? []} value={state.modes ?? []} onChange={state.setModes} disabled={disabled} />
     </Box>
   );
 }

@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { loadDashboardDataFiles } from '../../src/data/dashboardData.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 test('loads an index-only empty publication without fetching metadata', async () => {
   const index = { generatedAt: '2026-10-05T12:00:00Z', runFiles: [] };
@@ -21,13 +21,13 @@ test('loads an index-only empty publication without fetching metadata', async ()
 });
 
 function publication() {
-  return createSchema2Publication();
+  return createMaintainedPublication();
 }
 
 test('publication normalization uses bundled site settings without manufacturing raw metadata', () => {
   const source = publication();
   const { data, sourceData } = validatePublishedDashboardData(source);
-  expect(data).toMatchObject({ schemaVersion: 2, repository: 'https://github.com/ROCm/rocm-systems', canonicalBranch: 'develop', isBeta: true });
+  expect(data).toMatchObject({ schemaVersion: 1, repository: 'https://github.com/ROCm/rocm-systems', canonicalBranch: 'develop', isBeta: true });
   expect(sourceData).toEqual(source);
   expect(sourceData).not.toHaveProperty('metadata');
   expect(sourceData).not.toHaveProperty('siteConfig');
@@ -37,8 +37,8 @@ test.each([undefined, null, '2', 3, 99])('rejects run schema version %s even whe
   const source = publication();
   if (version === undefined) delete source.runs[0].schemaVersion;
   else source.runs[0].schemaVersion = version;
-  source.metadata = { schemaVersion: 2, repository: 'https://example.test/legacy', isBeta: false, canonicalBranch: 'develop' };
-  expect(() => validatePublishedDashboardData(source)).toThrow(version === undefined ? /schema-1.*contract/i : /unsupported schema version/i);
+  source.metadata = { schemaVersion: 1, repository: 'https://example.test/legacy', isBeta: false, canonicalBranch: 'develop' };
+  expect(() => validatePublishedDashboardData(source)).toThrow(version === undefined ? /unsupported schema version/i : /unsupported schema version/i);
 });
 
 test.each([undefined, null, '2', 1, 99])('ignores obsolete index schema version %s', (version) => {

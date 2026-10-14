@@ -31,15 +31,15 @@ test('overview passes its selected period into the metric strip', () => {
 });
 
 test('trend explicitly discloses selected configuration and benchmark coverage', () => {
-  const html = render(DurationHistory, { history, filters: { targets: ['gfx1250', 'gfx950'], suites: ['Triton'], modes: ['ST', 'MT'] }, coverage: { completed: 12, total: 12 }, range: '1W', onRangeChange() {} });
-  expect(html).toContain('2 targets · 1 suite · ST + MT');
+  const html = render(DurationHistory, { history, filters: { targets: ['gfx1250', 'gfx950'], suites: ['Triton'], modes: ['single', 'default'] }, coverage: { completed: 12, total: 12 }, range: '1W', onRangeChange() {} });
+  expect(html).toContain('2 targets · 1 suite · single + default');
   expect(html).toContain('12/12 selected benchmark results');
 });
 
 test('largest changes uses exact scope caption, shape tags and relative magnitude bars without old footer', () => {
-  const changes = [-10, 5].map((delta, i) => ({ delta, candidateTest: { testId: `gfx1250:ST:w${i}`, name: `Fictional ${i}`, target: 'gfx1250', suite: 'Triton', mode: 'ST' } }));
+  const changes = [-10, 5].map((delta, i) => ({ delta, candidateTest: { testId: `gfx1250/single:w${i}`, name: `Fictional ${i}`, target: 'gfx1250', suite: 'Triton', mode: 'single' } }));
   const html = render(LargestChanges, { changes });
-  expect(html).toContain('Across selected targets and suites and execution modes');
+  expect(html).toContain('Across selected targets and suites and thread policies');
   expect(html).toContain('data-category="mode"');
   expect(html).toContain('data-testid="change-magnitude-bar"');
   expect(html).toContain('width:100%');
@@ -53,7 +53,7 @@ const history = {
   series: [{ target: 'Selected runtime', color: '#0f62fe', data: [120, null, 100], baseline: 120 }],
   slots: [0, 1, 2].map((x) => ({ x, run: { runId: `fictional-${x}`, timestamp: `2026-10-0${x + 1}T12:00:00Z`, commitTimestamp: `2026-10-0${x + 1}T11:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' } } })),
   dayKeys: ['2026-10-01', '2026-10-02', '2026-10-03'], axisMax: 2,
-  currentDuration: 100, durationDelta: -16.67, summary: '1 target · 1 suite · ST',
+  currentDuration: 100, durationDelta: -16.67, summary: '1 target · 1 suite · single',
 };
 
 test('summed trend has a dotted baseline and a separate dashed bridge without changing null data', () => {
@@ -92,7 +92,7 @@ test.each(['light', 'dark'])('%s bridges only nearest finite endpoints across in
 });
 
 test('normalized trend tooltip is compact and leaves anchor provenance to inspection details', () => {
-  const estimatedHistory = { ...history, normalized: true, series: [{ ...history.series[0], estimated: [true, false, false] }], estimates: [{ estimatedRunId: 'fictional-0', runId: 'fictional-anchor-first-success', target: 'gfx1250', mode: 'ST', logicalTestId: 'added-workload', durationSeconds: 4, timestamp: '2026-10-04T11:00:00Z' }] };
+  const estimatedHistory = { ...history, normalized: true, series: [{ ...history.series[0], estimated: [true, false, false] }], estimates: [{ estimatedRunId: 'fictional-0', runId: 'fictional-anchor-first-success', target: 'gfx1250', mode: 'single', logicalTestId: 'added-workload', durationSeconds: 4, timestamp: '2026-10-04T11:00:00Z' }] };
   render(DurationHistory, { history: estimatedHistory, range: '1W', onRangeChange() {} });
   const option = chartCapture.props.option;
   const detail = option.tooltip.formatter([{ dataIndex: 0, value: option.series[0].data[0] }]);

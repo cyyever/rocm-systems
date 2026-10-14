@@ -8,10 +8,10 @@ const charts = vi.hoisted(() => ({ props: [] }));
 vi.mock('../../src/components/benchmarks/BenchmarkHistoryChart.jsx', () => ({ default: (props) => { charts.props.push(props); return createElement('div', { 'data-testid': 'measured-chart' }); } }));
 const catalog = ['a', 'b', 'c'].map((id) => ({ id, name: `Fictional workload ${id}`, suite: 'Triton', problem: {} }));
 const data = { testCatalog: catalog, runs: [{ timestamp: '2026-10-05T14:00:00Z', tests: [
-  { logicalTestId: 'a', target: 'gfx1250', mode: 'ST', suite: 'Triton', status: 'completed' },
-  { logicalTestId: 'b', target: 'gfx1250', mode: 'MT', suite: 'Triton', status: 'failed' },
+  { logicalTestId: 'a', target: 'gfx1250', mode: 'single', suite: 'Triton', status: 'completed' },
+  { logicalTestId: 'b', target: 'gfx1250', mode: 'default', suite: 'Triton', status: 'failed' },
 ] }] };
-const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST'] };
+const filters = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single'] };
 
 test('grid-first page has shared range, Add and inspect controls while retaining excluded workload identity', () => {
   charts.props = [];
@@ -26,13 +26,13 @@ test('grid-first page has shared range, Add and inspect controls while retaining
   expect(charts.props).toHaveLength(1);
   expect(charts.props[0].range).toBe('1M');
   expect(html).toContain('Remove Fictional workload b from grid');
-  expect(html).toContain('ST · solid');
-  expect(html).toContain('MT · dashed');
+  expect(html).toContain('single · solid');
+  expect(html).toContain('default · dashed');
 });
 
 test('eligible catalog follows explicit mode and empty mode is an empty analysis', () => {
   expect(explorer.explorerCatalog(data, filters).available.map((test) => test.id)).toEqual(['a']);
-  expect(explorer.explorerCatalog(data, { ...filters, modes: ['MT'] }).available.map((test) => test.id)).toEqual(['b']);
+  expect(explorer.explorerCatalog(data, { ...filters, modes: ['default'] }).available.map((test) => test.id)).toEqual(['b']);
   expect(explorer.explorerCatalog(data, { ...filters, modes: [] }).available).toEqual([]);
 });
 

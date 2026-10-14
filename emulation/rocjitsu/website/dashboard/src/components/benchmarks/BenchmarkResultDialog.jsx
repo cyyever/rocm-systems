@@ -45,7 +45,7 @@ export default function BenchmarkResultDialog({ record, repository, onClose }) {
             <DetailGrid>
               <DetailItem label="Status"><StatusChip status={test.status} /></DetailItem>
               <DetailItem label="Duration">{formatDuration(test.durationSeconds)}</DetailItem>
-              <DetailItem label="Execution mode">{test.mode}</DetailItem>
+              <DetailItem label="Thread policy">{test.mode}</DetailItem>
               {test.error && <Box sx={{ gridColumn: '1 / -1' }}><DetailItem label="Error">{test.error}</DetailItem></Box>}
             </DetailGrid>
 

@@ -8,17 +8,17 @@ vi.mock('../../src/data/selectors.js', () => ({ selectBenchmarkSeries: (data) =>
 
 function setup() {
   const runs = [1, 30].map((day) => ({ runId: `fictional-${day}`, timestamp: `2026-09-${String(day).padStart(2, '0')}T12:00:00Z`, commitTimestamp: `2026-09-${String(day).padStart(2, '0')}T11:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' }, tests: [] }));
-  const record = { run: runs[1], test: { mode: 'MT', status: 'completed', durationSeconds: 0 } };
+  const record = { run: runs[1], test: { mode: 'default', status: 'completed', durationSeconds: 0 } };
   captured.model = { runs: [runs[1]], labels: ['Sep 30'], series: [
-    { target: 'gfx1250', mode: 'ST', name: 'gfx1250 · ST', color: '#0f62fe', points: [null], records: [null] },
-    { target: 'gfx1250', mode: 'MT', name: 'gfx1250 · MT', color: '#0f62fe', points: [{ value: 0, record }], records: [record] },
+    { target: 'gfx1250', mode: 'single', name: 'gfx1250 · single', color: '#0f62fe', points: [null], records: [null] },
+    { target: 'gfx1250', mode: 'default', name: 'gfx1250 · default', color: '#0f62fe', points: [{ value: 0, record }], records: [record] },
   ] };
   return { data: { runs }, record };
 }
 
-test('benchmark lines use explicit ST solid / MT dashed and never estimate unavailable measurements', () => {
+test('benchmark lines use explicit single solid / default dashed and never estimate unavailable measurements', () => {
   const { data } = setup();
-  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST', 'MT'] }, benchmark: { id: 'a', name: 'Fictional' }, range: '1W' }));
+  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['single', 'default'] }, benchmark: { id: 'a', name: 'Fictional' }, range: '1W' }));
   expect(captured.data.runs).toHaveLength(1);
   const lines = captured.chart.option.series.filter((series) => series.type === 'line');
   expect(lines).toHaveLength(2);
@@ -31,14 +31,14 @@ test('benchmark lines use explicit ST solid / MT dashed and never estimate unava
 
 test('benchmark selection replaces its model synchronously before follow-up pointer events', () => {
   const { data } = setup();
-  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST', 'MT'] }, benchmark: { id: 'a', name: 'Fictional' }, selectedRunIds: ['fictional-30'] }));
+  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['single', 'default'] }, benchmark: { id: 'a', name: 'Fictional' }, selectedRunIds: ['fictional-30'] }));
   expect(captured.chart.lazyUpdate).toBe(false);
 });
 
 test('point selection retains completed zero and ignores unavailable or non-series clicks', () => {
   const { data, record } = setup();
   const onSelectRecord = vi.fn();
-  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['ST', 'MT'] }, benchmark: { id: 'a', name: 'Fictional' }, onSelectRecord }));
+  renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: { targets: ['gfx1250'], suites: ['Triton'], modes: ['single', 'default'] }, benchmark: { id: 'a', name: 'Fictional' }, onSelectRecord }));
   captured.chart.onEvents.click({ componentType: 'series', data: { record } });
   expect(onSelectRecord).toHaveBeenCalledWith(record);
   captured.chart.onEvents.click({ componentType: 'series', data: null });
@@ -49,7 +49,7 @@ test('point selection retains completed zero and ignores unavailable or non-seri
 test('full-timeframe bounds include early extremes without zoom and preserve selected highlights', () => {
   const { data, record } = setup();
   const points = Array.from({ length: 60 }, (_, index) => ({ value: index === 0 ? 1000 : 1, record: { ...record, run: { ...record.run, runId: `run-${index}` } } }));
-  captured.model = { runs: points.map(({ record }) => record.run), labels: points.map((_, index) => String(index)), series: [{ target: 'gfx1250', mode: 'ST', name: 'gfx1250 ST', color: '#0f62fe', points }] };
+  captured.model = { runs: points.map(({ record }) => record.run), labels: points.map((_, index) => String(index)), series: [{ target: 'gfx1250', mode: 'single', name: 'gfx1250 single', color: '#0f62fe', points }] };
   renderToStaticMarkup(createElement(BenchmarkHistoryChart, { data, filters: {}, benchmark: { id: 'a', name: 'Fictional' }, selectedRunIds: ['run-59'] }));
   expect(captured.chart.option).not.toHaveProperty('dataZoom');
   expect(captured.chart.onEvents).not.toHaveProperty('datazoom');

@@ -8,7 +8,7 @@ import { changeTone, classifyDurationChange } from '../../utils/performance';
 export default function LargestChanges({ changes, candidate, baseline }) {
   const maximumMagnitude = Math.max(...changes.map((item) => Math.abs(item.delta)).filter(Number.isFinite), 0);
   return (
-    <SectionCard title="Largest Changes" subtitle="Across selected targets and suites and execution modes" sx={{ height: '100%', minWidth: 0 }} contentSx={{ p: 2, '&:last-child': { pb: 2 } }} data-testid="largest-changes">
+    <SectionCard title="Largest Changes" subtitle="Across selected targets and suites and thread policies" sx={{ height: '100%', minWidth: 0 }} contentSx={{ p: 2, '&:last-child': { pb: 2 } }} data-testid="largest-changes">
       {changes.length === 0 ? <Typography color="text.secondary" sx={{ py: 4 }}>No comparable results in this selection.</Typography> : changes.map((item) => {
         const state = classifyDurationChange(item.delta, 3);
         const tone = changeTone(state);

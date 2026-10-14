@@ -17,7 +17,7 @@ export default function ConfigurationMatrix({ candidate, reference, selection, s
     <Box sx={{ display: 'grid', gridTemplateColumns: `40px repeat(${Math.max(targets.length, 1)}, minmax(120px,1fr))`, minWidth: 0, overflowX: 'auto', gap: 1, alignItems: 'stretch' }}>
       <Box />
       {targets.map((target) => <Box key={target} sx={{ textAlign: 'center' }}><CategoryTag kind="target" label={target} /></Box>)}
-      {['ST', 'MT'].map((mode) => <Fragment key={mode}>
+      {['single', 'default'].map((mode) => <Fragment key={mode}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CategoryTag kind="mode" label={mode} /></Box>
         {targets.map((target) => {
           const comparison = selectConfigurationComparison(candidate, reference, { target, mode, suites, query });
@@ -27,7 +27,7 @@ export default function ConfigurationMatrix({ candidate, reference, selection, s
           const value = summary.available ? Number.isFinite(summary.deltaPercent) ? formatPercent(summary.deltaPercent) : `${summary.deltaSeconds > 0 ? '+' : summary.deltaSeconds < 0 ? '−' : ''}${formatDuration(Math.abs(summary.deltaSeconds))}` : 'Unavailable';
           return <ButtonBase key={target} data-testid={`branch-config-${target}-${mode}`} aria-pressed={selected}
             data-comparison-state={summary.available ? 'measured' : 'unavailable'}
-            aria-label={`${target} ${mode === 'ST' ? 'single-threaded (ST)' : 'multi-threaded (MT)'} · ${summary.available ? `${value}, ${direction}, ${summary.matched} matched benchmarks` : summary.reason}`}
+            aria-label={`${target} ${mode} · ${summary.available ? `${value}, ${direction}, ${summary.matched} matched benchmarks` : summary.reason}`}
             aria-controls="branch-benchmark-differences" onClick={() => onSelect(target, mode)} sx={{
               minHeight: 88, p: { xs: 1, sm: 1.5 }, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 0.5,
               border: 1, borderColor: selected ? 'primary.main' : 'divider', borderRadius: 1,
@@ -42,6 +42,6 @@ export default function ConfigurationMatrix({ candidate, reference, selection, s
         })}
       </Fragment>)}
     </Box>
-    <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 1 }}>ST: single-threaded · MT: multi-threaded. Select any cell to inspect its results, including unavailable configurations.</Typography>
+    <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 1 }}>single: single-threaded · default: automatic policy. Select any cell to inspect its results, including unavailable configurations.</Typography>
   </Box>;
 }

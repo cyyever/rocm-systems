@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { validatePublishedResult, validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { createSchema2Publication } from '../fixtures/schema2Dataset.js';
+import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const completed = (samples, durationSeconds = 2) => ({
   testId: 'example', status: 'completed', durationSeconds, error: null, timing_results_s: samples,
@@ -34,11 +34,16 @@ test.each(['failed', 'timeout'])('preserves %s partial samples with null duratio
   expect(() => validatePublishedResult({ testId: 'example', status, durationSeconds: null, error: null, timing_results_s: [0] })).toThrow(/timing_results_s/);
 });
 
-test('old publications retain their durations without invented samples', () => {
-  const source = createSchema2Publication();
+test('maintained publications retain sample arrays and reject omitted samples', () => {
+  const source = createMaintainedPublication();
   const { data } = validatePublishedDashboardData(source);
   for (const run of data.allRuns) {
-    for (const result of run.tests) expect(result).not.toHaveProperty('timing_results_s');
+    const published = source.runs.find(({ id }) => id === run.runId);
+    for (const result of run.tests) {
+      const raw = published.configurations.find(({ target, thread_policy }) => target === result.target && thread_policy === result.mode).results.find(({ testId }) => testId === result.logicalTestId);
+      expect(result.timing_results_s).toEqual(raw.timing_results_s);
+    }
   }
-  expect(data.runs.find(({ runId }) => runId === 'fictional-develop-14').tests[0].durationSeconds).toBe(0);
+  delete source.runs[0].configurations[0].results[0].timing_results_s;
+  expect(() => validatePublishedDashboardData(source)).toThrow(/must contain timing_results_s/);
 });

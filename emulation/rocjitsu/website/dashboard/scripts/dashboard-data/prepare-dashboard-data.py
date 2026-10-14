@@ -186,6 +186,14 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
         require(isinstance(result, dict), 'Benchmark result must be an object')
         for key in ('id', 'name', 'suite', 'target', 'thread_policy', 'operation'):
             require(text(result[key]), f'Result {key} must be nonempty text')
+        require(
+            bool(re.fullmatch(r'[A-Za-z0-9._-]+', result['target'])),
+            'Result target must be a safe configuration token',
+        )
+        require(
+            result['thread_policy'] in ('single', 'default'),
+            'Result thread_policy must be single or default',
+        )
         require(isinstance(result['problem'], dict), 'problem must be an object')
         require(
             all(text(key) for key in result['problem']), 'problem keys must be nonempty'
@@ -267,13 +275,7 @@ def normalize_runs(
                 f'Conflicting workload definition: {test_id}',
             )
             definitions[test_id] = encoded
-            tests[test_id] = {
-                'id': test_id,
-                **definition,
-                'problem': {
-                    key: scalar(value) for key, value in definition['problem'].items()
-                },
-            }
+            tests[test_id] = {'id': test_id, **definition}
             results = groups.setdefault((result['target'], policy), {})
             require(
                 test_id not in results,

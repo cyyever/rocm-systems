@@ -10,7 +10,7 @@ src/components/                       # pages, charts, tables, pickers
 src/hooks/useDashboardState.js         # filters, selections, URL/history state
 src/data/dashboardData.js             # fetch publication JSON
 src/data/dashboardValidation.js       # validate and normalize it
-src/data/runSchema.js                 # run-version dispatch (consumer transition pending)
+src/data/runSchema.js                 # maintained version and configuration identity
 src/data/selectors.js                  # derive chart/comparison data
 src/config/metadata.json              # bundled settings and target run schema
 scripts/dashboard-data/                # prepare and stage benchmark publications
@@ -62,12 +62,12 @@ run result.testId → catalog.tests[].id
 Fetch index.json
   → fetch every listed run
   → fetch the distinct catalogs needed by included runs
-  → validate version/shape (legacy migration remains until consumer transition)
+  → strict JSON text parsing and maintained version/shape validation
   → validate and normalize
   → selectors → UI
 ```
 
-Unindexed files are not scanned. The [maintained schema contract](schema-1.md) specifies legacy rejection and parsed-published export preservation; its implementation-status section explains why the current loader is not yet compatible. The mutable index bypasses cache; immutable runs/catalogs can use cache. “Reload all data” cache-busts requests.
+Unindexed files are not scanned. The [maintained schema contract](schema-1.md) specifies legacy rejection and parsed-published export preservation; its implementation-status section distinguishes local compatibility from unresolved numeric acceptance and rollout. The mutable index bypasses cache; immutable runs/catalogs can use cache. “Reload all data” cache-busts requests.
 
 ## Preparing and publishing measurements
 
@@ -85,7 +85,7 @@ Run supported target/policy combinations in one corpus invocation
   → Git commit + push
 ```
 
-- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. The current client/validator still expects the retired ST/MT shape and must transition before publication; see [implementation status](schema-1.md#implementation-status). Nested/null problem-value preservation is also pending; current preparation stringifies those values. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
+- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. Problem values retain JSON types recursively; environment facts remain scalar. See [implementation status](schema-1.md#implementation-status) for unresolved numeric precision acceptance before publication. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
 - **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
 - **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
 - **Publish:** validate the complete dataset, stage only the index, run, and catalog, then commit and push once when the staged diff is nonempty.
