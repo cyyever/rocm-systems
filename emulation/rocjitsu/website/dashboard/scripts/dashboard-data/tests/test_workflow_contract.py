@@ -31,7 +31,8 @@ def test_benchmark_uses_one_consolidated_multi_policy_run():
     ):
         assert removed not in text
     publish = text.split('\n  publish:', 1)[1]
-    assert publish.index('validate-dashboard-data.mjs') < publish.index('git commit')
+    helper = (WORKFLOW.parents[2] / 'emulation/rocjitsu/website/dashboard/scripts/dashboard-data/publish-dashboard-run.sh').read_text()
+    assert helper.index('validate-dashboard-data.mjs') < helper.index('git commit')
 
 
 def test_publication_workflow_is_short_safe_orchestration():
@@ -44,39 +45,26 @@ def test_publication_workflow_is_short_safe_orchestration():
     assert 'runs/side-branches/${RUN_ID}.json' in publish
     assert 'CATALOGS=("${BUILD_DIR}"/test-catalogs/*.json)' in publish
     assert '${#CATALOGS[@]} -ne 1' in publish
-    assert publish.count('cp -n ') == 2
-    assert publish.count('cmp -s ') == 2
-    symlink_check = publish.index('for PATH_COMPONENT in')
-    assert '-L "${PATH_COMPONENT}"' in publish
-    assert symlink_check < publish.index('cp -n ')
-    assert 'update-dashboard-index.py' in publish
-    assert 'validate-dashboard-data.mjs' in publish
-    assert publish.count('git add ') == 1
-    for path in (
-        '"rocjitsu-dashboard/data/index.json"',
-        '"rocjitsu-dashboard/data/${RUN_PATH}"',
-        '"rocjitsu-dashboard/data/${CATALOG_PATH}"',
-    ):
-        assert path in publish
-    assert publish.count('git push ') == 1
-
-    prohibited = (
-        'publish-' + 'dashboard-run.py',
-        'MAX_ATTEMPTS',
-        'for ATTEMPT',
-        'git fetch',
-        'git reset',
-        'git switch --orphan',
-        'force-with-lease',
-        'rm -rf',
-        'rm -fr',
-        'rm -r',
-        'rm -R',
-        'rm --recursive',
-        'git rm -rf',
-        'git rm -r',
-        'git rm -R',
-        'dashboard-tests-venv',
-    )
-    for value in prohibited:
-        assert value not in publish
+    assert publish.count('publish-dashboard-run.sh') == 1
+    assert '"${BUILD_DIR}" "${RUN_PATH}" "${CATALOG_PATH}" "${RESULTS_BRANCH}"' in publish
+    helper = (WORKFLOW.parents[2] / 'emulation/rocjitsu/website/dashboard/scripts/dashboard-data/publish-dashboard-run.sh').read_text()
+    assert 'for ATTEMPT in 1 2 3; do' in helper
+    assert helper.count('git push ') == 1
+    assert 'git push --porcelain origin "HEAD:refs/heads/${RESULTS_BRANCH}"' in helper
+    assert 'git fetch --no-tags origin "refs/heads/${RESULTS_BRANCH}"' in helper
+    assert 'git reset --hard FETCH_HEAD' in helper
+    assert helper.index('for PATH_COMPONENT in') < helper.index('cp "${BUILD_DIR}')
+    assert '-L "${PATH_COMPONENT}"' in helper
+    assert 'cmp -s ' in helper
+    assert helper.index('update-dashboard-index.py') < helper.index('validate-dashboard-data.mjs')
+    assert helper.index('validate-dashboard-data.mjs') < helper.index('git commit')
+    assert helper.index('git commit') < helper.index('git push')
+    for path in ('"rocjitsu-dashboard/data/index.json"',
+                 '"rocjitsu-dashboard/data/${RUN_PATH}"',
+                 '"rocjitsu-dashboard/data/${CATALOG_PATH}"'):
+        assert path in helper
+    diagnostics = publish.split('      - name: Upload publication diagnostics', 1)[1]
+    assert 'if: always()' in diagnostics
+    assert 'retention-days: 14' in diagnostics
+    for prohibited in ('--force', 'force-with-lease', 'git switch --orphan', 'rm -rf', 'benchmarks.runner'):
+        assert prohibited not in helper

@@ -9,6 +9,11 @@ on:
       - ".github/workflows/rocjitsu-benchmarks.yml"
   workflow_dispatch:
     inputs:
+      publish_results:
+        description: "Publish dashboard results (leave disabled for test runs)"
+        required: false
+        type: boolean
+        default: false
       pull_request_number:
         description: "Optional open PR number for the selected side branch"
         required: false
@@ -240,7 +245,7 @@ jobs:
   publish:
     name: Publish dashboard data
     needs: [source-metadata, benchmark]
-    if: ${{ !cancelled() && needs.benchmark.outputs.ran == 'true' }}
+    if: ${{ !cancelled() && needs.benchmark.outputs.ran == 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_results == true) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -305,7 +310,6 @@ jobs:
           fi
 
           BUILD_DIR="${RUNNER_TEMP}/dashboard-built"
-          DATA_DIR="${GITHUB_WORKSPACE}/publication/rocjitsu-dashboard/data"
           SCRIPTS_DIR="${GITHUB_WORKSPACE}/dashboard/emulation/rocjitsu/website/dashboard/scripts"
           PREPARE_ARGS=(
             --raw-run "${RESULTS_DOWNLOAD_DIR}/run.json"
@@ -340,38 +344,16 @@ jobs:
           fi
           CATALOG_PATH="test-catalogs/$(basename "${CATALOGS[0]}")"
 
-          for PATH_COMPONENT in \
-            "${GITHUB_WORKSPACE}/publication/rocjitsu-dashboard" \
-            "${DATA_DIR}" \
-            "${DATA_DIR}/runs" \
-            "$(dirname "${DATA_DIR}/${RUN_PATH}")" \
-            "${DATA_DIR}/${RUN_PATH}" \
-            "${DATA_DIR}/test-catalogs" \
-            "${DATA_DIR}/${CATALOG_PATH}"; do
-            if [[ -L "${PATH_COMPONENT}" ]]; then
-              echo "::error::Dashboard publication path is a symbolic link: ${PATH_COMPONENT}"
-              exit 1
-            fi
-          done
+          bash "${SCRIPTS_DIR}/dashboard-data/publish-dashboard-run.sh" \
+            "${BUILD_DIR}" "${RUN_PATH}" "${CATALOG_PATH}" "${RESULTS_BRANCH}" \
+            "Publish rocjitsu benchmark run ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" \
+            "${SCRIPTS_DIR}" "${RUNNER_TEMP}/dashboard-publication-diagnostics"
 
-          mkdir -p "$(dirname "${DATA_DIR}/${RUN_PATH}")" "${DATA_DIR}/test-catalogs"
-          cp -n "${BUILD_DIR}/${RUN_PATH}" "${DATA_DIR}/${RUN_PATH}"
-          cmp -s "${BUILD_DIR}/${RUN_PATH}" "${DATA_DIR}/${RUN_PATH}"
-          cp -n "${CATALOGS[0]}" "${DATA_DIR}/${CATALOG_PATH}"
-          cmp -s "${CATALOGS[0]}" "${DATA_DIR}/${CATALOG_PATH}"
-
-          python "${SCRIPTS_DIR}/dashboard-data/update-dashboard-index.py" \
-            --data-dir "${DATA_DIR}" \
-            --run-path "${RUN_PATH}"
-          node "${SCRIPTS_DIR}/validate-dashboard-data.mjs" "${DATA_DIR}"
-
-          git add "rocjitsu-dashboard/data/index.json" \
-            "rocjitsu-dashboard/data/${RUN_PATH}" \
-            "rocjitsu-dashboard/data/${CATALOG_PATH}"
-          if git diff --cached --quiet; then
-            echo "Dashboard run ${RUN_ID} is already published"
-            exit 0
-          fi
-          git commit --signoff \
-            -m "Publish rocjitsu benchmark run ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
-          git push origin "HEAD:refs/heads/${RESULTS_BRANCH}"
+      - name: Upload publication diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rocjitsu-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dashboard-publication-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
