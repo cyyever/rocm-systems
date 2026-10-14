@@ -18,6 +18,9 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   const model = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: data.modes }, { range: '1W' });
   expect(new URL(page.url()).searchParams.get('range')).toBe('1W');
   const cards = page.getByTestId('metric-strip');
+  await expect(cards.locator('[data-testid^="metric-card-"]')).toHaveCount(4);
+  expect(await cards.locator('[data-testid^="metric-card-"]').evaluateAll((elements) => elements.map((element) => element.dataset.testid)))
+    .toEqual(['metric-card-latest-duration', 'metric-card-relative-speedup', 'metric-card-latest-results', 'metric-card-valid-data-points']);
   const changesPanel = page.getByTestId('largest-changes');
   const assertFlatChanges = async (projection) => {
     const expected = projection.rows.flatMap((row) => {
@@ -44,7 +47,9 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
     await expect(page.getByTestId('metric-card-latest-duration').locator(`[data-configuration="${row.key}"]`)).toContainText(formatDuration(row.latest.durationSeconds));
     await expect(page.getByTestId('metric-card-relative-speedup').locator(`[data-configuration="${row.key}"]`)).toContainText(`${row.latest.speedup.toFixed(2)}×`);
     await expect(page.getByTestId('metric-card-latest-results').locator(`[data-configuration="${row.key}"]`)).toContainText(`${row.latest.completed}/${row.latest.required}`);
+    await expect(page.getByTestId('metric-card-valid-data-points').locator(`[data-configuration="${row.key}"]`).locator('p').last()).toHaveText(String(row.points.filter((point) => Number.isFinite(point.speedup)).length));
   }
+  await page.screenshot({ path: `${process.env.TMPDIR}/top-cards-populated.png`, fullPage: false });
   const trend = page.getByTestId('performance-trend');
   const chart = trend.getByRole('img');
   const plotted = await readChart(chart, (instance) => instance.getOption().series.map((s) => ({ name: s.name, connectNulls: s.connectNulls, showSymbol: s.showSymbol, area: s.areaStyle })));
@@ -86,7 +91,10 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   await expect(page.getByTestId('metric-card-latest-duration').locator('[data-configuration]')).toHaveCount(2);
   await page.getByRole('checkbox', { name: 'Llama', exact: true }).uncheck();
   const filtered = selectOverviewProjection(data, { targets: data.targets, modes: ['single'], suites: ['Triton'] }, { range: '1M', catalogId });
-  for (const row of filtered.rows) await expect(page.getByTestId('metric-card-compared-workloads').locator(`[data-configuration="${row.key}"]`)).toContainText(String(row.cohortIds.length));
+  for (const row of filtered.rows) {
+    await expect(page.getByTestId('metric-card-latest-results').locator(`[data-configuration="${row.key}"]`).locator('p').last()).toHaveText(`${row.latest.completed}/${row.latest.required}`);
+    await expect(page.getByTestId('metric-card-valid-data-points').locator(`[data-configuration="${row.key}"]`).locator('p').last()).toHaveText(String(row.points.filter((point) => Number.isFinite(point.speedup)).length));
+  }
   await assertFlatChanges(filtered);
   await page.getByRole('checkbox', { name: 'gfx950', exact: true }).uncheck();
   await assertFlatChanges(selectOverviewProjection(data, { targets: ['gfx1250'], modes: ['single'], suites: ['Triton'] }, { range: '1M', catalogId }));

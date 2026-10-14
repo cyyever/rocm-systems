@@ -15,7 +15,9 @@ const projection = { rows: [{ key: 'gfx950/single', target: 'gfx950', mode: 'sin
 
 test('cards consume per-configuration endpoints and show only succeeded/required', () => {
   const html = renderToStaticMarkup(createElement(MetricsGrid, { projection }));
-  for (const title of ['Latest duration', 'Relative speedup', 'Compared workloads', 'Latest results']) expect(html).toContain(title);
+  const cards = [...html.matchAll(/data-testid="metric-card-([^"]+)"/g)].map((match) => match[1]);
+  expect(cards).toEqual(['latest-duration', 'relative-speedup', 'latest-results', 'valid-data-points']);
+  expect(html).not.toContain('Compared workloads');
   expect(html).toContain('2/2');
   expect(html).toContain('1.00×');
   expect(html).not.toContain('Run health');

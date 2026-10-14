@@ -25,7 +25,7 @@ export default function MetricsGrid({ projection }) {
   return <Paper variant="outlined" data-testid="metric-strip" sx={{ borderRadius: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,minmax(0,1fr))', md: 'repeat(4,minmax(0,1fr))' }, overflow: 'hidden', '& > div': { borderRight: { md: 1 }, borderBottom: { xs: 1, md: 0 }, borderColor: 'divider' }, '& > div:last-child': { border: 0 } }}>
     <Metric label="Latest duration" icon={TimerRoundedIcon} rows={rows} valueFor={(r) => r.latest.durationSeconds == null ? 'Unavailable' : formatDuration(r.latest.durationSeconds)} caption={projection.endpointLabel} />
     <Metric label="Relative speedup" icon={SpeedRoundedIcon} rows={rows} valueFor={(r) => r.latest.speedup == null ? 'Unavailable' : `${r.latest.speedup.toFixed(2)}×`} caption="First valid reference / latest · higher is faster" />
-    <Metric label="Compared workloads" icon={FactCheckRoundedIcon} rows={rows} valueFor={(r) => r.comparedWorkloads} caption="Required cohort per configuration" />
     <Metric label="Latest results" icon={ChecklistRoundedIcon} rows={rows} valueFor={(r) => `${r.latest.completed}/${r.latest.required}`} caption="Succeeded / required workloads" />
+    <Metric label="Valid data points" icon={FactCheckRoundedIcon} rows={rows} valueFor={(r) => r.points.filter((point) => Number.isFinite(point.speedup)).length} caption="Plotted points in selected range" />
   </Paper>;
 }
