@@ -78,6 +78,17 @@ pre {
   min-height: 100vh;
 }
 
+/* One desktop density layer also scales body-mounted menus/dialogs. Phones stay native size. */
+@supports (zoom: 0.8) {
+  @media (min-width: 900px) {
+    body { zoom: 0.8; }
+    /* Popper/Popover receive viewport pixel anchors; cancel inherited zoom there
+       so those coordinates are not scaled a second time. Dialog flex centering
+       and in-chart tooltips stay in the shared density layer. */
+    .MuiPopover-root, .MuiPopper-root { zoom: 1.25; }
+  }
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

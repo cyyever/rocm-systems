@@ -69,7 +69,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
         </Stack>
         {!catalog.all.length && <Alert severity="info">No benchmarks available in the published catalog.</Alert>}
         {catalog.all.length > 0 && !catalog.available.length && <Alert severity="info" sx={{ mb: 1.5 }}>No benchmarks in the selected targets, suites and thread policies. Retained workloads are shown as unavailable.</Alert>}
-        <Box data-testid="benchmark-grid" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', '@media (min-width:600px) and (max-width:899px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1200px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1800px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+        <Box data-testid="benchmark-grid" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', '@media (min-width:600px) and (max-width:899px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:900px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1200px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
           {selected.map((benchmark) => <Paper data-testid="benchmark-grid-card" key={benchmark.id} variant="outlined" sx={{ p: 1.75, minWidth: 0, borderRadius: '8px' }}>
             <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1 }}>
               <Box sx={{ minWidth: 0 }}><Typography variant="h3" sx={{ fontSize: 14, lineHeight: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{benchmark.name}</Typography><CategoryTag label={benchmark.suite} sx={{ mt: 0.75 }} /></Box>

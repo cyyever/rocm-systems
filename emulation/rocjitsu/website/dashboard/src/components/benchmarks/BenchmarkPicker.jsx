@@ -25,6 +25,10 @@ const benchmarkViewport = {
     const top = viewport?.offsetTop ?? 0;
     const bottom = top + (viewport?.height ?? window.innerHeight);
     const rect = anchor.getBoundingClientRect();
+    // The portal uses viewport coordinates; match its width to the scaled anchor,
+    // not Autocomplete's unscaled clientWidth, before overflow/flip calculations.
+    state.elements.popper.style.width = `${rect.width}px`;
+    state.rects.popper.width = rect.width;
     const height = Math.max(0, Math.min(340, Math.max(rect.top - top, bottom - rect.bottom) - 8));
     state.elements.popper.style.setProperty('--benchmark-listbox-height', `${height}px`);
     state.rects.popper.height = state.elements.popper.offsetHeight;
