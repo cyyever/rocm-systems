@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Box, Link, MenuItem, Select, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import Chart from '../shared/Chart';
 import SectionCard from '../shared/SectionCard';
@@ -7,7 +7,7 @@ import { escapeHtml, formatDuration, formatFullDate, formatShortDate } from '../
 import { targetColor } from '../../utils/chartColors';
 import { historyRanges } from '../../config/historyRanges';
 import { visuallyHiddenStyles } from '../../theme/styles';
-import { trendKeyIndex, nearestTrendIndex } from './overviewPresentation';
+import { trendEmptyMessage, trendKeyIndex, nearestTrendIndex, trendSlotStatus } from './overviewPresentation';
 
 const StableChart = memo(Chart);
 const colorFor = (row, index) => row.mode === 'default' ? ({ gfx1250: '#14826F', gfx950: '#7450B8' }[row.target] ?? targetColor(row.target, index + 2)) : targetColor(row.target, index);
@@ -23,6 +23,21 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
   const [inspection, setInspection] = useState(null);
   const inspected = inspection?.projection === projection ? inspection.index : null;
   const eligible = projection.slots.flatMap((slot, index) => slot.run && projection.rows.some((r) => Number.isFinite(r.points[index]?.speedup)) ? [index] : []);
+  const hasCandidates = (projection.attempts?.length ?? projection.slots.filter((slot) => slot.run).length) > 0;
+  const keyboardIndexes = hasCandidates && projection.rows.some((row) => row.cohortIds.length)
+    ? projection.slots.map((_, index) => index) : [];
+  const statusRef = useRef(null);
+  const announcedProjection = useRef(projection);
+  // One persistent live-region node owns both keyboard feedback and scope notices.
+  // Like the transient chart overlays, its DOM is updated without prop-sync state.
+  const announce = useCallback((text, visible = false) => {
+    const node = statusRef.current;
+    if (!node) return;
+    node.textContent = text;
+    node.setAttribute('data-visible', String(visible));
+    if (text) node.setAttribute('role', 'status');
+    else node.removeAttribute('role');
+  }, []);
   const colors = projection.rows.map(colorFor);
   const clear = () => {
     const chart = chartRef.current;
@@ -36,13 +51,20 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
     if (focusRef.current) { focusRef.current.style.display = 'none'; focusRef.current.innerHTML = ''; }
     const chart = chartRef.current;
     if (chart && !chart.isDisposed()) chart.dispatchAction({ type: 'hideTip' });
-  }, [projection]);
+    if (announcedProjection.current !== projection) {
+      announce('Comparison scope updated. Use arrow keys to inspect dates and attempts.');
+      announcedProjection.current = projection;
+    }
+  }, [projection, announce]);
   const inspect = (index) => {
+    if (index == null) { clear(); return; }
+    const source = pointerSource.current;
+    setInspection((current) => current?.projection === projection && current.index === index && current.source === source
+      ? current : { projection, index, source });
+    announce(trendSlotStatus(projection, index), source === 'keyboard');
     const chart = chartRef.current;
-    if (index == null || !chart || chart.isDisposed()) { clear(); return; }
     const hits = projection.rows.flatMap((r, si) => Number.isFinite(r.points[index]?.speedup) ? [si] : []);
-    if (!hits.length) { clear(); return; }
-    setInspection((current) => current?.projection === projection && current.index === index ? current : { projection, index });
+    if (!hits.length || !chart || chart.isDisposed()) { clear(); return; }
     chart.dispatchAction({ type: 'showTip', seriesIndex: hits[0], dataIndex: index });
     const x = chart.convertToPixel({ xAxisIndex: 0 }, projection.slots[index].x);
     Object.assign(guideRef.current.style, { display: 'block', left: `${x}px` });
@@ -62,7 +84,7 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
   const option = useMemo(() => ({
     animation: false,
     grid: { left: 50, right: 14, top: 26, bottom: 40 },
-    tooltip: { trigger: 'axis', triggerOn: 'none', axisPointer: { type: 'none' }, transitionDuration: 0, confine: true, textStyle: { fontSize: 11 },
+    tooltip: { trigger: 'axis', triggerOn: 'none', axisPointer: { type: 'none' }, transitionDuration: 0, hideDelay: 0, confine: true, textStyle: { fontSize: 11 },
       formatter: (parameters) => {
         const index = (Array.isArray(parameters) ? parameters[0] : parameters)?.dataIndex;
         const slot = projection.slots[index];
@@ -104,19 +126,27 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
       <Typography variant="caption" color="text.secondary">1.00× = each configuration’s first valid positive point in range.</Typography>
     </Stack>
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2, mb: 1 }}>{projection.rows.map((row, index) => <Typography key={row.key} variant="caption"><Box component="span" sx={{ color: colors[index], mr: 0.75 }}>{row.mode === 'single' ? '●' : '◆'}</Box>{row.target} {row.mode}</Typography>)}</Stack>
-    {!eligible.length ? <Box data-testid="speedup-empty-state" role="status" sx={{ height: 280, display: 'grid', placeItems: 'center', textAlign: 'center', px: 2 }}><Typography variant="body2" color="text.secondary">Relative speedup unavailable: no positive valid reference in the selected range.</Typography></Box> : <Box data-testid="performance-trend-chart" tabIndex={0} role="group" aria-label="Inspect performance trend" aria-describedby={helpId}
-      onKeyDown={(e) => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(e.key)) return; e.preventDefault(); pointerSource.current = 'keyboard'; inspect(trendKeyIndex(eligible, inspected, e.key)); if (e.key === 'Escape') setInspection(null); }}
+    <Box data-testid="performance-trend-chart" tabIndex={keyboardIndexes.length ? 0 : undefined} role="group" aria-label="Inspect performance trend" aria-describedby={helpId}
+      onKeyDown={(e) => {
+        if (!keyboardIndexes.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(e.key)) return;
+        e.preventDefault();
+        pointerSource.current = 'keyboard';
+        inspect(trendKeyIndex(keyboardIndexes, inspected, e.key));
+        if (e.key === 'Escape') { setInspection(null); announce(''); }
+      }}
       onPointerMove={(e) => { if (e.pointerType === 'mouse' || e.pointerType === 'pen') { pointerSource.current = e.pointerType; pointer(e); } }}
       onPointerDown={(e) => { pointerSource.current = e.pointerType; pointer(e); }}
       onPointerLeave={() => { if (['mouse', 'pen'].includes(pointerSource.current)) clear(); }}
       sx={{ position: 'relative', mt: 1, outlineOffset: 2, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' } }}>
-      <Box ref={guideRef} data-testid="point-hover-guide" aria-hidden="true" sx={{ display: 'none', pointerEvents: 'none', position: 'absolute', top: 26, bottom: 40, borderLeft: '1px dotted', borderColor: 'text.secondary', zIndex: 1 }} />
-      <Box component="svg" ref={focusRef} data-testid="hover-line-focus" aria-hidden="true" sx={{ position: 'absolute', inset: 0, width: '100%', height: 280, display: 'none', pointerEvents: 'none', zIndex: 2 }} />
-      <StableChart option={option} height={280} ariaLabel="Relative speedup by configuration; gaps unconnected" lazyUpdate={false} onReady={onReady} />
-    </Box>}
-    {inspected != null && <Typography role="status" aria-live="polite" sx={visuallyHiddenStyles}>{projection.slots[inspected]?.run?.runId} · {projection.rows.filter((r) => Number.isFinite(r.points[inspected]?.speedup)).map((r) => `${r.target} ${r.mode}: ${r.points[inspected].speedup.toFixed(3)} times`).join(' · ')}</Typography>}
-    <Typography id={helpId} variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>Arrow keys inspect runs · Home/End first/last · Escape clears · Date (UTC)</Typography>
+      {!eligible.length ? <Box key="empty-comparison" data-testid="speedup-empty-state" sx={{ height: 280, display: 'grid', placeItems: 'center', textAlign: 'center', px: 2 }}><Typography variant="body2" color="text.secondary">{trendEmptyMessage(projection)}</Typography></Box> : <>
+        <Box ref={guideRef} data-testid="point-hover-guide" aria-hidden="true" sx={{ display: 'none', pointerEvents: 'none', position: 'absolute', top: 26, bottom: 40, borderLeft: '1px dotted', borderColor: 'text.secondary', zIndex: 1 }} />
+        <Box component="svg" ref={focusRef} data-testid="hover-line-focus" aria-hidden="true" sx={{ position: 'absolute', inset: 0, width: '100%', height: 280, display: 'none', pointerEvents: 'none', zIndex: 2 }} />
+        <StableChart option={option} height={280} ariaLabel="Relative speedup by configuration; gaps unconnected" lazyUpdate={false} onReady={onReady} />
+      </>}
+    </Box>
+    <Typography ref={statusRef} data-testid="trend-inspection-status" aria-live="polite" aria-atomic="true" data-visible="false" variant="caption" sx={{ display: 'block', mt: 1, overflowWrap: 'anywhere', '&[data-visible="false"]': visuallyHiddenStyles }} />
+    <Typography id={helpId} variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>Arrow keys inspect dates and attempts · Home/End first/last · Escape clears · Date (UTC)</Typography>
     <CatalogWorkloads catalogs={catalogs} projection={projection} />
-    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{projection.endpointLabel}{projection.weeklyEligibility ? ' · provisional: selected required workloads succeed' : ''}. Original per-benchmark results: <Link component="button" type="button" onClick={onOpenBenchmarks} sx={{ font: 'inherit' }}>Benchmarks</Link>.</Typography>
+    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{projection.endpointLabel}{projection.weeklyEligibility ? ' · every required workload succeeds in every selected configuration' : ''}. Original per-benchmark results: <Link component="button" type="button" onClick={onOpenBenchmarks} sx={{ font: 'inherit' }}>Benchmarks</Link>.</Typography>
   </SectionCard>;
 }

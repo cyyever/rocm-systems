@@ -128,4 +128,5 @@ test('weekly retains repeated SHA attempts without cap and calculates cohort bef
   expect(model.slots.filter((s) => s.run)).toHaveLength(10);
   expect(model.rows[0].latest.runId).toBe('attempt-9');
   expect(model.endpointLabel).toBe('Latest eligible plotted run');
+  expect(model.weeklyEligibility).toBe('selected-workloads-succeed');
 });

@@ -91,7 +91,7 @@ function createSlots(dayKeys, runs, range) {
   });
 }
 
-// Model-only staged API. C2 will wire Overview and retire its old combined selector.
+// Shared Overview projection; catalog scoping preserves the UTC window.
 // catalogId=null selects Shared benchmarks; an explicit immutable catalog ID scopes
 // candidate runs without moving the UTC window. Hover is intentionally not input.
 export function selectOverviewProjection(data, filters, { range = 'ALL', catalogId = null } = {}) {
@@ -127,7 +127,7 @@ export function selectOverviewProjection(data, filters, { range = 'ALL', catalog
   return { range: resolved.id, catalogId, ...window, slots, attempts, rows,
     latestRun: slots[latestIndex]?.run ?? null,
     endpointLabel: resolved.id === '1W' ? 'Latest eligible plotted run' : 'Latest selected run',
-    weeklyEligibility: resolved.id === '1W' ? 'provisional-selected-workloads-succeed' : null,
+    weeklyEligibility: resolved.id === '1W' ? 'selected-workloads-succeed' : null,
     axisMax: resolved.id === '1W' ? window.dayKeys.length : Math.max(0, slots.length - 1),
     defaultConfigurationKey: rows[0]?.key ?? null };
 }

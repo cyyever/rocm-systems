@@ -13,6 +13,16 @@ const point = { run, runId: 'attempt', durationSeconds: 12, speedup: 1, required
 const projection = { rows: [{ key: 'gfx950/single', target: 'gfx950', mode: 'single', cohortIds: ['a', 'b'], comparedWorkloads: 2, reference: point, latest: point, points: [point, { ...point, run: null, speedup: null, durationSeconds: null }] }],
   slots: [{ run, x: 0 }, { run: null, x: 1 }], range: '1M', dayKeys: ['2026-01-01', '2026-01-02'], axisMax: 1, endpointLabel: 'Latest selected run' };
 
+test('all-gap comparisons retain a focusable chronological surface without a chart', () => {
+  const gap = { ...point, durationSeconds: null, speedup: null, completed: 0, reason: 'timeout' };
+  const allGap = { ...projection, attempts: [{ run, eligible: false }], rows: [{ ...projection.rows[0], points: [gap, { ...gap, run: null }], reference: null, latest: gap }] };
+  const html = renderToStaticMarkup(createElement(DurationHistory, { projection: allGap, catalogs: [], onRangeChange() {}, onCatalogChange() {} }));
+  expect(html).toMatch(/data-testid="performance-trend-chart"[^>]*tabindex="0"/);
+  expect(html).toContain('data-testid="trend-inspection-status"');
+  expect(html).toContain('aria-live="polite"');
+  expect(html).not.toContain('data-testid="point-hover-guide"');
+});
+
 test('cards consume per-configuration endpoints and show only succeeded/required', () => {
   const html = renderToStaticMarkup(createElement(MetricsGrid, { projection }));
   const cards = [...html.matchAll(/data-testid="metric-card-([^"]+)"/g)].map((match) => match[1]);
@@ -28,6 +38,7 @@ test('relative chart has only configuration series, no gap bridges, dots or fill
   expect(option.series).toHaveLength(1);
   expect(option.series[0]).toMatchObject({ connectNulls: false, showSymbol: false, symbol: 'none' });
   expect(option.series[0].areaStyle).toBeUndefined();
+  expect(option.tooltip.hideDelay).toBe(0);
   expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('');
   expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('attempt');
 });
