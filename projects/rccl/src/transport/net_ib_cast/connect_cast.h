@@ -157,7 +157,7 @@ static inline void IbCastQpCreateAttrInitSharing(struct ncclIbQpCreateAttr* attr
 // RCCL: a direct-GDR flush can be posted on every proxy step. RMA credits wait for one chain.
 static inline int IbCastFlushQpSendDepth(const struct ncclIbNetCommBase* base) {
   if (!IbCastAdvertiseMultiSeg()) return NET_IB_MAX_REQUESTS;
-  if (base->isRma) return NCCL_IB_RMA_MAX_FLUSH_WRS;
+  if (base->isRma) return NCCL_RMA_MAX_FLUSH_QP_WRS;
   return ncclIbFlushQpSendDepth(NCCL_STEPS, NCCL_NET_IB_MAX_RECVS, NCCL_IB_MAX_SEGMENTS, NET_IB_MAX_REQUESTS, 1);
 }
 
