@@ -150,6 +150,39 @@ foreach(
     endif()
 endforeach()
 
+# Integer families share references and contract checks, with explicit API tests.
+foreach(
+    family
+    IN
+    ITEMS
+        half_binary
+        half_ternary
+        add
+        multiply
+        select
+        combined
+        bitfield
+        bit_count
+        boolean
+        mad
+        packed_binary
+        packed_mad
+        shift
+        sad
+        carry
+        mad64
+)
+    set(target "rj_arith_integer_${family}_test")
+    add_executable(${target} integer/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    rj_configure_target(${target} WARNINGS)
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+    if(RJ_INSTALL_TESTS)
+        file(APPEND "${RJ_INSTALL_CTEST_FILE}" "include(\"${target}.cmake\")\n")
+    endif()
+endforeach()
+
 # Dot-product formats retain family-specific arithmetic and status expectations.
 foreach(family IN ITEMS integer fp8 half dot2)
     set(target "rj_arith_dot_${family}_test")

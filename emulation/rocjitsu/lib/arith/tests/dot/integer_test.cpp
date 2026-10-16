@@ -40,12 +40,13 @@ template <int Lanes, int Bits, bool Unsigned, typename Call> void check_integer_
     input.v[2][lane] = Bits == 8 ? 0x7f7f7f7fU : 0x77777777U;
     input.v[4][lane] = lane % 3 == 0 ? 0xfffffff0U : lane % 3 == 1 ? 0x7ffffff0U : 0x80000010U;
   }
-  check_integer_word<Lanes>(
+  check_integer_word<Lanes, 3, false>(
       call,
       [](uint32_t a, uint32_t b, uint32_t c, uint32_t, uint32_t mode, int) {
         return integer_dot<Bits, Unsigned>(a, b, c, mode);
       },
-      RJ_ARITH_DOT_CLAMP | (Unsigned ? 0 : RJ_ARITH_DOT_SIGNED_A | RJ_ARITH_DOT_SIGNED_B), input);
+      RJ_ARITH_DOT_CLAMP | (Unsigned ? 0 : RJ_ARITH_DOT_SIGNED_A | RJ_ARITH_DOT_SIGNED_B), false,
+      input);
 }
 
 } // namespace
