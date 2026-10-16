@@ -12,6 +12,24 @@ namespace rocjitsu::arith {
 
 #if defined(RJ_ARITH_HAVE_X86_64_V3)
 
+// Evaluate fp8 wmma for the caller-selected operation.
+// Requires the named CPU features and validated instruction controls.
+void fp8_wmma_x86_64_v3(bool bf8_a, bool bf8_b, uint32_t *const *d, const uint32_t *const *a,
+                        const uint32_t *const *b, const uint32_t *const *c);
+
+// Evaluate integer wmma for the caller-selected operation.
+// Requires the named CPU features and validated instruction controls.
+void integer_wmma_x86_64_v3(int bits, int k, uint32_t modifiers, uint32_t *const *d,
+                            const uint32_t *const *a, const uint32_t *const *b,
+                            const uint32_t *const *c);
+
+// Evaluate integer wmma replicated for the caller-selected operation.
+// Requires the named CPU features and validated instruction controls.
+template <int Bits, int Lanes>
+void integer_wmma_replicated_x86_64_v3(uint32_t modifiers, uint32_t *const *d,
+                                       const uint32_t *const *a, const uint32_t *const *b,
+                                       const uint32_t *const *c);
+
 // Evaluate wmma f32 for the caller-selected operation.
 // Requires the named CPU features and validated instruction controls.
 template <bool Bf16, int Lanes, bool Rdna3>
@@ -53,7 +71,11 @@ bool wmma_avx512bf16(uint32_t modifiers, uint32_t *const *d, const uint32_t *con
 #endif
 
 #if defined(RJ_ARITH_HAVE_AVX512VNNI)
-
+// Evaluate integer wmma avx512vnni for the caller-selected operation.
+// Requires the named CPU features and validated instruction controls.
+void integer_wmma_avx512vnni(int bits, int k, uint32_t modifiers, uint32_t *const *d,
+                             const uint32_t *const *a, const uint32_t *const *b,
+                             const uint32_t *const *c);
 #endif
 
 } // namespace rocjitsu::arith

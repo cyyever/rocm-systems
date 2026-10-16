@@ -57,4 +57,17 @@ void set_wmma_gfx12_half(uint32_t *const *v, int coordinate, int k, uint32_t bit
   word = (word & ~(0xffffU << shift)) | (bits << shift);
 }
 
+// Write a gfx12 dense WMMA 4/8-bit A/B element. Wave64 distributes
+// the Wave32 register words into the upper 32 lanes.
+template <int Bits, int Lanes>
+void set_wmma_gfx12_small(uint32_t *const *v, int coordinate, int k, uint32_t bits) {
+  static_assert(Bits == 4 || Bits == 8);
+  static_assert(Lanes == 32 || Lanes == 64);
+  int bit = (k % 8 + 8 * (k / 16)) * Bits;
+  int lane = coordinate + 16 * ((k / 8) % 2);
+  auto &word = v[Lanes == 32 ? bit / 32 : 0][lane + (Lanes == 64 ? 32 * (bit / 32) : 0)];
+  int shift = bit % 32;
+  word = (word & ~(((1U << Bits) - 1) << shift)) | (bits << shift);
+}
+
 } // namespace rocjitsu::arith::test
