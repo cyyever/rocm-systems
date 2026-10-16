@@ -7,7 +7,7 @@ and empirical exact results.
 gfx12 FP16 FMA reports FP status in mode 3; gfx11 FMA and FP32 FMA reject
 mode 3. WMMA accepts modes 0–3 and has no FP-status output.
 Source/output modifiers and FMA DPP routing are supported. Compatibility selects
-mode 2 for these entry points. CPU implementations are scalar and AVX2.
+mode 2 for these entry points. CPU implementations are scalar, AVX2, AVX-512 and native BF16.
 Benchmark commands and Rocjitsu integration described below are planned.
 
 The remaining design describes the intended interface; family headers state current support.
