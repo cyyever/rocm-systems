@@ -10,7 +10,10 @@ add_library(
     common/cpu.cpp
     common/cpu_decode.cpp
     fp/arithmetic.cpp
+    fp/fp64.cpp
     fp/half_fma.cpp
+    fp/mixed_fma.cpp
+    fp/packed_fma.cpp
     register/dpp.cpp
     wmma/swmmac16.cpp
     wmma/swmmac8.cpp

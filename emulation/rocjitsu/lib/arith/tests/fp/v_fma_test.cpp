@@ -35,26 +35,26 @@ const StatusCase status_cases_f16[] = {
 
 // Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W32Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_half_fma<32>(rj_arith_v_fma_f16_w32_gfx12, /*gfx12=*/true,
-                                            status_cases_f16);
+  rocjitsu::arith::test::check_half_fma<32, /*Packed=*/false, /*Accumulate=*/false>(
+      rj_arith_v_fma_f16_w32_gfx12, /*gfx12=*/true, status_cases_f16);
 }
 
 // Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W32, Arithmetic) {
-  rocjitsu::arith::test::check_half_fma<32>(rj_arith_v_fma_f16_w32, /*gfx12=*/false,
-                                            status_cases_f16);
+  rocjitsu::arith::test::check_half_fma<32, /*Packed=*/false, /*Accumulate=*/false>(
+      rj_arith_v_fma_f16_w32, /*gfx12=*/false, status_cases_f16);
 }
 
 // Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W64Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_half_fma<64>(rj_arith_v_fma_f16_w64_gfx12, /*gfx12=*/true,
-                                            status_cases_f16);
+  rocjitsu::arith::test::check_half_fma<64, /*Packed=*/false, /*Accumulate=*/false>(
+      rj_arith_v_fma_f16_w64_gfx12, /*gfx12=*/true, status_cases_f16);
 }
 
 // Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W64, Arithmetic) {
-  rocjitsu::arith::test::check_half_fma<64>(rj_arith_v_fma_f16_w64, /*gfx12=*/false,
-                                            status_cases_f16);
+  rocjitsu::arith::test::check_half_fma<64, /*Packed=*/false, /*Accumulate=*/false>(
+      rj_arith_v_fma_f16_w64, /*gfx12=*/false, status_cases_f16);
 }
 
 // Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
@@ -75,6 +75,26 @@ TEST(FpFmaF32W64Gfx12, Arithmetic) {
 // Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
 TEST(FpFmaF32W64, Arithmetic) {
   rocjitsu::arith::test::check_fma<32, 64>(rj_arith_v_fma_f32_w64, /*gfx12=*/false);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF64W32Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma<64, 32>(rj_arith_v_fma_f64_w32_gfx12, /*gfx12=*/true);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF64W32, Arithmetic) {
+  rocjitsu::arith::test::check_fma<64, 32>(rj_arith_v_fma_f64_w32, /*gfx12=*/false);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF64W64Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma<64, 64>(rj_arith_v_fma_f64_w64_gfx12, /*gfx12=*/true);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF64W64, Arithmetic) {
+  rocjitsu::arith::test::check_fma<64, 64>(rj_arith_v_fma_f64_w64, /*gfx12=*/false);
 }
 
 // Guard the finite/infinite boundary against double rounding, on every CPU path.
