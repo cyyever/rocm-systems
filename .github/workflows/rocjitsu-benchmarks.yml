@@ -281,6 +281,15 @@ jobs:
           persist-credentials: false
           sparse-checkout: emulation/rocjitsu/website/dashboard
 
+      - name: Checkout pinned publication manifest
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ROCm/rocjitsu-test-corpus
+          ref: ${{ env.CORPUS_SHA }}
+          path: publication-corpus
+          persist-credentials: false
+          sparse-checkout: benchmarks/suites
+
       - name: Set up publisher Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -316,6 +325,8 @@ jobs:
             --run-id "${RUN_ID}"
             --expected-sha "${BENCHMARK_SHA}"
             --expected-corpus-sha "${CORPUS_SHA}"
+            --corpus-dir "${GITHUB_WORKSPACE}/publication-corpus"
+            --manifest benchmarks/suites/performance-v1.toml
             --machine-id "${BENCHMARK_MACHINE}"
             --trigger "${TRIGGER}"
             --branch "${BENCHMARK_BRANCH}"
@@ -336,7 +347,9 @@ jobs:
           python "${SCRIPTS_DIR}/dashboard-data/prepare-dashboard-data.py" \
             "${PREPARE_ARGS[@]}"
 
+          shopt -s dotglob
           CATALOGS=("${BUILD_DIR}"/test-catalogs/*.json)
+          shopt -u dotglob
           if [[ ${#CATALOGS[@]} -ne 1 || ! -f "${CATALOGS[0]}" ]]; then
             echo "::error::Expected exactly one prepared test catalog."
             exit 1

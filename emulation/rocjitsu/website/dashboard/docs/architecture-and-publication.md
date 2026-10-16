@@ -77,7 +77,7 @@ The benchmark workflow runs on relevant develop pushes or manual dispatch, not a
 Run supported target/policy combinations in one corpus invocation
   → upload raw result directories as a GitHub Actions artifact
   → publish job downloads that artifact
-  → checkout gh-pages-rocjitsu and the source dashboard scripts
+  → checkout gh-pages-rocjitsu, the source dashboard scripts and pinned corpus manifest
   → prepare-dashboard-data.py (once)
   → copy the run and catalog without overwriting existing files
   → update-dashboard-index.py
@@ -85,10 +85,10 @@ Run supported target/policy combinations in one corpus invocation
   → Git commit + push
 ```
 
-- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its content-addressed catalog in an isolated build directory. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. Problem values retain JSON types recursively; environment facts remain scalar. See [implementation status](schema-1.md#implementation-status) for unresolved numeric precision acceptance before publication. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
+- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its suite-named catalog in an isolated build directory. Trusted `--corpus-dir`, repository-relative `--manifest` and `--expected-corpus-sha` inputs select committed TOML, not raw-artifact declarations. Each supplied raw input must independently match the full declared tuple set and typed workload definitions; diagnostic subsets reject even on first publication. Full finalized failures remain publishable. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. Problem values retain JSON types recursively; environment facts remain scalar. See [implementation status](schema-1.md#implementation-status) for unresolved numeric precision acceptance before publication. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
 - **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
 - **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
-- **Publish:** validate the complete dataset, stage only the index, run, and catalog, then commit and push once when the staged diff is nonempty.
+- **Publish:** validate the complete dataset and stage only the index, run and catalog. Preserve the existing maximum of three normal push attempts: retry only confirmed non-fast-forward conflicts after reloading the branch, reapplying unchanged immutable inputs and validating the full index. Identical retries are idempotent; immutable conflicts, validation and other push errors fail immediately. No force-push or benchmark rerun.
 
 The Actions artifact only transfers raw results between jobs. The Git push makes dashboard JSON available.
 
@@ -97,11 +97,19 @@ The Actions artifact only transfers raw results between jobs. The Git push makes
 ```text
 Run/catalog: same path + same JSON content → reuse; no rewrite
 Run/catalog: same path + different content → error
-Changed catalog content                  → new catalog hash/file
+Changed catalog content                  → new manifest name/catalog file
 New benchmark attempt                    → new run ID/file
 index.json                               → mutable; updated to reference runs
 ```
 
-Timing-only changes do not change the catalog. Keep old run/catalog files for cached indexes.
+Timing, status, error and sampling changes do not change the catalog. The catalog ID
+is exactly `execution_summary.benchmark_suite`, equal to the pinned manifest name.
+The publisher checks out that manifest at the same immutable corpus pin as the
+runner, without persisted credentials. Changed membership/definitions require a
+new manifest name; incompatible workload definitions also require new workload IDs.
+Keep old run/catalog files for cached indexes. Catalog menu/table dates describe
+the latest published develop commit using each catalog (UTC), not catalog creation
+or execution time. Unknown URL identities remain unavailable until the user
+chooses an available catalog or Shared benchmarks; export remains unfiltered.
 
 Contract and examples: [maintained schema 1](schema-1.md). Commands: [build and test](build-and-test.md).

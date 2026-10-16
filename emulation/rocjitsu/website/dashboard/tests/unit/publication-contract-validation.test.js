@@ -42,7 +42,7 @@ test.each(invalidCases)('maintained schema 1 rejects %s', (_, mutate, expected) 
 });
 
 test('independent branch machines and scalar environments remain disclosed', () => {
-  const source = createMaintainedPublication(); source.runs[0].environment = [];
+  const source = createMaintainedPublication(); source.runs[0].environment = source.runs[0].environment.filter(({ key }) => key === 'execution.benchmark_suite');
   const { data } = validatePublishedDashboardData(source);
   expect(data.allRuns.at(-1).machineId).toBe('fictional-branch-node');
   expect(data.allRuns.at(-1).provenance.details).toEqual(source.runs[43].environment);

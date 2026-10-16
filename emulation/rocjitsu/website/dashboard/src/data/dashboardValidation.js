@@ -57,7 +57,7 @@ export function validateDashboardSiteConfig(siteConfig) {
 }
 
 function validateCatalog(catalog, file) {
-  if (!CATALOG_FILE_PATTERN.test(file) || !object(catalog) || catalog.id !== file.slice(14, -5)
+  if (!CATALOG_FILE_PATTERN.test(file) || !object(catalog) || typeof catalog.id !== 'string' || !TOKEN.test(catalog.id) || ['.', '..'].includes(catalog.id) || catalog.id !== file.slice(14, -5)
     || Object.hasOwn(catalog, 'targets') || !Array.isArray(catalog.tests) || !object(catalog.configurations) || Object.keys(catalog.configurations).length === 0) {
     throw new Error(`Test catalog ${file} does not match the maintained schema-1 catalog contract`);
   }
@@ -114,6 +114,8 @@ function normalizeRun(run, catalog, generatedAt) {
     throw new Error(`Run ${run?.id ?? '(unknown)'} does not match the maintained schema-1 run contract`);
   }
   if (Date.parse(source.committedAt) > Date.parse(execution.completedAt) || Date.parse(execution.completedAt) > Date.parse(generatedAt)) throw new Error(`Run ${run.id} must be committed before completion and completed by publication`);
+  const suite = environment.find(({ key }) => key === 'execution.benchmark_suite');
+  if (typeof suite?.value !== 'string' || suite.value !== catalog.id) throw new Error(`Run ${run.id} execution.benchmark_suite must equal catalog ID ${catalog.id}`);
   if (Object.hasOwn(source, 'base') && (!hasText(source.base?.branch) || source.base.branch === source.branch || typeof source.base?.commit !== 'string' || !SHA.test(source.base?.commit ?? ''))) throw new Error(`Run ${run.id} has an invalid source base`);
   if (Object.hasOwn(source, 'pullRequest') && (!source.base || !Number.isSafeInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
     || (Object.hasOwn(source.pullRequest, 'url') && (!safeUrl(source.pullRequest.url, true) || !new URL(source.pullRequest.url).pathname.endsWith(`/pull/${source.pullRequest.number}`))))) throw new Error(`Run ${run.id} has an invalid pullRequest`);

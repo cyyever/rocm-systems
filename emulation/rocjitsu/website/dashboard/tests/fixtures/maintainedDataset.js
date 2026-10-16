@@ -83,6 +83,7 @@ export function createMaintainedPublication() {
     run.testCatalog = `test-catalogs/${catalog.id}.json`;
     catalogs[run.testCatalog] = catalog;
   }
+  for (const run of runs) run.environment.push({ key: 'execution.benchmark_suite', label: 'execution.benchmark_suite', value: catalogs[run.testCatalog].id });
   return {
     index: { generatedAt: '2026-10-05T12:00:00.000Z', runFiles: runs.map(fixtureRunPath) },
     catalogs, runs,

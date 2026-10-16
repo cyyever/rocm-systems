@@ -15,7 +15,7 @@ export default function OverviewView({ viewModel, data, state, onOpenBenchmarks 
       if (catalog) latest.set(catalog.id, { catalog, timestamp: run.commitTimestamp });
     }
     return [...latest.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp) || a.catalog.id.localeCompare(b.catalog.id))
-      .map((entry, index, all) => ({ ...entry, label: `Catalog ${all.length - index} · ${formatShortDate(entry.timestamp)}` }));
+      .map((entry) => ({ ...entry, label: `${entry.catalog.id} · ${formatShortDate(entry.timestamp)}` }));
   }, [data]);
   return <Stack sx={{ gap: 1.75, minWidth: 0 }}>
     <MetricsGrid projection={viewModel} />

@@ -50,8 +50,10 @@ Indexes and catalogs have no schema-version field.
 
 ## Complete fictional publication example
 
-These are explanatory fixtures, not real measurements. The illustrative catalog
-ID is filename-safe; production catalog IDs are content-addressed by the preparer.
+These are explanatory consumer fixtures, not real measurements or a producer
+execution record. Catalog identity is the exact pinned manifest `name`, carried
+by raw `execution_summary.benchmark_suite`, not a hash of observed results.
+The illustrative suite below is named `example`.
 
 ### index.json
 
@@ -108,7 +110,7 @@ must match its filename. No absolute paths or traversal.
     "trigger": "auto",
     "machine": "example-runner"
   },
-  "environment": [{"key": "cores", "label": "CPU cores", "value": 32}],
+  "environment": [{"key": "cores", "label": "CPU cores", "value": 32}, {"key": "execution.benchmark_suite", "label": "execution.benchmark_suite", "value": "example"}],
   "configurations": [
     {
       "target": "gfx950",
@@ -192,7 +194,11 @@ nonempty text and value is a string, boolean or finite number. This scalar fact
 format is separate from recursively typed workload `problem` values. Preparation
 records shared protocol facts `execution.warmups`, `execution.samples`,
 `execution.timeout_seconds`, `execution.benchmark_suite`, without policy prefixes
-or target config hashes; source revision/time lives in `source`.
+or target config hashes; source revision/time lives in `source`. Exactly one
+`execution.benchmark_suite` fact is required, with a primitive string value equal
+to the catalog ID. Suite names use ASCII letters, digits, `.`, `_` or `-`, except
+the literal names `.` and `..`. Names remain case-sensitive and are never trimmed
+or normalized.
 
 ## Supported numeric domain
 
@@ -229,15 +235,28 @@ normalization. It is not byte-identical input JSON, a normalized chart export or
 original runner `run.json`. Runner `exit_code`, stdout/stderr and other diagnostics
 are separate workflow artifacts, not promised published export fields.
 
-## Output-derived membership boundary
+## Pinned declaration and completeness boundary
 
-Catalog membership is derived from recorded runner results, not a separate matrix
-registry. After its first checkpoint, the runner retains selected unexecuted cells
-as failed placeholders. Setup failure before that checkpoint has no publishable
-run. Deleting a result while retaining catalog membership is malformed and must
-reject. Deleting a cell **before catalog generation**, or constructing the wrong
-matrix, can evade intended-membership detection; equality validation cannot prove
-the intended matrix was executed. No new registry/status inventory is in scope.
+The preparer requires trusted `--corpus-dir`, `--manifest` and exact
+`--expected-corpus-sha` inputs. It reads committed TOML bytes using Git, ignoring
+working-tree changes. Every raw input must independently contain exactly the
+manifest's full supported `(id, target, thread_policy)` matrix and matching typed
+definitions. Missing/extra/duplicate cells, intentionally filtered first runs and
+complementary subsets reject before writes. TOML parameters must be representable
+under the maintained JSON/numeric rules; consumer JSON types remain unchanged.
+
+A finalized full matrix may contain failures, timeouts and unexecuted failure
+placeholders. These remain members, with null failed durations. Setup failure
+before checkpoint and unfinished timestamps are not publishable. Timing, status,
+error and sampling changes reuse the same catalog. Changed definitions or
+membership require a new manifest name; incompatible workload definitions also
+require new workload IDs. Existing named catalog paths are immutable.
+
+This checks consistency with independently pinned declarations, including deletion
+before catalog construction. It does not authenticate measurements, prove actual
+native execution, or detect incorrectly authored manifests. Shared consumers
+validate published identity/member agreement but do not independently fetch the
+corpus. There is no registry, migration or partial-publication bypass.
 
 See [preparing and publishing measurements](architecture-and-publication.md#preparing-and-publishing-measurements)
 for generation and immutability, and [build/test commands](build-and-test.md).

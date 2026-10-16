@@ -10,4 +10,5 @@ export function setFixtureConfigurations(publication, run, configurations) {
   run.configurations = configurations;
   run.testCatalog = `test-catalogs/${catalog.id}.json`;
   publication.catalogs[run.testCatalog] = catalog;
+  run.environment.find(({ key }) => key === 'execution.benchmark_suite').value = catalog.id;
 }

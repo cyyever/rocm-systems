@@ -18,14 +18,15 @@ Full wire-schema validation is a separate workflow step before publication.
 import argparse
 from datetime import datetime, timezone
 from decimal import Decimal
-import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import re
 import statistics
+import subprocess
 import tempfile
+import tomllib
 from urllib.parse import urlsplit
 
 
@@ -33,10 +34,6 @@ def canonical(value):
     return json.dumps(
         value, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False
     )
-
-
-def digest(value):
-    return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
 def unique_object(pairs):
@@ -95,6 +92,66 @@ def require(condition, message):
 
 def text(value):
     return isinstance(value, str) and bool(value.strip())
+
+
+def safe_suite_name(value):
+    return isinstance(value, str) and bool(re.fullmatch(r'[A-Za-z0-9._-]+', value)) and value not in ('.', '..')
+
+
+def load_pinned_manifest(corpus_dir, manifest, expected_corpus_sha):
+    """Read only committed declarations from the trusted caller's exact pin."""
+    require(isinstance(manifest, str) and manifest and not any(
+        part in ('', '.', '..') for part in manifest.split('/')
+    ) and '\\' not in manifest and '\x00' not in manifest,
+            'manifest must be a repository-relative POSIX path without empty/dot components')
+    require(isinstance(expected_corpus_sha, str) and bool(re.fullmatch(r'[a-fA-F0-9]{40}', expected_corpus_sha)),
+            'Expected corpus SHA must be a full 40-hex SHA')
+
+    def git(*args):
+        result = subprocess.run(['git', '-C', str(corpus_dir), *args], capture_output=True, text=True)
+        require(result.returncode == 0, f'Cannot read pinned manifest: {result.stderr.strip()}')
+        return result.stdout
+
+    require(git('cat-file', '-t', expected_corpus_sha).strip() == 'commit', 'Expected corpus SHA must identify a commit')
+    declaration = tomllib.loads(git('show', f'{expected_corpus_sha}:{manifest}'))
+    require(safe_suite_name(declaration.get('name')), 'Invalid manifest benchmark_suite name')
+    cases = declaration.get('cases')
+    require(isinstance(cases, list) and cases, 'manifest cases must be nonempty')
+    definitions, tuples = {}, set()
+    for case in cases:
+        require(isinstance(case, dict) and all(text(case.get(key)) for key in ('id', 'suite', 'name', 'operation')),
+                'Invalid manifest case definition')
+        case_id = case['id']
+        require(case_id not in definitions, f'Duplicate manifest case ID: {case_id}')
+        for field in ('targets', 'thread_policies'):
+            values = case.get(field)
+            require(isinstance(values, list) and values and all(text(v) for v in values)
+                    and len(set(values)) == len(values), f'Invalid manifest {field} support')
+        require(all(re.fullmatch(r'[A-Za-z0-9._-]+', target) for target in case['targets']), 'Invalid manifest target')
+        require(all(policy in ('single', 'default') for policy in case['thread_policies']), 'Invalid manifest policy')
+        params = case.get('params')
+        require(isinstance(params, dict) and all(text(key) for key in params), 'Invalid manifest params')
+        validate_numeric_values(params)
+        definition = {key: case[key] for key in ('suite', 'name', 'operation')}
+        definition['problem'] = params
+        definitions[case_id] = canonical(definition)
+        tuples.update((case_id, target, policy) for target in case['targets'] for policy in case['thread_policies'])
+    return {'name': declaration['name'], 'definitions': definitions, 'tuples': tuples}
+
+
+def validate_manifest_run(raw, declaration):
+    require(raw['execution_summary']['benchmark_suite'] == declaration['name'], 'benchmark_suite must equal pinned manifest name')
+    seen = set()
+    for result in raw['benchmark_results']:
+        identity = (result['id'], result['target'], result['thread_policy'])
+        require(identity not in seen, f'Duplicate result identity: {identity}')
+        seen.add(identity)
+    missing, extra = declaration['tuples'] - seen, seen - declaration['tuples']
+    require(not missing and not extra, f'Incomplete manifest matrix: missing={sorted(missing)} extra={sorted(extra)}')
+    for result in raw['benchmark_results']:
+        definition = {key: result[key] for key in ('suite', 'name', 'operation', 'problem')}
+        require(canonical(definition) == declaration['definitions'][result['id']],
+                f'Pinned workload definition mismatch: {result["id"]}')
 
 
 MAX_NUMERIC_VALUE = 9007199254740991
@@ -159,7 +216,7 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
         number(summary['wall_time_s']) and summary['wall_time_s'] >= 0,
         'wall_time_s must be nonnegative and finite',
     )
-    require(text(summary['benchmark_suite']), 'benchmark_suite must be nonempty text')
+    require(safe_suite_name(summary['benchmark_suite']), 'benchmark_suite must be a safe suite name')
 
     require(
         summary['finished_at'] is not None, 'Missing finished_at: incomplete raw run'
@@ -330,7 +387,7 @@ def normalize_runs(
             for (target, policy), results in ordered_groups
         },
     }
-    catalog['id'] = 'catalog-' + digest(catalog)
+    catalog['id'] = raw_runs[0]['execution_summary']['benchmark_suite']
     source = raw_runs[0]['provenance']['rocjitsu']
     completed_at = max(
         (raw['execution_summary']['finished_at'] for raw in raw_runs),
@@ -435,6 +492,8 @@ def prepare(
     run_id,
     expected_sha,
     expected_corpus_sha,
+    corpus_dir,
+    manifest,
     machine_id,
     branch,
     commit_message,
@@ -515,6 +574,9 @@ def prepare(
             key = section + '_commit_sha'
             raw['provenance'][section][key] = raw['provenance'][section][key].lower()
     validate_consistency(raw_runs)
+    declaration = load_pinned_manifest(corpus_dir, manifest, expected_corpus_sha)
+    for raw in raw_runs:
+        validate_manifest_run(raw, declaration)
     run, catalog = normalize_runs(
         raw_runs,
         run_id=run_id,
@@ -537,6 +599,8 @@ def main():
         'run-id',
         'expected-sha',
         'expected-corpus-sha',
+        'corpus-dir',
+        'manifest',
         'machine-id',
         'branch',
         'commit-message',

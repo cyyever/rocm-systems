@@ -34,6 +34,7 @@ function repeatedPublication(left, right) {
   const secondRun = structuredClone(source.runs[0]);
   secondRun.id = 'run-002';
   secondRun.testCatalog = 'test-catalogs/second.json';
+  secondRun.environment.find(({ key }) => key === 'execution.benchmark_suite').value = secondCatalog.id;
   source.catalogs[secondRun.testCatalog] = secondCatalog;
   source.runs.push(secondRun);
   source.index.runFiles.push('runs/default-branch/run-002.json');

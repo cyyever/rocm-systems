@@ -49,6 +49,14 @@ def test_benchmark_uses_one_consolidated_multi_policy_run():
 def test_publication_workflow_is_short_safe_orchestration():
     text = WORKFLOW.read_text(encoding='utf-8')
     publish = text.split('\n  publish:', 1)[1]
+    checkout = publish.split('      - name: Checkout pinned publication manifest', 1)[1].split('      - name: Set up publisher Python', 1)[0]
+    assert 'repository: ROCm/rocjitsu-test-corpus' in checkout
+    assert 'ref: ${{ env.CORPUS_SHA }}' in checkout
+    assert 'persist-credentials: false' in checkout
+    assert 'path: publication-corpus' in checkout
+    assert 'sparse-checkout: benchmarks/suites' in checkout
+    assert '--corpus-dir "${GITHUB_WORKSPACE}/publication-corpus"' in publish
+    assert '--manifest benchmarks/suites/performance-v1.toml' in publish
 
     assert 'path: publication\n          ref: ${{ env.RESULTS_BRANCH }}' in publish
     assert publish.count('prepare-dashboard-data.py') == 1

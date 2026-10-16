@@ -12,6 +12,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from manifest_fixture import declare_fixture
 
 HERE = Path(__file__).resolve().parent
 SCRIPT = HERE.parent / 'prepare-dashboard-data.py'
@@ -67,6 +68,17 @@ def raw(policy='single'):
     }
 
 
+def consolidated(*inputs):
+    from datetime import datetime
+    value = copy.deepcopy(inputs[0])
+    value['benchmark_results'] = [copy.deepcopy(row) for raw_input in inputs for row in raw_input['benchmark_results']]
+    value['execution_summary']['finished_at'] = max(
+        (item['execution_summary']['finished_at'] for item in inputs),
+        key=lambda stamp: datetime.fromisoformat(stamp.replace('Z', '+00:00')),
+    )
+    return value
+
+
 class PrepareTests(unittest.TestCase):
     def test_rejects_long_decimal_magnitude_before_writes(self):
         for token in ('9007199254740991.0000000000000000000000000000001',
@@ -118,7 +130,7 @@ class PrepareTests(unittest.TestCase):
     def test_numeric_boundaries_and_fractional_roundtrip(self):
         value = raw()
         row = value['benchmark_results'][0]
-        row['problem'] = {'limits': [9007199254740991, -9007199254740991, 1.25, None, True]}
+        row['problem'] = {'limits': [9007199254740991, -9007199254740991, 1.25, True]}
         for samples in ([4503599627370495, 4503599627370495], [1.25], [1, 1.5], [1, 1.25, 2]):
             with self.subTest(samples=samples):
                 row['timing_results_s'] = list(samples)
@@ -165,7 +177,21 @@ class PrepareTests(unittest.TestCase):
         self.data = self.root / 'data'
 
     def invoke(self, inputs=None, run_id='attempt-1', extra=(), env=None):
+        inputs = copy.deepcopy(inputs if inputs is not None else [raw()])
+        # Conversion fixtures declare fictional source; pinned-source negative
+        # cases use test_suite_catalog.py with an unchanged committed oracle.
+        try:
+            repository, self.corpus_sha = declare_fixture(self.root, inputs or [raw()])
+        except (ValueError, TypeError):
+            repository, self.corpus_sha = declare_fixture(self.root, [raw()])
+        for value in inputs:
+            actual = value['provenance']['corpus']['corpus_commit_sha']
+            if isinstance(actual, str) and actual.lower() == CORPUS:
+                value['provenance']['corpus']['corpus_commit_sha'] = self.corpus_sha
         extra = list(extra)
+        for i, value in enumerate(extra[:-1]):
+            if value == '--expected-corpus-sha' and extra[i + 1].lower() == CORPUS:
+                extra[i + 1] = self.corpus_sha
         destination = self.data
         filtered = []
         index = 0
@@ -186,7 +212,8 @@ class PrepareTests(unittest.TestCase):
             '--expected-sha',
             SHA,
             '--expected-corpus-sha',
-            CORPUS,
+            self.corpus_sha,
+            '--corpus-dir', str(repository), '--manifest', 'suite.toml',
             '--machine-id',
             'worker-1',
             '--trigger',
@@ -196,7 +223,7 @@ class PrepareTests(unittest.TestCase):
             '--commit-message',
             'Example commit',
         ]
-        for i, value in enumerate(inputs if inputs is not None else [raw()]):
+        for i, value in enumerate(inputs):
             path = self.root / f'raw-{i}.json'
             path.write_text(json.dumps(value))
             args.extend(['--raw-run', str(path)])
@@ -217,7 +244,7 @@ class PrepareTests(unittest.TestCase):
 
     def test_typed_problem_values_survive_preparation_and_consumer_export(self):
         value = raw()
-        problem = {'array': [1, {'z': None, 'flag': False}], 'object': {'b': 2, 'a': 1}, 'null': None, 'text': '[1,2]'}
+        problem = {'array': [1, {'z': 'literal', 'flag': False}], 'object': {'b': 2, 'a': 1}, 'text': '[1,2]'}
         value['benchmark_results'][0]['problem'] = problem
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
@@ -264,8 +291,11 @@ class PrepareTests(unittest.TestCase):
         index = staging / 'index.json'
         metadata.write_bytes(b'{"keep": true}\n')
         index.write_bytes(b'{"runFiles": []}\n')
+        value = raw()
+        repository, corpus_sha = declare_fixture(self.root, [value])
+        value['provenance']['corpus']['corpus_commit_sha'] = corpus_sha
         raw_path = self.root / 'one-raw.json'
-        raw_path.write_text(json.dumps(raw()))
+        raw_path.write_text(json.dumps(value))
         result = subprocess.run(
             [
                 sys.executable,
@@ -279,7 +309,8 @@ class PrepareTests(unittest.TestCase):
                 '--expected-sha',
                 SHA,
                 '--expected-corpus-sha',
-                CORPUS,
+                corpus_sha,
+                '--corpus-dir', str(repository), '--manifest', 'suite.toml',
                 '--machine-id',
                 'worker-1',
                 '--trigger',
@@ -299,11 +330,12 @@ class PrepareTests(unittest.TestCase):
             (staging / 'runs' / 'default-branch' / 'attempt-1.json').is_file()
         )
 
-    def test_preparer_runs_without_node_or_path(self):
+    def test_preparer_requires_git_but_not_node(self):
         environment = dict(os.environ)
-        environment.pop('PATH', None)
-        # An empty PATH also prevents platform-default executable lookup.
-        environment['PATH'] = ''
+        tools = self.root / 'git-only'
+        tools.mkdir()
+        (tools / 'git').symlink_to(shutil.which('git'))
+        environment['PATH'] = str(tools)
         self.assert_ok(self.invoke(env=environment))
         self.assertTrue((self.data / 'runs/default-branch/attempt-1.json').is_file())
         self.assertFalse((self.data / 'index.json').exists())
@@ -354,6 +386,7 @@ class PrepareTests(unittest.TestCase):
             ('gfx950', 'default', 'completed', [9, 1, 2]),
             ('gfx950', 'single', 'failed', [5, 2]),
             ('gfx1250', 'default', 'timeout', []),
+            ('gfx1250', 'single', 'failed', []),
         ):
             result = copy.deepcopy(raw()['benchmark_results'][0])
             result.update(
@@ -379,7 +412,7 @@ class PrepareTests(unittest.TestCase):
         configs = {(c['target'], c['thread_policy']): c for c in run['configurations']}
         self.assertEqual(
             set(configs),
-            {('gfx950', 'default'), ('gfx950', 'single'), ('gfx1250', 'default')},
+            {('gfx950', 'default'), ('gfx950', 'single'), ('gfx1250', 'default'), ('gfx1250', 'single')},
         )
         for result in value['benchmark_results']:
             prepared = configs[result['target'], result['thread_policy']]['results'][0]
@@ -434,6 +467,7 @@ class PrepareTests(unittest.TestCase):
         for target, policy in pairs:
             result = copy.deepcopy(raw()['benchmark_results'][0])
             result.update(target=target, thread_policy=policy)
+            if target == 'gfx950-variant': result['id'] = 'variant-case'
             value['benchmark_results'].append(result)
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
@@ -446,7 +480,7 @@ class PrepareTests(unittest.TestCase):
         )
         self.assertEqual(
             self.read(run['testCatalog'])['configurations'],
-            {f'{target}/{policy}': ['case-1'] for target, policy in pairs},
+            {f'{target}/{policy}': ['variant-case' if target == 'gfx950-variant' else 'case-1'] for target, policy in pairs},
         )
         for config in run['configurations']:
             self.assertEqual(
@@ -527,9 +561,7 @@ class PrepareTests(unittest.TestCase):
                         inputs = [first]
                     result = self.invoke(inputs)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(
-                        'Conflicting workload definition: case-1', result.stderr
-                    )
+                    self.assertRegex(result.stderr, 'definition mismatch|Incomplete manifest matrix')
                     self.assertFalse(self.data.exists())
 
     def test_duplicate_result_identity_rejected_within_and_across_files(self):
@@ -558,7 +590,7 @@ class PrepareTests(unittest.TestCase):
         # Obsolete producer fields are neither required nor checked/published.
         first['provenance']['rocjitsu']['target_config_sha256'] = {'gfx950': 'unused'}
         second['provenance']['rocjitsu']['target_config_sha256'] = None
-        self.assert_ok(self.invoke([first, second]))
+        self.assert_ok(self.invoke([consolidated(first, second)]))
         run = self.read('runs/default-branch/attempt-1.json')
         self.assertEqual(len(run['configurations']), 2)
         self.assertFalse(
@@ -585,7 +617,7 @@ class PrepareTests(unittest.TestCase):
         first['benchmark_results'].extend(second['benchmark_results'])
         result = self.invoke([first], run_id='attempt-2')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Conflicting workload definition', result.stderr)
+        self.assertIn('definition mismatch', result.stderr)
         self.assertEqual(self.snapshot(), before)
 
     def test_timing_samples_survive_publication_and_consumer_normalization(self):
@@ -669,7 +701,7 @@ class PrepareTests(unittest.TestCase):
         run = self.read('runs/default-branch/attempt-1.json')
         self.assertEqual(run['source']['commit'], SHA)
         details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['corpus.corpus_commit_sha'], CORPUS)
+        self.assertEqual(details['corpus.corpus_commit_sha'], self.corpus_sha)
         before = self.snapshot()
         self.assert_ok(self.invoke())
         self.assertEqual(self.snapshot(), before)
@@ -680,7 +712,7 @@ class PrepareTests(unittest.TestCase):
         single['provenance']['corpus']['corpus_commit_sha'] = CORPUS.upper()
         self.assert_ok(
             self.invoke(
-                [single, multi],
+                [consolidated(single, multi)],
                 extra=(
                     '--expected-sha',
                     SHA.upper(),
@@ -693,7 +725,7 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(run['source']['commit'], SHA)
         self.assertEqual(len(run['configurations']), 2)
         details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['corpus.corpus_commit_sha'], CORPUS)
+        self.assertEqual(details['corpus.corpus_commit_sha'], self.corpus_sha)
         before = self.snapshot()
         for flag, expected in (
             ('--expected-sha', 'D' * 40),
@@ -726,8 +758,7 @@ class PrepareTests(unittest.TestCase):
         single['benchmark_results'][0]['id'] = 'example'
         multi['benchmark_results'][0]['id'] = 'example'
         problem = {
-            'nested': {'z': None, 'a': [1, False]},
-            'nil': None,
+            'nested': {'z': 'literal', 'a': [1, False]},
             'bool': False,
             'zero': 0,
             'text': 'value',
@@ -750,7 +781,7 @@ class PrepareTests(unittest.TestCase):
             id='timeout', name='Timeout workload', status='timeout', error=None
         )
         single['benchmark_results'].extend([failed, timeout])
-        self.assert_ok(self.invoke([single, multi]))
+        self.assert_ok(self.invoke([consolidated(single, multi)]))
         run = self.read('runs/default-branch/attempt-1.json')
         configs = {c['thread_policy']: c for c in run['configurations']}
         single_success = next(
@@ -769,8 +800,7 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(
             definition['problem'],
             {
-                'nested': {'a': [1, False], 'z': None},
-                'nil': None,
+                'nested': {'a': [1, False], 'z': 'literal'},
                 'bool': False,
                 'zero': 0,
                 'text': 'value',
@@ -807,10 +837,15 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(old['testCatalog'], new['testCatalog'])
         self.assertEqual(old['environment'], new['environment'])
         revised['benchmark_results'][0]['problem']['size'] = 16
+        rejected = self.invoke([revised], run_id='attempt-3')
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn('Immutable resource conflict', rejected.stderr)
+        revised['execution_summary']['benchmark_suite'] = 'smoke-v2'
+        revised['benchmark_results'][0]['id'] = 'case-v2'
         self.assert_ok(self.invoke([revised], run_id='attempt-3'))
         changed = self.read('runs/default-branch/attempt-3.json')
         self.assertNotEqual(old['testCatalog'], changed['testCatalog'])
-        self.assertEqual(
+        self.assertNotEqual(
             old['configurations'][0]['results'][0]['testId'],
             changed['configurations'][0]['results'][0]['testId'],
         )
@@ -910,7 +945,7 @@ class PrepareTests(unittest.TestCase):
             extra = copy.deepcopy(value['benchmark_results'][0])
             extra.update(id='second', name='Another definition')
             value['benchmark_results'].append(extra)
-        self.assert_ok(self.invoke([single, multi]))
+        self.assert_ok(self.invoke([consolidated(single, multi)]))
         self.assertEqual(
             self.read('runs/default-branch/attempt-1.json')['execution']['completedAt'],
             '2026-01-01T03:00:00Z',
@@ -918,7 +953,7 @@ class PrepareTests(unittest.TestCase):
         original = self.snapshot()
         single['benchmark_results'].reverse()
         multi['benchmark_results'].reverse()
-        self.assert_ok(self.invoke([multi, single]))
+        self.assert_ok(self.invoke([consolidated(multi, single)]))
         self.assertEqual(self.snapshot(), original)
 
     def test_path_traversal_rejected_without_staging_escape(self):
@@ -1171,9 +1206,7 @@ class PrepareTests(unittest.TestCase):
                 self.assertIn(message.lower(), result.stderr.lower())
                 self.assertFalse(self.data.exists())
 
-    def test_content_addressed_catalog_and_target_independent_workloads(self):
-        import hashlib
-
+    def test_suite_named_catalog_and_target_independent_workloads(self):
         value = raw()
         other = copy.deepcopy(value['benchmark_results'][0])
         other.update(target='gfx1250')
@@ -1193,11 +1226,7 @@ class PrepareTests(unittest.TestCase):
             run['configurations'][1]['results'][0]['testId'],
         )
         catalog = self.read(run['testCatalog'])
-        catalog_id = catalog.pop('id')
-        encoded = json.dumps(
-            catalog, sort_keys=True, separators=(',', ':'), ensure_ascii=True
-        ).encode()
-        self.assertEqual(catalog_id, 'catalog-' + hashlib.sha256(encoded).hexdigest())
+        self.assertEqual(catalog['id'], 'smoke')
         self.assertEqual(run['execution']['machine'], 'worker-1')
 
     def test_retry_preserves_configuration_order_for_prefix_targets(self):
@@ -1261,7 +1290,7 @@ class PrepareTests(unittest.TestCase):
 def test_export_prepared_data_for_workflow(tmp_path):
     single, multi = raw(), raw('default')
     for value in (single, multi):
-        value['benchmark_results'][0]['problem']['nested'] = {'values': [1, None, True]}
+        value['benchmark_results'][0]['problem']['nested'] = {'values': [1, 'literal', True]}
         for status in ('failed', 'timeout'):
             result = copy.deepcopy(value['benchmark_results'][0])
             result.update(
@@ -1276,9 +1305,11 @@ def test_export_prepared_data_for_workflow(tmp_path):
     for samples in ([4503599627370495, 4503599627370495], [1.25], [1, 1.5], [1, 1.25, 2]):
         numeric = copy.deepcopy(single['benchmark_results'][0])
         numeric.update(id=f'numeric-{len(single["benchmark_results"])}', timing_results_s=list(samples),
-                       problem={'limits': [9007199254740991, -9007199254740991, 1.25, None, True]})
+                       problem={'limits': [9007199254740991, -9007199254740991, 1.25, True]})
         single['benchmark_results'].append(numeric)
     single['benchmark_results'].extend(multi['benchmark_results'])
+    repository, corpus_sha = declare_fixture(tmp_path, [single])
+    single['provenance']['corpus']['corpus_commit_sha'] = corpus_sha
     file = tmp_path / 'run.json'
     file.write_text(json.dumps(single))
     inputs = ['--raw-run', str(file)]
@@ -1300,7 +1331,8 @@ def test_export_prepared_data_for_workflow(tmp_path):
                 '--expected-sha',
                 SHA,
                 '--expected-corpus-sha',
-                CORPUS,
+                corpus_sha,
+                '--corpus-dir', str(repository), '--manifest', 'suite.toml',
                 '--machine-id',
                 'fictional-worker',
                 '--trigger',

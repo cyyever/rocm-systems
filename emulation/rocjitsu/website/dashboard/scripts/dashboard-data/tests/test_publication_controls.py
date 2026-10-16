@@ -44,7 +44,8 @@ class RecoveryTests(unittest.TestCase):
         import json
         import shutil
         import sys
-        from test_prepare_dashboard_data import raw, SHA, CORPUS
+        from test_prepare_dashboard_data import raw, SHA
+        from manifest_fixture import declare_fixture
 
         self.json = json
         self.temporary = tempfile.TemporaryDirectory()
@@ -68,12 +69,16 @@ class RecoveryTests(unittest.TestCase):
         self.built = self.root / 'built'
         self.run_path = 'runs/default-branch/attempt-1.json'
         raw_path = self.root / 'raw.json'
-        raw_path.write_text(json.dumps(raw()))
+        value = raw()
+        corpus, corpus_sha = declare_fixture(self.root, [value])
+        value['provenance']['corpus']['corpus_commit_sha'] = corpus_sha
+        raw_path.write_text(json.dumps(value))
         prepared = subprocess.run([
             sys.executable, str(HERE.parent / 'prepare-dashboard-data.py'),
             '--raw-run', str(raw_path), '--data-dir', str(self.built),
             '--run-id', 'attempt-1', '--expected-sha', SHA,
-            '--expected-corpus-sha', CORPUS, '--machine-id', 'fixture',
+            '--expected-corpus-sha', corpus_sha, '--corpus-dir', str(corpus),
+            '--manifest', 'suite.toml', '--machine-id', 'fixture',
             '--trigger', 'auto', '--branch', 'develop', '--commit-message', 'Fictional fixture',
         ], capture_output=True, text=True)
         self.assertEqual(prepared.returncode, 0, prepared.stderr)

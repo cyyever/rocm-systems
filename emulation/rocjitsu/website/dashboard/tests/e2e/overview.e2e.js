@@ -80,7 +80,7 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   await expect(trend.getByRole('columnheader').nth(1)).toHaveText('Shared across catalogs');
   await trend.getByRole('button', { name: 'Trailing 30 days' }).click();
   await trend.getByRole('combobox', { name: 'Catalog', exact: true }).click();
-  await page.getByRole('option', { name: /Catalog 1/ }).click();
+  await page.getByRole('option', { name: /fictional-old/ }).click();
   const catalogId = new URL(page.url()).searchParams.get('catalog');
   expect(catalogId).toBeTruthy();
   await page.reload(); await ready(page);

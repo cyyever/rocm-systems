@@ -14,7 +14,7 @@ function syntheticRun(index) {
   return { schemaVersion: 1, id, testCatalog: CATALOG_PATH,
     source: { branch: 'develop', commit: index.toString(16).padStart(40, '0'), committedAt: day, message: `Fictional queue test ${index}` },
     execution: { completedAt: day, trigger: 'auto', machine: 'fictional-queue-node' },
-    environment: [{ key: 'sdk', label: 'Fictional SDK', value: 'test-only' }],
+    environment: [{ key: 'sdk', label: 'Fictional SDK', value: 'test-only' }, { key: 'execution.benchmark_suite', label: 'Suite', value: catalog.id }],
     configurations: KEYS.map((key) => {
       const [target, mode] = key.split('/');
       return { target, thread_policy: mode, results: catalog.configurations[key].map((testId, testIndex) => ({ testId, thread_policy: mode, status: 'completed', timing_results_s: [1 + testIndex + index / 1000], durationSeconds: 1 + testIndex + index / 1000, error: null })) };

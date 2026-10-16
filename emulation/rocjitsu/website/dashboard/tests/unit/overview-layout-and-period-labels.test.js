@@ -6,10 +6,10 @@ import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { benchmarkData } from '../fixtures/publishedData.js';
 
 const filters = { targets: ['gfx1250'], suites: benchmarkData.suites, modes: benchmarkData.modes };
-function renderOverview(scope = filters, range = 'ALL') {
+function renderOverview(scope = filters, range = 'ALL', catalogId = null) {
   return renderToStaticMarkup(createElement(OverviewView, {
     data: benchmarkData,
-    viewModel: selectOverviewProjection(benchmarkData, scope, { range }),
+    viewModel: selectOverviewProjection(benchmarkData, scope, { range, catalogId }),
     state: { filters: scope, historyRange: range, setHistoryRange() {}, search: '', setSearch() {} },
     onCompareRun() {}, onExploreRun() {}, onOpenBenchmarks() {},
   }));
@@ -45,4 +45,14 @@ test('overview exposes compact catalog scope without anchor estimates', () => {
   expect(html).toContain('Original per-benchmark results');
   expect(html).not.toContain('first-success anchors');
   expect(html.match(/data-testid="metric-card-/g)).toHaveLength(4);
+});
+
+test('catalog labels expose exact names, truthful date context and unavailable identity', () => {
+  const known = renderOverview(filters, 'ALL', 'fictional-old');
+  expect(known).toContain('fictional-old');
+  expect(known).toContain('Latest published develop commit using this catalog (UTC)');
+  expect(known).not.toMatch(/Catalog \d+ ·/);
+  const unknown = renderOverview(filters, '1M', 'historical-hash');
+  expect(unknown).toContain('Unavailable catalog: historical-hash');
+  expect(unknown.match(/data-testid="metric-card-/g)).toHaveLength(4);
 });

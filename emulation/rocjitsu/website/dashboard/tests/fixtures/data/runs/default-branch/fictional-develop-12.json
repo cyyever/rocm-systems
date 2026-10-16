@@ -28,6 +28,11 @@
       "key": "cores",
       "label": "CPU cores",
       "value": 32
+    },
+    {
+      "key": "execution.benchmark_suite",
+      "label": "execution.benchmark_suite",
+      "value": "fictional-current-fictional-develop-12"
     }
   ],
   "configurations": [
