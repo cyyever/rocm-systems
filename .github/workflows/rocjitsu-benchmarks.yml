@@ -27,7 +27,7 @@ defaults:
     shell: bash
 
 env:
-  CORPUS_SHA: 8a5e006cc1c205c057dc4c367741c6aff2ba8cd1
+  CORPUS_SHA: 6186d5c8bcd5e9bc93f7406e7cb50ed2a7698621
   ROCJITSU_SOURCE_DIR: ${{ github.workspace }}/rocm-systems/emulation/rocjitsu
   CORPUS_SOURCE_DIR: ${{ github.workspace }}/rocjitsu-test-corpus
   RESULTS_BRANCH: gh-pages-rocjitsu
@@ -230,7 +230,6 @@ jobs:
             --target-config "gfx1250=${ROCJITSU_SOURCE_DIR}/configs/gfx1250_mi455x.json" \
             --run-wrapper "\"${ROCJITSU_BUILD_DIR}/tools/rocjitsu/rocjitsu\" --config {config} --" \
             --manifest benchmarks/suites/performance-v1.toml \
-            --thread-policy default,single \
             --output "${ROCJITSU_RESULT_DIR}"
 
       - name: Upload benchmark diagnostics

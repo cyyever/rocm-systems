@@ -9,14 +9,25 @@ WORKFLOW = (
 )
 
 
+def test_benchmark_pairs_unfiltered_caller_with_compatible_temporary_pin():
+    text = WORKFLOW.read_text(encoding='utf-8')
+    assert '  CORPUS_SHA: 6186d5c8bcd5e9bc93f7406e7cb50ed2a7698621\n' in text
+    assert '          ref: ${{ env.CORPUS_SHA }}\n' in text
+
+
 def test_benchmark_uses_one_consolidated_multi_policy_run():
     text = WORKFLOW.read_text(encoding='utf-8')
     benchmark = text.split('      - name: Run performance suite', 1)[1].split(
         '      - name: Upload benchmark diagnostics', 1
     )[0]
     assert benchmark.count('-m benchmarks.runner') == 1
+    assert benchmark.count('--manifest ') == 1
     assert '--manifest benchmarks/suites/performance-v1.toml' in benchmark
-    assert '--thread-policy default,single' in benchmark
+    for selector in ('--thread-policy', '--target ', '--case ', '--warmups', '--samples'):
+        assert selector not in benchmark
+    assert benchmark.count('--target-config ') == 2
+    assert '--run-wrapper "\\\"${ROCJITSU_BUILD_DIR}/tools/rocjitsu/rocjitsu\\\" --config {config} --"' in benchmark
+    assert '--cpu-thread-budget' not in benchmark
     assert '--output "${ROCJITSU_RESULT_DIR}"' in benchmark
     assert '--target-config "gfx950=' in benchmark
     assert '--target-config "gfx1250=' in benchmark
