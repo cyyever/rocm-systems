@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// Integer FMA accumulation with sticky bits and FP64 round-to-odd intermediates.
+// Integer FMA accumulation with FP64 round-to-odd intermediates and FP32 narrowing.
 // Internal helpers shared by instruction implementations; not part of the public C API.
 
 #pragma once
@@ -84,6 +84,44 @@ inline uint64_t fma_finite_round_odd(uint32_t a, uint32_t b, uint32_t c) {
   uint64_t significand = fma_shift_jam(sum, 9);
   return (uint64_t(negative) << 63) | (uint64_t(exponent + 61 + 1023) << 52) |
          (significand & 0xfffffffffffffULL);
+}
+
+// Round a finite round-to-odd FP64 intermediate to nearest-even FP32, preserving
+// subnormals. A carried significand can promote a subnormal to the smallest normal.
+inline uint32_t fma_narrow_f32(uint64_t bits) {
+  uint32_t sign = uint32_t(bits >> 32) & 0x80000000;
+  uint64_t magnitude = bits & 0x7fffffffffffffffULL;
+  if (!magnitude) {
+    return sign;
+  }
+  const uint32_t overflow = sign | 0x7f800000;
+  int exponent = int(magnitude >> 52) - 1023;
+  if (exponent > 127) {
+    return overflow;
+  }
+
+  if (exponent < -150) {
+    return sign;
+  }
+  int shift = 29 + (exponent < -126 ? -126 - exponent : 0);
+  uint64_t significand = (magnitude & 0xfffffffffffffULL) | (1ULL << 52);
+  uint32_t rounded = uint32_t(significand >> shift);
+  uint64_t unit = 1ULL << shift, remainder = significand & (unit - 1);
+  rounded += remainder > unit / 2 || (remainder == unit / 2 && (rounded & 1));
+  if (exponent < -126) {
+    return sign | rounded;
+  }
+  if (rounded == (1U << 24)) {
+    rounded >>= 1;
+    ++exponent;
+  }
+  if (exponent > 127) {
+    return overflow;
+  }
+  if (exponent < -126) {
+    return sign;
+  }
+  return sign | (uint32_t(exponent + 127) << 23) | (rounded & 0x7fffff);
 }
 
 } // namespace rocjitsu::arith
