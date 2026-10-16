@@ -3,7 +3,7 @@
 ## Current implementation
 
 Empirical exact arithmetic is available for the seed WMMA/FMA; other declarations state their support.
-FP status support is not implemented yet.
+FP status support is available for gfx12 FP16 FMA; other instructions document their limits.
 CPU implementations are scalar; SIMD backends are planned.
 Compatibility and instruction modifiers are planned; mode 7 is currently rejected.
 Benchmark commands and Rocjitsu integration described below are planned.

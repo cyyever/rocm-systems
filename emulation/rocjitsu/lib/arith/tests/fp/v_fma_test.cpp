@@ -50,7 +50,11 @@ TEST(FpFmaF16W32Gfx12, Arithmetic) {
         ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(semantics, exec_mask, 0, r.v + aliasing_offset, r.v,
                                                r.v + 1, r.v + 2, &status),
                   RJ_ARITH_SUCCESS);
-        EXPECT_EQ(status, 0x80000000U);
+        if (semantics != RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL || !exec_mask) {
+          EXPECT_EQ(status, 0x80000000U);
+        } else {
+          EXPECT_EQ(status & 0x80000000U, 0x80000000U);
+        }
         r.expect_preserved(input, aliasing_offset, 1);
         for (int lane = 0; lane < 32; ++lane) {
           uint32_t actual = r.v[aliasing_offset][lane];
@@ -77,9 +81,33 @@ TEST(FpFmaF16W32Gfx12, Arithmetic) {
       }
     }
   }
-  EXPECT_EQ(rj_arith_v_fma_f16_w32_gfx12(RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL, 0, 0, nullptr,
-                                         nullptr, nullptr, nullptr, nullptr),
-            RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
+
+  // Literal causes from the inherited model and previously validated gfx1201 cases.
+  const struct {
+    uint16_t a, b, c;
+    uint32_t causes;
+  } cases[] = {
+      {0x3c00, 0x3c00, 0, 0},
+      {0, 0x7c00, 0, RJ_ARITH_EXCEPTION_INVALID},
+      {0x7bff, 0x4000, 0, RJ_ARITH_EXCEPTION_OVERFLOW | RJ_ARITH_EXCEPTION_INEXACT},
+      {0x3c01, 0x3c01, 0, RJ_ARITH_EXCEPTION_INEXACT},
+      {1, 0x3800, 0,
+       RJ_ARITH_EXCEPTION_INPUT_DENORM | RJ_ARITH_EXCEPTION_UNDERFLOW | RJ_ARITH_EXCEPTION_INEXACT},
+  };
+  for (const auto &test : cases) {
+    for (uint32_t exec_mask : {0U, 1U}) {
+      RegBank r = input;
+      r.v[0][0] = test.a;
+      r.v[1][0] = test.b;
+      r.v[2][0] = test.c;
+      uint32_t status = 0x80000000U | RJ_ARITH_EXCEPTION_FLOAT_DIV0;
+      ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL, exec_mask, 0,
+                                             r.v + 3, r.v, r.v + 1, r.v + 2, &status),
+                RJ_ARITH_SUCCESS);
+      EXPECT_EQ(status,
+                0x80000000U | RJ_ARITH_EXCEPTION_FLOAT_DIV0 | (exec_mask ? test.causes : 0));
+    }
+  }
 }
 
 // Guard the finite/infinite boundary against double rounding, on every CPU path.
@@ -143,7 +171,8 @@ TEST(FpFmaF16W32Gfx12, ExactEncodings) {
   };
   for (uint64_t cpu : supported_cpu_levels()) {
     for (uint64_t semantics : {RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_ALLOW_LOOSE,
-                               RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS}) {
+                               RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS,
+                               RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL}) {
       for (const auto &sample : cases) {
         SCOPED_TRACE(testing::Message()
                      << "cpu=" << cpu << " semantics=" << semantics << " a=" << sample.a);
@@ -157,6 +186,67 @@ TEST(FpFmaF16W32Gfx12, ExactEncodings) {
                   RJ_ARITH_SUCCESS);
         EXPECT_EQ(uint16_t(r.v[3][0]), sample.expected);
       }
+    }
+  }
+}
+
+// gfx1201 WAVE_EXCP_FLAG_USER observations under MODE=0xf0 (RNE, preserve denormals).
+// These literal cases distinguish tininess, NaN suppression, and finite saturation.
+TEST(FpFmaF16W32Gfx12, StatusBoundariesAndExec) {
+  using namespace rocjitsu::arith::test;
+  const struct {
+    uint16_t a, b, c, expected;
+    uint32_t causes;
+    uint64_t flags;
+  } cases[] = {
+      {1, 0xb400, 0x0400, 0x0400, RJ_ARITH_EXCEPTION_INPUT_DENORM | RJ_ARITH_EXCEPTION_INEXACT, 0},
+      {0x0400, 0x3bff, 0, 0x0400, RJ_ARITH_EXCEPTION_UNDERFLOW | RJ_ARITH_EXCEPTION_INEXACT, 0},
+      {1, 0x3c00, 0, 1, RJ_ARITH_EXCEPTION_INPUT_DENORM, 0},
+      {1, 0x3c00, 0x7e00, 0x7e00, 0, 0},
+      {1, 0x7c00, 0, 0x7c00, RJ_ARITH_EXCEPTION_INPUT_DENORM, 0},
+      {0x7c01, 0x3c00, 0, 0x7e01, RJ_ARITH_EXCEPTION_INVALID, 0},
+      {0x7e02, 0x7c01, 0, 0x7e02, RJ_ARITH_EXCEPTION_INVALID, 0},
+      {0x7c00, 0x3c00, 0xfc00, 0xfe00, RJ_ARITH_EXCEPTION_INVALID, 0},
+      {0x7bff, 0x4000, 0, 0x7bff, RJ_ARITH_EXCEPTION_OVERFLOW | RJ_ARITH_EXCEPTION_INEXACT,
+       RJ_ARITH_FP16_OVFL},
+  };
+  constexpr uint32_t preserved = 0x80000000U | RJ_ARITH_EXCEPTION_FLOAT_DIV0;
+  for (uint64_t cpu : supported_cpu_levels()) {
+    for (const auto &sample : cases) {
+      SCOPED_TRACE(testing::Message() << "cpu=" << cpu << " a=" << sample.a << " b=" << sample.b);
+      Registers<4, 32> r;
+      r.v[0][31] = sample.a;
+      r.v[1][31] = sample.b;
+      r.v[2][31] = sample.c;
+      uint32_t status = preserved;
+      ASSERT_EQ(
+          rj_arith_v_fma_f16_w32_gfx12(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL | sample.flags,
+                                       0x80000000U, 0, r.v + 3, r.v, r.v + 1, r.v + 2, &status),
+          RJ_ARITH_SUCCESS);
+      EXPECT_EQ(uint16_t(r.v[3][31]), sample.expected);
+      EXPECT_EQ(status, preserved | sample.causes);
+    }
+    // Each exceptional lane contributes independently, and masked lanes contribute nothing.
+    for (uint32_t exec_mask : {0U, 1U, 0x80000000U, 0x80000001U}) {
+      Registers<4, 32> r;
+      r.v[0][0] = 0;
+      r.v[1][0] = 0x7c00;
+      r.v[2][0] = 0;
+      r.v[0][31] = 0x7bff;
+      r.v[1][31] = 0x4000;
+      r.v[2][31] = 0;
+      uint32_t status = preserved;
+      ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL,
+                                             exec_mask, 0, r.v + 3, r.v, r.v + 1, r.v + 2, &status),
+                RJ_ARITH_SUCCESS);
+      uint32_t expected = preserved;
+      if (exec_mask & 1) {
+        expected |= RJ_ARITH_EXCEPTION_INVALID;
+      }
+      if (exec_mask & 0x80000000U) {
+        expected |= RJ_ARITH_EXCEPTION_OVERFLOW | RJ_ARITH_EXCEPTION_INEXACT;
+      }
+      EXPECT_EQ(status, expected);
     }
   }
 }

@@ -18,6 +18,7 @@ extern "C" {
 // unselected halfwords. FP status pointers are unused in modes 0..2.
 // Instruction flags must be zero. Denormal and IEEE guest flags are rejected.
 // RJ_ARITH_FP16_OVFL saturates finite FP16 overflow; infinities remain infinite.
+// Mode 3 ORs active-lane FP exception causes into excp_flag_user, preserving existing bits.
 int rj_arith_v_fma_f16_w32_gfx12(uint64_t flags, uint32_t exec_mask, uint64_t instruction_flags,
                                  uint32_t *const *d, const uint32_t *const *a,
                                  const uint32_t *const *b, const uint32_t *const *c,
