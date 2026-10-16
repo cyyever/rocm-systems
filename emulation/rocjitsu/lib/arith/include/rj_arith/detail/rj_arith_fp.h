@@ -15,7 +15,9 @@ extern "C" {
 #endif
 
 // Fused multiply-add for selected lanes, preserving inactive lanes and
-// unselected halfwords. FP status pointers are unused in modes 0..2.
+// unselected halfwords. Modes 0..2 are supported; modes 1..2 use empirical exact
+// arithmetic. Mode 3 returns RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS. FP status
+// pointers are unused in modes 0..2.
 // Instruction flags must be zero. Only CPU-level and semantics fields (with supported
 // values) and RJ_ARITH_FP16_OVFL are accepted; all other flag bits are rejected.
 // RJ_ARITH_FP16_OVFL saturates finite FP16 overflow; infinities remain infinite.
