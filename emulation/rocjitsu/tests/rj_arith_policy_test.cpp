@@ -13,6 +13,7 @@ namespace {
 
 TEST(ArithPolicyTest, DefaultForwardsTemporaryCompatibility) {
   ArithmeticExecution execution;
+  EXPECT_TRUE(execution.reports_fp_status());
   const uint64_t expected_cpu =
       util::force_scalar() ? RJ_ARITH_CPU_BASELINE : rj_arith_init_cpu_flags();
   EXPECT_EQ(execution.flags() & RJ_ARITH_CPU_MASK, expected_cpu & RJ_ARITH_CPU_MASK);
@@ -34,6 +35,7 @@ TEST(ArithPolicyTest, ConfigurationNamesMapDirectlyToArithSemantics) {
     EXPECT_EQ((static_cast<uint64_t>(policy.semantics) << 16), modes[i]);
     EXPECT_EQ(execution.flags() & RJ_ARITH_SEMANTICS_MASK, modes[i]);
     EXPECT_STREQ(arithmetic_semantics_name(policy.semantics), names[i]);
+    EXPECT_EQ(execution.reports_fp_status(), i >= 3);
     EXPECT_EQ(execution.flags() & RJ_ARITH_CPU_MASK,
               ArithmeticExecution().flags() & RJ_ARITH_CPU_MASK);
   }
