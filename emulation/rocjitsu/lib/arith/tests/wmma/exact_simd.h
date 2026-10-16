@@ -19,9 +19,10 @@ namespace rocjitsu::arith::test {
 
 // Differential coverage supplements the per-instruction rocjitsu goldens.
 // The scalar path retains the inherited integer model unchanged. Compare raw
-// bits (including NaN payloads), all source modifiers and preserved registers.
+// bits (including NaN payloads), all source modifiers and preserved halfwords.
 // BF16 also exercises loose SIMD against scalar arithmetic with fuzzy compares.
-template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exact_simd(Call call) {
+template <bool Bf16, int Lanes, bool Rdna3, bool Packed, typename Call>
+void expect_wmma_exact_simd(Call call) {
   const auto levels = supported_cpu_levels();
   if (levels.size() < 2) {
     return;
@@ -30,7 +31,7 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
   constexpr uint32_t infinity = Bf16 ? 0x7f80 : 0x7c00;
   constexpr uint32_t fraction = Bf16 ? 0x7f : 0x3ff;
   constexpr uint32_t one = Bf16 ? 0x3f80 : 0x3c00;
-  constexpr int dest_regs = 256 / Lanes;
+  constexpr int dest_regs = !Rdna3 && Packed ? 128 / Lanes : 256 / Lanes;
   for (int sample = 0; sample < 256; ++sample) {
     Registers<32, Lanes> input;
     int kind = (sample / 8) % 8;
@@ -67,7 +68,7 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
           }
           word |= ((half & 0x8000) | magnitude) << shift;
         }
-        if (reg >= 16) {
+        if (reg >= 16 && !Packed) {
           word = raw;
           if (kind == 0 || kind == 5) {
             word = (raw & 0x807fffffU) | 0x3f800000U;
@@ -88,7 +89,7 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
             word = lane % 2 ? 0x7f7fffffU : 0x00800000U;
           }
         }
-        if (sample >= 128 && reg >= 16) {
+        if (sample >= 128 && reg >= 16 && !Packed) {
           word = (raw & 0x80000000U) |
                  ((uint32_t(1 + (sample + reg + lane) % 254) << 23) + (sample + lane) % 3 - 1);
         }
@@ -100,7 +101,7 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
       // signaling and quiet NaNs, infinity, and diagnostic payloads.
       input.v[8][sample % 16] = infinity | (infinity << 16);
       input.v[9][(sample + 3) % 16] = (infinity + 1) | ((infinity + fraction) << 16);
-      input.v[16][(sample + 5) % 16] = 0x7f800001U;
+      input.v[16][(sample + 5) % 16] = Packed ? infinity : 0x7f800001U;
     }
     // gfx11 requires replicated source fragments; enforce that layout before comparing backends.
     if constexpr (Rdna3) {
@@ -112,7 +113,11 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
     }
 
     uint64_t mode = sample % 64;
-
+    if constexpr (Packed && Rdna3) {
+      if ((sample / 64) % 2) {
+        mode |= RJ_ARITH_WMMA_HIGH_C_D;
+      }
+    }
     uint64_t flags = sample % 2 ? RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL
                                 : RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS;
     if ((sample / 64) % 2) {
@@ -125,7 +130,8 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
     const int aliases[] = {0, 4, 8, 16, 24};
     int destination = aliases[sample % 5];
     // Reuse the same broad inputs, modifiers and aliases for loose BF16.
-    // Include exceptional columns and the full exponent range in SIMD comparisons.
+    // Native DPBF16 must keep NaN-containing waves usable and safely decline
+    // subnormal/extreme products that require ordinary FP32 arithmetic.
     for (bool loose : {false, true}) {
       if (loose && !Bf16) {
         continue;
@@ -150,7 +156,19 @@ template <bool Bf16, int Lanes, bool Rdna3, typename Call> void expect_wmma_exac
               ASSERT_EQ(actual.v[reg][lane], expected.v[reg][lane]) << reg << '/' << lane;
             } else {
               uint32_t av = actual.v[reg][lane], ev = expected.v[reg][lane];
-
+              if constexpr (Packed) {
+                if constexpr (Rdna3) {
+                  int shift = mode & RJ_ARITH_WMMA_HIGH_C_D ? 16 : 0;
+                  EXPECT_EQ(av & ~(0xffffU << shift), ev & ~(0xffffU << shift));
+                  av >>= shift;
+                  ev >>= shift;
+                } else {
+                  expect_f32(av & 0xffff0000U, std::bit_cast<float>(ev & 0xffff0000U),
+                             RJ_ARITH_SEMANTICS_LOOSE, /*atol=*/1e-36, /*rtol=*/1e-6);
+                }
+                av <<= 16;
+                ev <<= 16;
+              }
               expect_f32(av, std::bit_cast<float>(ev), RJ_ARITH_SEMANTICS_LOOSE,
                          /*atol=*/1e-36, /*rtol=*/1e-6);
             }
