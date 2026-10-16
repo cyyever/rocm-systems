@@ -27,6 +27,9 @@ using Registers = rocjitsu::arith::test::Registers<33, 32>;
 // Check matrix results, operand aliases, and instruction-flag contracts across supported CPUs
 // and semantics.
 TEST(WmmaF32F16W32Gfx12, Arithmetic) {
+  rocjitsu::arith::test::expect_matrix_modifiers<false, 32, false>(
+      rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12);
+
   Registers input;
 
   // Named engine with its standardized default seed and explicit mapping (no distributions).
@@ -90,9 +93,9 @@ TEST(WmmaF32F16W32Gfx12, Arithmetic) {
   // clang-format on
 
   // Invalid requests must be rejected before operand access or output writes.
-  // Nonzero instruction modifiers are not implemented yet.
+  // This instruction supports the six NEG/ABS modifier bits, with no DPP.
   rocjitsu::arith::test::expect_matrix_invalid_flags(rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12,
-                                                     input, 16, 0, 4, 8, 0);
+                                                     input, 16, 0, 4, 8, 63);
 
   // A=VGPRs 0..3, B=4..7, C=8..15; D spans eight registers. These cover
   // A/B overlap, partial A/B/C overlap, B/C overlap, C alias, and disjoint D.
@@ -123,18 +126,5 @@ TEST(WmmaF32F16W32Gfx12, Arithmetic) {
         }
       }
     }
-  }
-}
-
-// Reject controls not implemented by this slice, before accessing operands.
-TEST(WmmaF32F16W32Gfx12, UnsupportedGuestControls) {
-  for (uint64_t flag :
-       {RJ_ARITH_FP_FLUSH_INPUT_DENORMALS, RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS,
-        RJ_ARITH_FP_IEEE_MODE, RJ_ARITH_FP_DX10_CLAMP_OFF, RJ_ARITH_FP_ROUND_UP,
-        RJ_ARITH_FP_ROUND_DOWN, RJ_ARITH_FP_ROUND_ZERO, RJ_ARITH_FP_FLUSH_INPUT_DENORMALS_F16,
-        RJ_ARITH_FP_PRESERVE_INPUT_DENORMALS_F16}) {
-    EXPECT_EQ(
-        rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12(flag, 0, nullptr, nullptr, nullptr, nullptr),
-        RJ_ARITH_ERROR_INVALID_FLAGS);
   }
 }

@@ -21,10 +21,9 @@ int rj_arith_v_fma_f16_w32(uint64_t flags, uint32_t exec_mask, uint64_t instruct
                            uint32_t *const *d, const uint32_t *const *a, const uint32_t *const *b,
                            const uint32_t *const *c, uint32_t *trapsts);
 
-// Instruction flags must be zero. Only CPU-level and semantics fields (with supported
-// values) and RJ_ARITH_FP16_OVFL are accepted; all other flag bits are rejected.
-// RJ_ARITH_FP16_OVFL saturates finite FP16 overflow; infinities remain infinite.
 // Mode 3 ORs active-lane FP exception causes into excp_flag_user, preserving existing bits.
+// Reporting requires nearest-even guest rounding and preserved denormals; other
+// guest policies return RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS without writes.
 int rj_arith_v_fma_f16_w32_gfx12(uint64_t flags, uint32_t exec_mask, uint64_t instruction_flags,
                                  uint32_t *const *d, const uint32_t *const *a,
                                  const uint32_t *const *b, const uint32_t *const *c,
@@ -39,8 +38,10 @@ int rj_arith_v_fma_f32_w32(uint64_t flags, uint32_t exec_mask, uint64_t instruct
 // FP32 FMA preserves inactive lanes and supports whole-register aliases.
 // Modes 0..2 are supported; mode 3 returns RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS
 // without changing D or FP status. The status pointer is unused in modes 0..2.
-// Instruction flags must be zero. Only supported CPU/semantics fields and
-// RJ_ARITH_FP16_OVFL are accepted; the latter has no effect on FP32 results.
+// ABS/NEG, OMOD, CLAMP and DPP8/DPP16 are supported; FP16 also supports half selection.
+// Guest rounding, input/output flushing and IEEE controls are accepted.
+// gfx11 additionally accepts DX10_CLAMP_OFF; FP16_OVFL has no effect on FP32.
+// Compatibility selects mode 2 for all FMA variants.
 int rj_arith_v_fma_f32_w32_gfx12(uint64_t flags, uint32_t exec_mask, uint64_t instruction_flags,
                                  uint32_t *const *d, const uint32_t *const *a,
                                  const uint32_t *const *b, const uint32_t *const *c,

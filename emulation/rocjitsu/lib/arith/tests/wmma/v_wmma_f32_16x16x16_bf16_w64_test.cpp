@@ -27,6 +27,9 @@ using Registers = rocjitsu::arith::test::Registers<64, 64>;
 // Check matrix results, operand aliases, and instruction-flag contracts across supported CPUs
 // and semantics.
 TEST(WmmaF32BF16W64, Arithmetic) {
+  rocjitsu::arith::test::expect_matrix_modifiers<true, 64, true>(
+      rj_arith_v_wmma_f32_16x16x16_bf16_w64);
+
   std::minstd_rand random;
   uint32_t a[16][16], b[16][16], c[16][16];
   for (int row = 0; row < 16; ++row) {
@@ -98,7 +101,7 @@ TEST(WmmaF32BF16W64, Arithmetic) {
   // clang-format on
 
   rocjitsu::arith::test::expect_matrix_invalid_flags(rj_arith_v_wmma_f32_16x16x16_bf16_w64, input,
-                                                     21, 0, 8, 16, 0);
+                                                     21, 0, 8, 16, 63);
 
   // A occupies 8 registers, B 8, C/D 4. Reuse the same arithmetic
   // data for overlapping and disjoint destination ranges.

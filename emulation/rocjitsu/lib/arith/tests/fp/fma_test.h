@@ -1,153 +1,91 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// RDNA3/gfx12 FP16/FP32 FMA: deterministic fractional inputs, exceptional values,
-// EXEC, whole-register aliases, preserved halfwords, and errors.
+// Fused arithmetic across FP widths, aliases, and guest controls.
+// Shared family test runner; instruction-specific cases supply operations and expectations.
 
 #pragma once
 
-#include "common/contracts.h"
 #include "common/cpu.h"
-#include "common/floating_point.h"
-#include "common/half_reference.h"
 #include "common/registers.h"
 #include "common/semantics.h"
-#include "fp/half_fma_reference.h"
+#include "fp/elementwise.h"
+#include "fp/fma_reference.h"
+#include "fp/reference.h"
 #include "rj_arith/rj_arith.h"
-#include <bit>
 
-#include <cmath>
 #include <gtest/gtest.h>
-#include <random>
+#include <stdint.h>
 #include <type_traits>
 
 namespace rocjitsu::arith::test {
 
-// Check low-half arithmetic and that all storage outside active results is preserved.
-template <int Lanes, bool Rdna3 = false, typename Call> void check_fma16(Call call) {
-  using namespace rocjitsu::arith::test;
-  using RegBank = Registers<5, Lanes>;
+// Exercise FP32 FMA arithmetic, modifiers, EXEC, aliases and API errors.
+// For these normal inputs, the inherited model agrees with std::fma;
+// exceptional encodings are covered separately by literal witnesses.
+template <int Lanes, typename Call> void check_fma(Call call, bool gfx12) {
+  constexpr int Width = 32;
   using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
-  RegBank input;
-  std::minstd_rand random;
-  for (int reg = 0; reg < 5; ++reg) {
-    for (int lane = 0; lane < Lanes; ++lane) {
-      input.v[reg][lane] = (random_f16_pair(random) & 0xffff0000U) | random_f16_bits(random);
-    }
-  }
-  for (int reg = 0; reg < 3; ++reg) {
-    input.v[reg][reg * 2] = kF16QuietNaNBits;
-    input.v[reg][reg * 2 + 1] = kF16PositiveInfinityBits;
-  }
-  expect_invalid_flags(
-      [&](uint64_t flags, uint64_t mode) {
-        return call(flags, ~Mask(0), mode, nullptr, nullptr, nullptr, nullptr, nullptr);
-      },
-      0);
-  for (uint64_t cpu : supported_cpu_levels()) {
-    for (uint64_t semantics : semantics_modes()) {
-      for (Mask exec_mask :
-           {Mask(0), ~Mask(0), Mask(0xaaaaaaaaaaaaaaaaULL), Mask(1) << (Lanes - 1)}) {
-        for (int aliasing_offset : {0, 1, 2, 3}) {
-          RegBank r = input;
-          uint32_t status = 0x80000000U;
-          if (Rdna3 && semantics == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL) {
-            EXPECT_EQ(call(cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1,
-                           r.v + 2, &status),
-                      RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
-            r.expect_preserved(input, 0, 0);
-            EXPECT_EQ(status, 0x80000000U);
-            continue;
-          }
-          ASSERT_EQ(call(cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1,
-                         r.v + 2, &status),
-                    RJ_ARITH_SUCCESS);
-          if (semantics != RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL || !exec_mask) {
-            EXPECT_EQ(status, 0x80000000U);
-          } else {
-            EXPECT_EQ(status & 0x80000000U, 0x80000000U);
-          }
-          r.expect_preserved(input, aliasing_offset, 1);
-          for (int lane = 0; lane < Lanes; ++lane) {
-            uint32_t actual = r.v[aliasing_offset][lane];
-            if (!((exec_mask >> lane) & 1)) {
-              EXPECT_EQ(actual, input.v[aliasing_offset][lane]);
-              continue;
-            }
-            EXPECT_EQ(actual >> 16, input.v[aliasing_offset][lane] >> 16);
-            // A computed reference is sufficient for loose arithmetic.
-            double value = std::fma(half_value(uint16_t(input.v[0][lane])),
-                                    half_value(uint16_t(input.v[1][lane])),
-                                    half_value(uint16_t(input.v[2][lane])));
-            // Existing independent integer oracle, validated against rocjitsu's model.
-            uint16_t expected_bits =
-                semantics == RJ_ARITH_SEMANTICS_LOOSE
-                    ? half_bits(value)
-                    : half_fma_reference::evaluate(input.v[0][lane], input.v[1][lane],
-                                                   input.v[2][lane], false, Rdna3);
-            if (semantics != RJ_ARITH_SEMANTICS_LOOSE) {
-              EXPECT_EQ(uint16_t(actual), expected_bits);
-              continue;
-            }
-            float expected = float(half_value(expected_bits));
-            expect_f32(std::bit_cast<uint32_t>(float(half_value(uint16_t(actual)))), expected,
-                       semantics,
-                       /*atol=*/1e-5, /*rtol=*/5e-4);
-          }
-        }
-      }
-    }
-  }
-}
+  using Registers = rocjitsu::arith::test::Registers<10, Lanes>;
+  Registers input = make_fp_inputs<Width, Lanes>();
 
-// The existing rocjitsu FP32 FMA model agrees with std::fma on these inputs.
-template <int Lanes, bool Rdna3 = false, typename Call> void check_fma32(Call call) {
-  using namespace rocjitsu::arith::test;
-  using RegBank = Registers<5, Lanes>;
-  using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
-  RegBank input;
-  std::minstd_rand random;
-  for (int reg = 0; reg < 5; ++reg) {
-    for (int lane = 0; lane < Lanes; ++lane) {
-      input.v[reg][lane] = random_f32_bits(random);
-    }
-  }
-  for (int reg = 0; reg < 3; ++reg) {
-    input.v[reg][2 * reg] = kF32QuietNaNBits;
-    input.v[reg][2 * reg + 1] = kF32PositiveInfinityBits;
-  }
-  expect_invalid_flags(
-      [&](uint64_t flags, uint64_t mode) {
-        return call(flags, ~Mask(0), mode, nullptr, nullptr, nullptr, nullptr, nullptr);
-      },
-      0);
-  for (uint64_t cpu : supported_cpu_levels()) {
-    for (uint64_t semantics : semantics_modes()) {
-      for (Mask exec_mask :
-           {Mask(0), ~Mask(0), Mask(0xaaaaaaaaaaaaaaaaULL), Mask(1) << (Lanes - 1)}) {
-        for (int aliasing_offset : {0, 1, 2, 3}) {
-          RegBank r = input;
-          uint32_t status = 0x80000000U;
-          int result = call(cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1,
-                            r.v + 2, &status);
-          EXPECT_EQ(status, 0x80000000U);
-          if (semantics == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL) {
-            EXPECT_EQ(result, RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
-            r.expect_preserved(input, 0, 0);
-            continue;
-          }
-          ASSERT_EQ(result, RJ_ARITH_SUCCESS);
-          r.expect_preserved(input, aliasing_offset, 1);
-          for (int lane = 0; lane < Lanes; ++lane) {
-            uint32_t actual = r.v[aliasing_offset][lane];
-            if (!((exec_mask >> lane) & 1)) {
-              EXPECT_EQ(actual, input.v[aliasing_offset][lane]);
+  rocjitsu::arith::test::expect_invalid_fp_requests([&](uint64_t flags, uint64_t mode) {
+    Registers r = input;
+    int aliasing_offset = 6;
+    Mask exec_mask = ~Mask(0);
+    uint32_t fp_status = 0x80000000U;
+
+    int result =
+        call(flags, exec_mask, mode, r.v + aliasing_offset, r.v, r.v + 2, r.v + 4, &fp_status);
+    r.expect_preserved(input, 0, 0);
+    EXPECT_EQ(fp_status, 0x80000000U);
+    EXPECT_EQ(call(flags, exec_mask, mode, nullptr, nullptr, nullptr, nullptr, &fp_status), result);
+    return result;
+  });
+
+  // FP32 exercises DPP8, OMOD and combined ABS/NEG in addition to the
+  // basic modifiers common to both formats. gfx11 ignores OMOD under the
+  // default guest FP mode; compute_fma_expected accounts for that difference.
+  const uint64_t modes[] = {0,
+                            RJ_ARITH_ALU_NEG_A,
+                            RJ_ARITH_ALU_CLAMP,
+                            RJ_ARITH_DPP8 | (0x53977ULL << RJ_ARITH_DPP8_SELECT_SHIFT),
+                            RJ_ARITH_DPP8 | (0x53977ULL << RJ_ARITH_DPP8_SELECT_SHIFT) |
+                                RJ_ARITH_DPP_FI | RJ_ARITH_ALU_NEG_A,
+                            RJ_ARITH_ALU_OMOD_2,
+                            RJ_ARITH_ALU_ABS_B | RJ_ARITH_ALU_NEG_A};
+  const int aliasing_offsets[] = {6, 0, 2, 4};
+
+  const auto cpu_levels = rocjitsu::arith::test::supported_cpu_levels();
+  for (uint64_t cpu : cpu_levels) {
+    for (uint64_t semantics : rocjitsu::arith::test::semantics_modes()) {
+      for (uint64_t mode : modes) {
+        for (Mask exec_mask :
+             {Mask(0), ~Mask(0), Mask(0xaaaaaaaaaaaaaaaaULL), Mask(1) << (Lanes - 1)}) {
+          for (int aliasing_offset : aliasing_offsets) {
+            SCOPED_TRACE(::testing::Message() << cpu << '/' << semantics << '/' << mode << '/'
+                                              << exec_mask << '/' << aliasing_offset);
+            Registers r = input, expected_registers = input;
+            uint64_t flags = cpu | semantics;
+            uint32_t fp_status = 0x80000000U;
+
+            int result = call(flags, exec_mask, mode, r.v + aliasing_offset, r.v, r.v + 2, r.v + 4,
+                              &fp_status);
+            if (semantics == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL) {
+              EXPECT_EQ(result, RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
+              r.expect_preserved(input, 0, 0);
+              EXPECT_EQ(fp_status, 0x80000000U);
               continue;
             }
-            float expected = std::fma(std::bit_cast<float>(input.v[0][lane]),
-                                      std::bit_cast<float>(input.v[1][lane]),
-                                      std::bit_cast<float>(input.v[2][lane]));
-            expect_f32(actual, expected, semantics, /*atol=*/1e-6, /*rtol=*/1e-6);
+            ASSERT_EQ(result, RJ_ARITH_SUCCESS);
+            EXPECT_EQ(fp_status, 0x80000000U);
+            compute_fma_expected<Width>(input, exec_mask, mode, aliasing_offset, expected_registers,
+                                        gfx12);
+
+            expect_fp_result<Width>(input, r, expected_registers, exec_mask, aliasing_offset, mode,
+                                    semantics,
+                                    /*atol=*/1e-5,
+                                    /*rtol=*/1e-6);
           }
         }
       }

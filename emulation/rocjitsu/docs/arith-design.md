@@ -6,8 +6,8 @@ FP16/BF16 WMMA and FP16/FP32 FMA support Wave32 and Wave64, with loose
 and empirical exact results.
 gfx12 FP16 FMA reports FP status in mode 3; gfx11 FMA and FP32 FMA reject
 mode 3. WMMA accepts modes 0–3 and has no FP-status output.
-CPU implementations are scalar; SIMD backends are planned.
-Compatibility and instruction modifiers are planned; mode 7 is currently rejected.
+Source/output modifiers and FMA DPP routing are supported. Compatibility selects
+mode 2 for these entry points. CPU implementations are scalar; SIMD is planned.
 Benchmark commands and Rocjitsu integration described below are planned.
 
 The remaining design describes the intended interface; family headers state current support.
@@ -135,15 +135,15 @@ and guest FP controls.
 | 2 | `RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS` | Require empirical bit-exact arithmetic; no FP status reporting |
 | 3 | `RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL` | Require empirical bit-exact arithmetic and FP status reporting |
 | 4–6 | Reserved | Rejected |
-| 7 | Reserved for compatibility | Currently rejected |
+| 7 | `RJ_ARITH_SEMANTICS_COMPATIBILITY` | Instruction-specific policy, outside the ordering |
 
 Loose semantics permit numerical approximations, not wrong operands, missing
 operations, or incorrect integer and comparison results. Modes 2 and 3 reject
 unsupported behavior rather than silently falling back to loose arithmetic.
 
-### Compatibility mode (planned)
+### Compatibility mode
 
-Once implemented, mode 7 will be a temporary, instruction-specific policy outside the ordered modes.
+Mode 7 is a temporary, instruction-specific policy outside the ordered modes.
 Each entry point resolves it before validation or calling another entry point;
 the resolved mode determines both numerical behavior and FP status reporting.
 Rocjitsu's JSON policy setting is planned for the later integration step.

@@ -6,8 +6,8 @@ FP16/BF16 WMMA and FP16/FP32 FMA support Wave32 and Wave64, with loose
 and empirical exact results.
 gfx12 FP16 FMA reports FP status in mode 3; gfx11 FMA and FP32 FMA reject
 mode 3. WMMA accepts modes 0–3 and has no FP-status output.
-CPU implementations are scalar; SIMD backends are planned.
-Compatibility and instruction modifiers are planned; mode 7 is currently rejected.
+Source/output modifiers and FMA DPP routing are supported. Compatibility selects
+mode 2 for these entry points. CPU implementations are scalar; SIMD is planned.
 Benchmark commands and Rocjitsu integration described below are planned.
 
 The remaining design describes the intended interface; family headers state current support.
@@ -23,9 +23,6 @@ The semantics field selects loose or empirical bit-exact arithmetic. rj-arith is
 See [coverage per architecture](COVERAGE.md) for instruction-family support.
 
 Rocjitsu continues to use its existing instruction handlers.
-
-For gfx12 FP16 FMA and FP32-output WMMA, modes 0–3 are supported.
-FMA mode 3 accumulates FP status; WMMA has no FP-status output.
 
 ## Build and run
 
@@ -65,7 +62,7 @@ or FP status output.
 `flags` combines CPU capabilities from `rj_arith_init_cpu_flags()` with the
 semantics selection. Cache the CPU flags when making repeated calls.
 `instruction_flags = 0` selects unmodified operands. This WMMA entry point
-accepts modes 0–3. WMMA has no FP-status side effects, so mode 3 has the same numeric contract as mode 2.
+accepts modes 0–3. With no FP-status output, mode 3 has the same numeric contract as mode 2.
 The host FP environment must be in its default state; the library never explicitly
 changes it. The function returns `RJ_ARITH_SUCCESS` (zero) on success and leaves
 outputs unchanged on error.

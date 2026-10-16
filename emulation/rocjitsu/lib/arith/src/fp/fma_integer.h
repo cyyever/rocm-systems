@@ -86,29 +86,33 @@ inline uint64_t fma_finite_round_odd(uint32_t a, uint32_t b, uint32_t c) {
          (significand & 0xfffffffffffffULL);
 }
 
-// Round a finite round-to-odd FP64 intermediate to nearest-even FP32, preserving
-// subnormals. A carried significand can promote a subnormal to the smallest normal.
-inline uint32_t fma_narrow_f32(uint64_t bits) {
+// Round a finite round-to-odd FP64 intermediate to FP32 using guest MODE.
+// Flushing tests tininess after significand rounding, before exponent packing.
+inline uint32_t fma_narrow_f32(uint64_t bits, bool flush_output, unsigned rounding = 0) {
   uint32_t sign = uint32_t(bits >> 32) & 0x80000000;
   uint64_t magnitude = bits & 0x7fffffffffffffffULL;
   if (!magnitude) {
     return sign;
   }
-  const uint32_t overflow = sign | 0x7f800000;
+  const bool away = rounding == (sign ? 2u : 1u);
+  const uint32_t overflow = sign | ((rounding == 0 || away) ? 0x7f800000 : 0x7f7fffff);
   int exponent = int(magnitude >> 52) - 1023;
   if (exponent > 127) {
     return overflow;
   }
-
-  if (exponent < -150) {
+  if (flush_output && exponent < -127) {
     return sign;
   }
-  int shift = 29 + (exponent < -126 ? -126 - exponent : 0);
+  if (exponent < -150) {
+    return sign | unsigned(away);
+  }
+  int shift = 29 + (!flush_output && exponent < -126 ? -126 - exponent : 0);
   uint64_t significand = (magnitude & 0xfffffffffffffULL) | (1ULL << 52);
   uint32_t rounded = uint32_t(significand >> shift);
   uint64_t unit = 1ULL << shift, remainder = significand & (unit - 1);
-  rounded += remainder > unit / 2 || (remainder == unit / 2 && (rounded & 1));
-  if (exponent < -126) {
+  rounded += rounding == 0 ? remainder > unit / 2 || (remainder == unit / 2 && (rounded & 1))
+                           : away && remainder != 0;
+  if (!flush_output && exponent < -126) {
     return sign | rounded;
   }
   if (rounded == (1U << 24)) {

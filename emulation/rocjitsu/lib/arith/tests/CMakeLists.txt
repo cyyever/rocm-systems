@@ -28,7 +28,6 @@ if(RJ_INSTALL_TESTS)
         "include(\"rj_arith_v_wmma_f32_16x16x16_f16_w32_test.cmake\")\n"
     )
 endif()
-
 add_executable(
     rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12_test
     wmma/v_wmma_f32_16x16x16_f16_w32_gfx12_test.cpp
@@ -75,7 +74,6 @@ if(RJ_INSTALL_TESTS)
         "include(\"rj_arith_v_wmma_f32_16x16x16_f16_w64_test.cmake\")\n"
     )
 endif()
-
 add_executable(
     rj_arith_v_wmma_f32_16x16x16_f16_w64_gfx12_test
     wmma/v_wmma_f32_16x16x16_f16_w64_gfx12_test.cpp
@@ -122,7 +120,6 @@ if(RJ_INSTALL_TESTS)
         "include(\"rj_arith_v_wmma_f32_16x16x16_bf16_w32_test.cmake\")\n"
     )
 endif()
-
 add_executable(
     rj_arith_v_wmma_f32_16x16x16_bf16_w32_gfx12_test
     wmma/v_wmma_f32_16x16x16_bf16_w32_gfx12_test.cpp
@@ -169,7 +166,6 @@ if(RJ_INSTALL_TESTS)
         "include(\"rj_arith_v_wmma_f32_16x16x16_bf16_w64_test.cmake\")\n"
     )
 endif()
-
 add_executable(
     rj_arith_v_wmma_f32_16x16x16_bf16_w64_gfx12_test
     wmma/v_wmma_f32_16x16x16_bf16_w64_gfx12_test.cpp

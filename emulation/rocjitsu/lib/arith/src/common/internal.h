@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// Shared flag validation, FP bit casts, and CPU-query state.
+// Shared flag validation, semantics resolution, FP bit casts, and CPU-query state.
 // Internal helpers shared by instruction implementations; not part of the public C API.
 
 #ifndef RJ_ARITH_INTERNAL_H_
@@ -14,6 +14,11 @@
 #include <type_traits>
 
 namespace rocjitsu::arith {
+
+// Floating matrix arithmetic ignores guest denormal and IEEE controls.
+// FP16_OVFL is accepted separately and has no effect on FP32 matrix results.
+inline constexpr uint64_t matrix_ignored_fp_flags =
+    RJ_ARITH_FP_FLUSH_INPUT_DENORMALS | RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS | RJ_ARITH_FP_IEEE_MODE;
 
 // EXEC has one bit per lane in the instruction wave.
 template <int Lanes> using ExecMask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
@@ -30,6 +35,14 @@ inline double as_double(uint64_t bits) { return std::bit_cast<double>(bits); }
 // Return the FP64 representation without numeric conversion.
 inline uint64_t double_bits(double value) { return std::bit_cast<uint64_t>(value); }
 
+// Resolve the legacy rocjitsu policy selected by this entry point's wrapper.
+// Explicit semantics are never reinterpreted.
+inline uint64_t resolve_compatibility(uint64_t flags, uint64_t semantics) {
+  return (flags & RJ_ARITH_SEMANTICS_MASK) == RJ_ARITH_SEMANTICS_COMPATIBILITY
+             ? (flags & ~RJ_ARITH_SEMANTICS_MASK) | semantics
+             : flags;
+}
+
 // These queries operate on resolved semantics; validation rejects reserved values.
 inline bool is_exact(uint64_t flags) {
   const uint64_t semantics = flags & RJ_ARITH_SEMANTICS_MASK;
@@ -42,20 +55,28 @@ inline bool reports_fp_status(uint64_t flags) {
   return (flags & RJ_ARITH_SEMANTICS_MASK) == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL;
 }
 
-// Accept ordinary semantics modes 0..3; reject reserved modes, including mode 7.
+// Accept ordinary semantics modes 0..3; reject reserved or unresolved compatibility modes.
 inline int validate_semantics(uint64_t flags) {
   return (flags & RJ_ARITH_SEMANTICS_MASK) > RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL
              ? RJ_ARITH_ERROR_INVALID_FLAGS
              : RJ_ARITH_SUCCESS;
 }
 
-// Validate CPU, semantics, and guest FP flags without accessing operands or outputs.
-inline int validate(uint64_t flags) {
-  // Only the advertised CPU levels, semantics modes, and FP16_OVFL are accepted.
+// Validate CPU, semantics, instruction bits, and supported guest FP flags. Return an error
+// without accessing operands or outputs.
+inline int validate(uint64_t flags, uint32_t instruction_flags, bool supports_exact = false,
+                    uint64_t supported_fp_flags = 0) {
+  // Only advertised guest FP controls are accepted; compatibility must already be resolved by
+  // the entry point.
   constexpr uint64_t known = RJ_ARITH_CPU_MASK | RJ_ARITH_SEMANTICS_MASK | RJ_ARITH_FP16_OVFL;
-  if ((flags & ~known) || (flags & RJ_ARITH_CPU_MASK) > RJ_ARITH_CPU_X86_64_ZEN4 ||
+  if ((flags & ~(known | supported_fp_flags)) ||
+      (flags & RJ_ARITH_CPU_MASK) > RJ_ARITH_CPU_X86_64_ZEN4 || instruction_flags ||
       validate_semantics(flags)) {
     return RJ_ARITH_ERROR_INVALID_FLAGS;
+  }
+  if (!supports_exact &&
+      (flags & RJ_ARITH_SEMANTICS_MASK) >= RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS) {
+    return RJ_ARITH_ERROR_UNSUPPORTED_SEMANTICS;
   }
   return RJ_ARITH_SUCCESS;
 }

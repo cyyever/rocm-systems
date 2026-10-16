@@ -6,9 +6,12 @@
 #pragma once
 
 #include "common/contracts.h"
+#include "common/cpu.h"
 #include "common/registers.h"
+#include "common/semantics.h"
 #include "rj_arith/rj_arith.h"
 
+#include <bit>
 #include <gtest/gtest.h>
 #include <random>
 #include <stdint.h>
@@ -30,6 +33,51 @@ void expect_matrix_invalid_flags(Call call, const Registers<RegistersCount, Lane
         return result;
       },
       supported_modifiers);
+}
+
+// Isolate each factor-half sign and accumulator modifier with exactly representable
+// arithmetic. These cases supplement the varied-input per-instruction goldens.
+template <bool Bf16, int Lanes, bool Gfx11, typename Call> void expect_matrix_modifiers(Call call) {
+  constexpr int factors = Gfx11 ? 8 : 128 / Lanes, outputs = 256 / Lanes;
+  Registers<32, Lanes> input;
+  for (int reg = 0; reg < factors * 2; ++reg) {
+    for (int lane = 0; lane < Lanes; ++lane) {
+      input.v[reg][lane] = Bf16 ? 0x3f803f80U : 0x3c003c00U;
+    }
+  }
+  for (int reg = 16; reg < 16 + outputs; ++reg) {
+    for (int lane = 0; lane < Lanes; ++lane) {
+      input.v[reg][lane] = std::bit_cast<uint32_t>(-2.0f);
+    }
+  }
+  const struct {
+    uint64_t mode;
+    float expected;
+  } cases[] = {{0, 14},
+               {RJ_ARITH_WMMA_NEG_LO_A, -2},
+               {RJ_ARITH_WMMA_NEG_HI_A, -2},
+               {RJ_ARITH_WMMA_NEG_LO_B, -2},
+               {RJ_ARITH_WMMA_NEG_HI_B, -2},
+               {RJ_ARITH_WMMA_NEG_LO_A | RJ_ARITH_WMMA_NEG_HI_A, -18},
+               {RJ_ARITH_WMMA_NEG_C, 18},
+               {RJ_ARITH_WMMA_ABS_C, 18},
+               {RJ_ARITH_WMMA_ABS_C | RJ_ARITH_WMMA_NEG_C, 14}};
+  for (uint64_t cpu : supported_cpu_levels()) {
+    for (uint64_t semantics : semantics_modes()) {
+      for (const auto &test : cases) {
+        SCOPED_TRACE(testing::Message() << cpu << '/' << semantics << '/' << test.mode);
+        auto r = input;
+        ASSERT_EQ(call(cpu | semantics, test.mode, r.v + 24, r.v, r.v + factors, r.v + 16),
+                  RJ_ARITH_SUCCESS);
+        for (int reg = 24; reg < 24 + outputs; ++reg) {
+          for (int lane = 0; lane < Lanes; ++lane) {
+            EXPECT_EQ(r.v[reg][lane], std::bit_cast<uint32_t>(test.expected));
+          }
+        }
+        r.expect_preserved(input, 24, outputs);
+      }
+    }
+  }
 }
 
 // Write an A/B element in the gfx11 dense WMMA layout. Coordinate is the

@@ -27,6 +27,9 @@ using Registers = rocjitsu::arith::test::Registers<33, 32>;
 // Check matrix results, operand aliases, and instruction-flag contracts across supported CPUs
 // and semantics.
 TEST(WmmaF32F16W32, Arithmetic) {
+  rocjitsu::arith::test::expect_matrix_modifiers<false, 32, true>(
+      rj_arith_v_wmma_f32_16x16x16_f16_w32);
+
   Registers input;
 
   // Named engine with its standardized default seed and explicit mapping (no distributions).
@@ -90,7 +93,7 @@ TEST(WmmaF32F16W32, Arithmetic) {
   // Invalid requests must be rejected before operand access or output writes.
   // This instruction supports the six NEG/ABS modifier bits, with no DPP.
   rocjitsu::arith::test::expect_matrix_invalid_flags(rj_arith_v_wmma_f32_16x16x16_f16_w32, input,
-                                                     24, 0, 8, 16, 0);
+                                                     24, 0, 8, 16, 63);
 
   // A=VGPRs 0..7, B=8..15, C=16..23; D spans eight registers. Offsets
   // cover A alias, partial A/B overlap, B alias, partial B/C overlap, C alias,
