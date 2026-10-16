@@ -1,14 +1,5 @@
 # Rocjitsu Arithmetic Library design
 
-## Current implementation
-
-Empirical exact arithmetic is available for the seed WMMA/FMA; other declarations state their support.
-FP status support is available for gfx12 FP16 FMA; other instructions document their limits.
-CPU implementations are scalar, AVX2, and AVX-512.
-Benchmark commands and Rocjitsu integration described below are planned.
-
-The remaining design describes the intended interface; family headers state current support.
-
 This document describes the Rocjitsu Arithmetic Library (`rj-arith`), located in
 [`lib/arith/`](../lib/arith/). It implements GPU arithmetic on a CPU. Its interface follows GPU
 instructions and register layouts; its implementation uses portable C++ and
@@ -240,9 +231,7 @@ sanitizers provide broader validation; ordinary tests need no GPU.
 Each `*_test.cpp` builds as a separate executable, with individual GTest cases
 exposed to CTest. Public headers are compiled independently as C23 and C++17.
 
-## Benchmarking (planned)
-
-No benchmark executable is built at this stage. The following describes its intended interface.
+## Benchmarking
 
 ### Workloads and reported results
 
