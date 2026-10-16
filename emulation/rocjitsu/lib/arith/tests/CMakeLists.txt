@@ -6,6 +6,29 @@
 include(GoogleTest)
 
 add_executable(
+    rj_arith_v_wmma_f32_16x16x16_f16_w32_test
+    wmma/v_wmma_f32_16x16x16_f16_w32_test.cpp
+)
+target_link_libraries(
+    rj_arith_v_wmma_f32_16x16x16_f16_w32_test
+    PRIVATE rj_arith GTest::gtest_main
+)
+target_include_directories(
+    rj_arith_v_wmma_f32_16x16x16_f16_w32_test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${rj_arith_source_dir}/src
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        rj_arith_v_wmma_f32_16x16x16_f16_w32_test
+        PRIVATE -Wall -Wextra -Werror -pedantic
+    )
+endif()
+rj_add_gtest_tests(
+    rj_arith_v_wmma_f32_16x16x16_f16_w32_test
+    TEST_PREFIX "rj_arith."
+)
+
+add_executable(
     rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12_test
     wmma/v_wmma_f32_16x16x16_f16_w32_gfx12_test.cpp
 )
@@ -25,6 +48,29 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 rj_add_gtest_tests(
     rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12_test
+    TEST_PREFIX "rj_arith."
+)
+
+add_executable(
+    rj_arith_v_wmma_f32_16x16x16_f16_w64_test
+    wmma/v_wmma_f32_16x16x16_f16_w64_test.cpp
+)
+target_link_libraries(
+    rj_arith_v_wmma_f32_16x16x16_f16_w64_test
+    PRIVATE rj_arith GTest::gtest_main
+)
+target_include_directories(
+    rj_arith_v_wmma_f32_16x16x16_f16_w64_test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${rj_arith_source_dir}/src
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        rj_arith_v_wmma_f32_16x16x16_f16_w64_test
+        PRIVATE -Wall -Wextra -Werror -pedantic
+    )
+endif()
+rj_add_gtest_tests(
+    rj_arith_v_wmma_f32_16x16x16_f16_w64_test
     TEST_PREFIX "rj_arith."
 )
 
@@ -52,6 +98,29 @@ rj_add_gtest_tests(
 )
 
 add_executable(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w32_test
+    wmma/v_wmma_f32_16x16x16_bf16_w32_test.cpp
+)
+target_link_libraries(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w32_test
+    PRIVATE rj_arith GTest::gtest_main
+)
+target_include_directories(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w32_test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${rj_arith_source_dir}/src
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        rj_arith_v_wmma_f32_16x16x16_bf16_w32_test
+        PRIVATE -Wall -Wextra -Werror -pedantic
+    )
+endif()
+rj_add_gtest_tests(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w32_test
+    TEST_PREFIX "rj_arith."
+)
+
+add_executable(
     rj_arith_v_wmma_f32_16x16x16_bf16_w32_gfx12_test
     wmma/v_wmma_f32_16x16x16_bf16_w32_gfx12_test.cpp
 )
@@ -71,6 +140,29 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 rj_add_gtest_tests(
     rj_arith_v_wmma_f32_16x16x16_bf16_w32_gfx12_test
+    TEST_PREFIX "rj_arith."
+)
+
+add_executable(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w64_test
+    wmma/v_wmma_f32_16x16x16_bf16_w64_test.cpp
+)
+target_link_libraries(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w64_test
+    PRIVATE rj_arith GTest::gtest_main
+)
+target_include_directories(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w64_test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${rj_arith_source_dir}/src
+)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(
+        rj_arith_v_wmma_f32_16x16x16_bf16_w64_test
+        PRIVATE -Wall -Wextra -Werror -pedantic
+    )
+endif()
+rj_add_gtest_tests(
+    rj_arith_v_wmma_f32_16x16x16_bf16_w64_test
     TEST_PREFIX "rj_arith."
 )
 
