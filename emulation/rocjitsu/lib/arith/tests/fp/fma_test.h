@@ -11,6 +11,7 @@
 #include "common/semantics.h"
 #include "fp/elementwise.h"
 #include "fp/fma_reference.h"
+#include "fp/fma_simd_test.h"
 #include "fp/reference.h"
 #include "rj_arith/rj_arith.h"
 
@@ -26,6 +27,8 @@ namespace rocjitsu::arith::test {
 template <int Lanes, typename Call> void check_fma(Call call, bool gfx12) {
   constexpr int Width = 32;
   using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
+  check_fma_simd<32, Lanes>(
+      call, {0, RJ_ARITH_ALU_NEG_A | RJ_ARITH_ALU_ABS_B, RJ_ARITH_ALU_CLAMP, RJ_ARITH_ALU_OMOD_2});
   using Registers = rocjitsu::arith::test::Registers<10, Lanes>;
   Registers input = make_fp_inputs<Width, Lanes>();
 

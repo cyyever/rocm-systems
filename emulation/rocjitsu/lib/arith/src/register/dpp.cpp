@@ -18,6 +18,12 @@ void dpp8_source(uint64_t flags, uint32_t exec_mask, uint64_t mode, uint32_t *ou
                  const uint32_t *a) {
   uint32_t selectors = uint32_t(mode >> RJ_ARITH_DPP8_SELECT_SHIFT);
   bool fi = (mode & RJ_ARITH_DPP_FI) != 0;
+#if defined(RJ_ARITH_HAVE_X86_64_V3)
+  if ((flags & RJ_ARITH_CPU_MASK) >= RJ_ARITH_CPU_X86_64_V3) {
+    dpp8_x86_64_v3(exec_mask, selectors, fi, out, a);
+    return;
+  }
+#endif
   (void)flags;
   for (int lane = 0; lane < 32; ++lane) {
     int src = (lane & ~7u) | ((selectors >> (3 * (lane & 7))) & 7);
@@ -58,6 +64,11 @@ uint32_t dpp16_source(uint64_t flags, uint32_t exec_mask, uint64_t mode, uint32_
   }
   bool fi = (mode & RJ_ARITH_DPP_FI) != 0;
   uint32_t readable = 0;
+#if defined(RJ_ARITH_HAVE_X86_64_V3)
+  if ((flags & RJ_ARITH_CPU_MASK) >= RJ_ARITH_CPU_X86_64_V3) {
+    readable = dpp16_x86_64_v3(exec_mask, ctrl, valid_row, fi, out, a);
+  } else
+#endif
   {
     for (int lane = 0; lane < 32; ++lane) {
       int sub = lane & 15, index = sub;

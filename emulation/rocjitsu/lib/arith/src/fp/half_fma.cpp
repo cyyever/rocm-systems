@@ -4,6 +4,8 @@
 // gfx11/gfx12 FP16 FMA with guest rounding and optional FP status.
 // Owns public entry points and their validation/dispatch policy.
 
+#include "fp/half_fma.h"
+#include "common/exact_arithmetic.h"
 #include "common/internal.h"
 #include "fp/half_fma_scalar.h"
 #include "register/dpp.h"
@@ -44,6 +46,24 @@ int run(uint64_t flags, uint32_t exec_mask, uint64_t mode, uint32_t *const *d,
   if (exec_mask == 0) {
     return RJ_ARITH_SUCCESS;
   }
+#if defined(RJ_ARITH_HAVE_X86_64_V3)
+  if ((rocjitsu::arith::is_exact(flags) || (flags & RJ_ARITH_FP_ROUND_MASK)) &&
+      (flags & RJ_ARITH_CPU_MASK) >= RJ_ARITH_CPU_X86_64_V3) {
+
+    if (rocjitsu::arith::half_fma_exact_x86_64_v3(flags, exec_mask, uint32_t(mode), d[0], a[0],
+                                                  b[0], c[0], excp_flag_user, Rdna3)) {
+      return RJ_ARITH_SUCCESS;
+    }
+  }
+#endif
+#if defined(RJ_ARITH_HAVE_X86_64_V3)
+  bool exact = rocjitsu::arith::is_exact(flags);
+  if (!exact && !(flags & RJ_ARITH_FP_ROUND_MASK) &&
+      (flags & RJ_ARITH_CPU_MASK) >= RJ_ARITH_CPU_X86_64_V3) {
+    rocjitsu::arith::half_fma_x86_64_v3(flags, exec_mask, mode, d[0], a[0], b[0], c[0]);
+    return RJ_ARITH_SUCCESS;
+  }
+#endif
   int a_shift = mode & RJ_ARITH_ALU_HIGH_A ? 16 : 0;
   int b_shift = mode & RJ_ARITH_ALU_HIGH_B ? 16 : 0;
   int c_shift = mode & RJ_ARITH_ALU_HIGH_C ? 16 : 0;

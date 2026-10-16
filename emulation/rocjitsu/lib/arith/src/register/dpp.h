@@ -17,6 +17,12 @@ namespace rocjitsu::arith {
 void dpp8_source(uint64_t flags, uint32_t exec_mask, uint64_t mode, uint32_t *out,
                  const uint32_t *a);
 
+// Evaluate dpp8 for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+void dpp8_x86_64_v3(uint32_t exec_mask, uint32_t selectors, bool fi, uint32_t *out,
+                    const uint32_t *a);
+
 // Checks descriptor fields and the RDNA4 control encoding; low 32 bits are
 // validated by the instruction. Zero denotes no DPP modifier.
 bool valid_dpp(uint64_t mode);
@@ -25,6 +31,12 @@ bool valid_dpp(uint64_t mode);
 // row/bank/source filtering. out must not overlap a. Valid descriptor required.
 uint32_t dpp16_source(uint64_t flags, uint32_t exec_mask, uint64_t mode, uint32_t *out,
                       const uint32_t *a);
+
+// Evaluate dpp16 for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+uint32_t dpp16_x86_64_v3(uint32_t exec_mask, uint32_t control, uint32_t valid_row, bool fi,
+                         uint32_t *out, const uint32_t *a);
 
 // Applies DPP to one 32-bit source VGPR, then executes vector-only arithmetic.
 // execute(exec_mask, source_a) must validate flags before touching operands, leave all
