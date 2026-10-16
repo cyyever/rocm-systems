@@ -30,6 +30,8 @@ env:
   CORPUS_SHA: 6186d5c8bcd5e9bc93f7406e7cb50ed2a7698621
   ROCJITSU_SOURCE_DIR: ${{ github.workspace }}/rocm-systems/emulation/rocjitsu
   CORPUS_SOURCE_DIR: ${{ github.workspace }}/rocjitsu-test-corpus
+  TENSILE_SOURCE: ${{ github.workspace }}/tensile-source
+  NANOBIND_SOURCE: ${{ github.workspace }}/native-nanobind
   RESULTS_BRANCH: gh-pages-rocjitsu
   RESULTS_ARTIFACT: rocjitsu-benchmark-${{ github.run_id }}-${{ github.run_attempt }}
   RESULTS_DOWNLOAD_DIR: ${{ github.workspace }}/benchmark-results
@@ -128,39 +130,40 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
 
     steps:
-      - name: Validate benchmark source
+      - name: Set benchmark paths
+        timeout-minutes: 1
         env:
           SOURCE_REF_TYPE: ${{ github.ref_type }}
         run: |
-          # The Run workflow branch selector also chooses the workflow revision.
           if [[ "${SOURCE_REF_TYPE}" != branch ]]; then
             echo "::error::Select a branch, not a tag, when running this workflow."
             exit 1
           fi
-
-      - name: Set benchmark paths
-        run: |
+          : "${RUNNER_TEMP:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_ATTEMPT:?}"
+          [[ "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" =~ ^[0-9]+:[0-9]+$ ]]
           BENCHMARK_DIR="${RUNNER_TEMP}/rocjitsu-benchmark-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          [[ ! -e "${BENCHMARK_DIR}" && ! -L "${BENCHMARK_DIR}" ]]
+          mkdir -m 700 "${BENCHMARK_DIR}"
+          printf '%s:%s\n' "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" > "${BENCHMARK_DIR}/.owned-attempt"
           {
+            echo "BENCHMARK_DIR=${BENCHMARK_DIR}"
+            echo "SETUP_STARTED_AT=$(date +%s)"
             echo "ROCJITSU_BUILD_DIR=${BENCHMARK_DIR}/build"
             echo "ROCJITSU_VENV=${BENCHMARK_DIR}/venv"
             echo "ROCJITSU_RESULT_DIR=${BENCHMARK_DIR}/results"
+            echo "PYTHONDONTWRITEBYTECODE=1"
           } >> "${GITHUB_ENV}"
 
       - name: Install base dependencies
+        timeout-minutes: 5
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential \
-            ca-certificates \
-            clang \
-            cmake \
-            git \
-            libclang-rt-dev \
-            libdrm-dev \
-            ninja-build
+            build-essential ca-certificates clang cmake git libclang-rt-dev \
+            libdrm-dev libomp-dev ninja-build python3-dev zlib1g-dev
 
       - name: Checkout rocm-systems
+        timeout-minutes: 2
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           path: rocm-systems
@@ -168,6 +171,7 @@ jobs:
           persist-credentials: false
 
       - name: Record benchmark source
+        timeout-minutes: 1
         id: source
         working-directory: rocm-systems
         run: |
@@ -175,6 +179,7 @@ jobs:
           printf 'commit_message=%s\n' "${COMMIT_MESSAGE}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout benchmark corpus
+        timeout-minutes: 2
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: ROCm/rocjitsu-test-corpus
@@ -182,42 +187,56 @@ jobs:
           path: rocjitsu-test-corpus
           persist-credentials: false
 
+      - name: Checkout pinned Tensile source
+        timeout-minutes: 2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: ROCm/rocm-libraries
+          ref: dd77374194a3ea1a7258cd54f87af6747b6362a5
+          path: tensile-source
+          persist-credentials: false
+
+      - name: Checkout pinned native nanobind
+        timeout-minutes: 2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          repository: wjakob/nanobind
+          ref: 9b3afa9dbdc23641daf26fadef7743e7127ff92f
+          path: native-nanobind
+          submodules: recursive
+          persist-credentials: false
+
       - name: Record benchmark machine
+        timeout-minutes: 1
         id: machine
         run: echo "name=${RUNNER_NAME}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Python
+        timeout-minutes: 1
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Install benchmark dependencies
-        run: |
-          python -m venv "${ROCJITSU_VENV}"
-          "${ROCJITSU_VENV}/bin/python" -m pip install \
-            --disable-pip-version-check \
-            -r "${CORPUS_SOURCE_DIR}/benchmarks/requirements.txt"
-
-          ROCM_PATH="$("${ROCJITSU_VENV}/bin/rocm-sdk" path --root)"
-          echo "ROCM_PATH=${ROCM_PATH}" >> "${GITHUB_ENV}"
-          echo "LD_LIBRARY_PATH=${ROCM_PATH}/lib:${LD_LIBRARY_PATH:-}" >> "${GITHUB_ENV}"
+        timeout-minutes: 20
+        run: python "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" dependencies
 
       - name: Build rocjitsu
+        timeout-minutes: 8
+        run: python "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" rocjitsu
+
+      - name: Prepare Tensile wheel and native adapter
+        timeout-minutes: 45
+        run: python "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" native
+
+      - name: Generate pinned Tensile artifacts
+        timeout-minutes: 45
+        id: prepare
         run: |
-          cmake -S "${ROCJITSU_SOURCE_DIR}" -B "${ROCJITSU_BUILD_DIR}" -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DLTO=OFF \
-            -DRJ_ENABLE_ASAN=OFF \
-            -DRJ_ENABLE_MSAN=OFF \
-            -DRJ_ENABLE_TSAN=OFF \
-            -DRJ_ENABLE_UBSAN=OFF \
-            -DCMAKE_C_COMPILER="${ROCM_PATH}/lib/llvm/bin/amdclang" \
-            -DCMAKE_CXX_COMPILER="${ROCM_PATH}/lib/llvm/bin/amdclang++"
-          cmake --build "${ROCJITSU_BUILD_DIR}" \
-            --target rocjitsu_bin rocjitsu_shared
+          "${ROCJITSU_VENV}/bin/python" "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" generate
 
       - name: Run performance suite
+        if: ${{ success() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 60
         id: benchmark
         working-directory: ${{ env.CORPUS_SOURCE_DIR }}
@@ -232,14 +251,45 @@ jobs:
             --manifest benchmarks/suites/performance-v1.toml \
             --output "${ROCJITSU_RESULT_DIR}"
 
+      - name: Collect preparation diagnostics
+        if: always()
+        timeout-minutes: 3
+        run: |
+          if [[ -n "${BENCHMARK_DIR:-}" && -f "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" ]]; then
+            python "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" diagnostics
+          else
+            echo "::warning::Preparation helper unavailable; retain Actions setup logs."
+          fi
+
       - name: Upload benchmark diagnostics
         if: always()
+        timeout-minutes: 4
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.RESULTS_ARTIFACT }}
           path: ${{ env.ROCJITSU_RESULT_DIR }}
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload preparation diagnostics
+        if: always()
+        timeout-minutes: 6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rocjitsu-preparation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BENCHMARK_DIR }}/preparation-diagnostics.tar.gz
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Clean owned benchmark scratch
+        if: always()
+        timeout-minutes: 2
+        run: |
+          if [[ -n "${BENCHMARK_DIR:-}" && -f "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" ]]; then
+            python "${ROCJITSU_SOURCE_DIR}/scripts/prepare-benchmarks.py" cleanup
+          else
+            echo "::warning::Ownership cannot be checked without helper; scratch retained."
+          fi
 
   publish:
     name: Publish dashboard data
