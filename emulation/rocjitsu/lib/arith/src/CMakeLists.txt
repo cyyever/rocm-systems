@@ -27,6 +27,7 @@ add_library(
     dot/fp8_dot.cpp
     dot/half_dot.cpp
     dot/integer_dot.cpp
+    dual/dual.cpp
     fp/arithmetic.cpp
     fp/binary.cpp
     fp/div_fixup.cpp
