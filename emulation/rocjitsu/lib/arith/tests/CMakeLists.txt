@@ -192,6 +192,32 @@ foreach(
 endforeach()
 
 # Conversion layouts share contract checks; family references remain independent.
+foreach(
+    family
+    IN
+    ITEMS
+        integer_pack
+        byte
+        float16
+        float32
+        float64
+        normalized
+        packed
+        fp8_widen
+        fp8_narrow
+)
+    set(target "rj_arith_conversion_${family}_test")
+    add_executable(${target} conversion/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            ${target}
+            PRIVATE -Wall -Wextra -Werror -pedantic
+        )
+    endif()
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+endforeach()
 
 # Dot-product formats retain family-specific arithmetic and status expectations.
 foreach(family IN ITEMS integer fp8 half dot2)
