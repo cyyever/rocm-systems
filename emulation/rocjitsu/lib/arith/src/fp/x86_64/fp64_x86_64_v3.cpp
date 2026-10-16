@@ -6,6 +6,7 @@
 
 #include "common/x86_64/alu_x86_64_v3.h"
 #include "fp/fp64.h"
+#include "fp/x86_64/minmax_x86_64_v3.h"
 #include "rj_arith/rj_arith.h"
 
 #include <immintrin.h>
@@ -38,7 +39,8 @@ template <Fp64 Op>
 void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
          const uint32_t *const *a, const uint32_t *const *b, const uint32_t *const *c) {
   constexpr bool basic = Op == Fp64::Add || Op == Fp64::Mul || Op == Fp64::Fma;
-
+  constexpr bool selection = Op == Fp64::MinLegacy || Op == Fp64::MaxLegacy || Op == Fp64::MinNum ||
+                             Op == Fp64::MaxNum || Op == Fp64::Minimum || Op == Fp64::Maximum;
   auto ka = _mm256_set1_epi64x(mode & RJ_ARITH_ALU_ABS_A ? INT64_MAX : -1);
   auto kb = _mm256_set1_epi64x(mode & RJ_ARITH_ALU_ABS_B ? INT64_MAX : -1);
   auto kc = _mm256_set1_epi64x(mode & RJ_ARITH_ALU_ABS_C ? INT64_MAX : -1);
@@ -53,7 +55,7 @@ void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
     if constexpr (fp64_sources(Op) >= 2) {
       y = load(b, lane, kb, nb);
     }
-    if ((basic) && (flags & RJ_ARITH_FP_FLUSH_INPUT_DENORMALS)) {
+    if ((basic || selection) && (flags & RJ_ARITH_FP_FLUSH_INPUT_DENORMALS)) {
       x = flush_denorm(x);
       y = flush_denorm(y);
     }
@@ -71,7 +73,21 @@ void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
       }
       value = _mm256_fmadd_pd(x, y, z);
     }
-
+    if constexpr (Op == Fp64::MinLegacy || Op == Fp64::MaxLegacy) {
+      value = minmax_rdna3<Op == Fp64::MaxLegacy>(x, y, flags & RJ_ARITH_FP_IEEE_MODE);
+    }
+    if constexpr (Op == Fp64::MinNum) {
+      value = minmax<false, false>(x, y);
+    }
+    if constexpr (Op == Fp64::MaxNum) {
+      value = minmax<true, false>(x, y);
+    }
+    if constexpr (Op == Fp64::Minimum) {
+      value = minmax<false, true>(x, y);
+    }
+    if constexpr (Op == Fp64::Maximum) {
+      value = minmax<true, true>(x, y);
+    }
     if constexpr (Op == Fp64::FrexpMant) {
       auto original = _mm256_castpd_si256(x);
       auto magnitude = _mm256_and_si256(original, _mm256_set1_epi64x(INT64_MAX));
@@ -173,7 +189,18 @@ void fp64_x86_64_v3(Fp64 op, uint64_t flags, uint32_t exec_mask, uint32_t mode, 
     return run<Fp64::Rcp>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Rsq:
     return run<Fp64::Rsq>(flags, exec_mask, mode, d, a, b, c);
-
+  case Fp64::MinLegacy:
+    return run<Fp64::MinLegacy>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::MaxLegacy:
+    return run<Fp64::MaxLegacy>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::MinNum:
+    return run<Fp64::MinNum>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::MaxNum:
+    return run<Fp64::MaxNum>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::Minimum:
+    return run<Fp64::Minimum>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::Maximum:
+    return run<Fp64::Maximum>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Add:
     return run<Fp64::Add>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Mul:
