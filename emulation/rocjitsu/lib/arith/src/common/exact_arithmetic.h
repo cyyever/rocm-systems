@@ -35,6 +35,10 @@ bool packed_fma_exact_x86_64_v3(uint64_t flags, uint32_t exec_mask, const uint32
 #endif
 
 #if defined(RJ_ARITH_HAVE_X86_64_V4)
+// Attempt the documented finite domains without changing outputs on decline.
+// Requires default host FP state. Reporting follows the resolved semantics.
+bool mul_exact_x86_64_v4(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *d,
+                         const uint32_t *a, const uint32_t *b, uint32_t *state);
 
 // All FP32 inputs and guest rounding modes; exceptional/tiny lanes use scalar repair.
 bool fma_exact_x86_64_v4(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *d,
