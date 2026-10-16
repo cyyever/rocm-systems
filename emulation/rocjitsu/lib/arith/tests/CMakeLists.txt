@@ -239,6 +239,19 @@ foreach(
     endif()
 endforeach()
 
+# Graphics families retain their independent interpolation and selection references.
+foreach(family IN ITEMS cube interp mullit)
+    set(target "rj_arith_graphics_${family}_test")
+    add_executable(${target} graphics/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    rj_configure_target(${target} WARNINGS)
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+    if(RJ_INSTALL_TESTS)
+        file(APPEND "${RJ_INSTALL_CTEST_FILE}" "include(\"${target}.cmake\")\n")
+    endif()
+endforeach()
+
 # Math families share unary layouts, with independent loose and exact references.
 foreach(
     family
