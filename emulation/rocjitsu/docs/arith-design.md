@@ -4,7 +4,7 @@
 
 Empirical exact arithmetic is available for the seed WMMA/FMA; other declarations state their support.
 FP status support is available for gfx12 FP16 FMA; other instructions document their limits.
-CPU implementations are scalar; SIMD backends are planned.
+CPU implementations are scalar and AVX2.
 Benchmark commands and Rocjitsu integration described below are planned.
 
 The remaining design describes the intended interface; family headers state current support.
