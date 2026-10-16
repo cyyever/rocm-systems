@@ -3,8 +3,7 @@
 ## Current implementation
 
 Both entry points support loose and empirical bit-exact semantics with default controls.
-FMA supports modes 0–2; FP-status reporting is deferred. WMMA has no FP-status
-output and accepts modes 0–3.
+FMA reports FP status in mode 3; WMMA accepts modes 0–3 without an FP-status output.
 CPU implementations are scalar; SIMD backends are planned.
 Compatibility and instruction modifiers are planned; mode 7 is currently rejected.
 Benchmark commands and Rocjitsu integration described below are planned.

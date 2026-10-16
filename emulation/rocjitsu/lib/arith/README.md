@@ -3,7 +3,7 @@
 ## Current implementation
 
 Both entry points support loose and empirical bit-exact semantics with default controls.
-FMA accepts modes 0–2; WMMA accepts modes 0–3 and has no FP-status output.
+FMA reports FP status in mode 3; WMMA accepts modes 0–3 without an FP-status output.
 CPU implementations are scalar; SIMD backends are planned.
 Compatibility and instruction modifiers are planned; mode 7 is currently rejected.
 Benchmark commands and Rocjitsu integration described below are planned.
@@ -24,6 +24,9 @@ See [coverage per architecture](COVERAGE.md) for instruction-family support.
 
 Only gfx12 Wave32 FP16 WMMA with FP32 output and FP16 FMA are implemented.
 Rocjitsu continues to use its existing instruction handlers.
+
+For gfx12 FP16 FMA and FP32-output WMMA, modes 0–3 are supported.
+FMA mode 3 accumulates FP status; WMMA has no FP-status output.
 
 ## Build and run
 
