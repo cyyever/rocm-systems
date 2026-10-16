@@ -1665,6 +1665,7 @@
       "timeout": 300,
       "description": "Classic-only: NCCL_RMA_IB_WR_BATCHSIZE is read by the classic RMA proxy alone, so these runs stay out of the IB-CAST twin.",
       "env_variables": {
+        "NCCL_MULTI_SEGMENT_REGISTER": "1",
         "NCCL_NET": "ib",
         "NCCL_CUMEM_ENABLE": "1",
         "NCCL_DEBUG_SUBSYS": "ALL",
