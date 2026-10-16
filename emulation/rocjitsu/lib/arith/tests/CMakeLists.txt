@@ -252,6 +252,39 @@ foreach(family IN ITEMS cube interp mullit)
     endif()
 endforeach()
 
+# Scalar families keep required SCC/EXEC results distinct from FP status.
+foreach(
+    family
+    IN
+    ITEMS
+        boolean
+        shift
+        move
+        field
+        count
+        pack
+        arithmetic
+        compare_integer
+        compare_float
+        exec
+        fp
+        round
+        conversion
+        state
+        relative
+        pseudo
+)
+    set(target "rj_arith_scalar_${family}_test")
+    add_executable(${target} scalar/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    rj_configure_target(${target} WARNINGS)
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+    if(RJ_INSTALL_TESTS)
+        file(APPEND "${RJ_INSTALL_CTEST_FILE}" "include(\"${target}.cmake\")\n")
+    endif()
+endforeach()
+
 # Math families share unary layouts, with independent loose and exact references.
 foreach(
     family
