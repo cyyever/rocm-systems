@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// gfx12 FP16/FP32 FMA: deterministic fractional inputs, exceptional values,
+// RDNA3/gfx12 FP16/FP32 FMA: deterministic fractional inputs, exceptional values,
 // EXEC, whole-register aliases, preserved halfwords, and errors.
 
 #pragma once
@@ -24,7 +24,7 @@
 namespace rocjitsu::arith::test {
 
 // Check low-half arithmetic and that all storage outside active results is preserved.
-template <int Lanes, typename Call> void check_fma16(Call call) {
+template <int Lanes, bool Rdna3 = false, typename Call> void check_fma16(Call call) {
   using namespace rocjitsu::arith::test;
   using RegBank = Registers<5, Lanes>;
   using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
@@ -51,6 +51,14 @@ template <int Lanes, typename Call> void check_fma16(Call call) {
         for (int aliasing_offset : {0, 1, 2, 3}) {
           RegBank r = input;
           uint32_t status = 0x80000000U;
+          if (Rdna3 && semantics == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL) {
+            EXPECT_EQ(call(cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1,
+                           r.v + 2, &status),
+                      RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
+            r.expect_preserved(input, 0, 0);
+            EXPECT_EQ(status, 0x80000000U);
+            continue;
+          }
           ASSERT_EQ(call(cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1,
                          r.v + 2, &status),
                     RJ_ARITH_SUCCESS);
@@ -76,7 +84,11 @@ template <int Lanes, typename Call> void check_fma16(Call call) {
                 semantics == RJ_ARITH_SEMANTICS_LOOSE
                     ? half_bits(value)
                     : half_fma_reference::evaluate(input.v[0][lane], input.v[1][lane],
-                                                   input.v[2][lane], false);
+                                                   input.v[2][lane], false, Rdna3);
+            if (semantics != RJ_ARITH_SEMANTICS_LOOSE) {
+              EXPECT_EQ(uint16_t(actual), expected_bits);
+              continue;
+            }
             float expected = float(half_value(expected_bits));
             expect_f32(std::bit_cast<uint32_t>(float(half_value(uint16_t(actual)))), expected,
                        semantics,
@@ -89,7 +101,7 @@ template <int Lanes, typename Call> void check_fma16(Call call) {
 }
 
 // The existing rocjitsu FP32 FMA model agrees with std::fma on these inputs.
-template <int Lanes, typename Call> void check_fma32(Call call) {
+template <int Lanes, bool Rdna3 = false, typename Call> void check_fma32(Call call) {
   using namespace rocjitsu::arith::test;
   using RegBank = Registers<5, Lanes>;
   using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;

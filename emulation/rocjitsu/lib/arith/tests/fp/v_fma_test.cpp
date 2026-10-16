@@ -30,14 +30,16 @@ TEST(FpFmaF32W64Gfx12, Arithmetic) {
 
 // Raw encodings from rocjitsu shared/fp_mode.h's default-mode FP32 FMA rules.
 // The finite witness distinguishes fused arithmetic from a rounded multiply plus add.
-template <int Lanes, typename Call> static void check_fma32_encodings(Call call) {
+template <int Lanes, bool Rdna3 = false, typename Call>
+static void check_fma32_encodings(Call call) {
   using namespace rocjitsu::arith::test;
   const struct {
     uint32_t a, b, c, expected;
   } cases[] = {
       {0x3f800001, 0x3f7ffffe, 0xbf800000, 0xa8800000}, // Fused cancellation.
       {0, 0x7f800000, 0x7fc12345, 0xffc00000},          // Invalid product beats C NaN.
-      {0x7f800003, 0x7fc00005, 0, 0x7fc00003},          // First NaN, quieted.
+      {0x7f800003, 0x7fc00005, 0,
+       Rdna3 ? 0x7f800003U : 0x7fc00003U},              // gfx11 retains signaling NaNs.
       {0x80000000, 0x3f800000, 0x80000000, 0x80000000}, // Matching negative zeros.
       {3, 0x3f000000, 0, 2},                            // Subnormal halfway rounds to even.
   };
@@ -61,6 +63,29 @@ template <int Lanes, typename Call> static void check_fma32_encodings(Call call)
 // Check exact FP32 encodings for both wave widths against the same model cases.
 TEST(FpFmaF32W32Gfx12, ExactEncodings) { check_fma32_encodings<32>(rj_arith_v_fma_f32_w32_gfx12); }
 TEST(FpFmaF32W64Gfx12, ExactEncodings) { check_fma32_encodings<64>(rj_arith_v_fma_f32_w64_gfx12); }
+// The same witnesses distinguish gfx11's signaling-NaN policy from gfx12.
+TEST(FpFmaF32W32, ExactEncodings) { check_fma32_encodings<32, true>(rj_arith_v_fma_f32_w32); }
+TEST(FpFmaF32W64, ExactEncodings) { check_fma32_encodings<64, true>(rj_arith_v_fma_f32_w64); }
+
+// Check the gfx11 arithmetic and unsupported status contract.
+TEST(FpFmaF16W32, Arithmetic) {
+  rocjitsu::arith::test::check_fma16<32, true>(rj_arith_v_fma_f16_w32);
+}
+
+// Check the gfx11 arithmetic and unsupported status contract.
+TEST(FpFmaF16W64, Arithmetic) {
+  rocjitsu::arith::test::check_fma16<64, true>(rj_arith_v_fma_f16_w64);
+}
+
+// Check the gfx11 arithmetic and unsupported status contract.
+TEST(FpFmaF32W32, Arithmetic) {
+  rocjitsu::arith::test::check_fma32<32, true>(rj_arith_v_fma_f32_w32);
+}
+
+// Check the gfx11 arithmetic and unsupported status contract.
+TEST(FpFmaF32W64, Arithmetic) {
+  rocjitsu::arith::test::check_fma32<64, true>(rj_arith_v_fma_f32_w64);
+}
 
 // Guard ordinary midpoints and the finite/infinite boundary against double rounding.
 TEST(FpFmaF16W32Gfx12, RoundingBoundaries) {

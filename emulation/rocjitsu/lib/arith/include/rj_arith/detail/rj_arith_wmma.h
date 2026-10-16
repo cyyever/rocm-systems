@@ -16,6 +16,27 @@ extern "C" {
 
 // Dense matrix multiply-accumulate; operands contain one complete wave.
 // Results are staged before writes, permitting whole-VGPR aliases.
+// Both architectures support modes 0..3 without an FP-status output. Instruction
+// flags must be zero; CPU/semantics fields and FP16_OVFL are the only accepted flags.
+// FP16_OVFL has no effect on these FP32 results.
+// gfx11 A/B each use 8 VGPRs; C/D use 8 in Wave32 and 4 in Wave64.
+// Factors are replicated across groups of 16 lanes, unlike the gfx12 layout.
+int rj_arith_v_wmma_f32_16x16x16_f16_w32(uint64_t flags, uint64_t instruction_flags,
+                                         uint32_t *const *d, const uint32_t *const *a,
+                                         const uint32_t *const *b, const uint32_t *const *c);
+
+int rj_arith_v_wmma_f32_16x16x16_f16_w64(uint64_t flags, uint64_t instruction_flags,
+                                         uint32_t *const *d, const uint32_t *const *a,
+                                         const uint32_t *const *b, const uint32_t *const *c);
+
+int rj_arith_v_wmma_f32_16x16x16_bf16_w32(uint64_t flags, uint64_t instruction_flags,
+                                          uint32_t *const *d, const uint32_t *const *a,
+                                          const uint32_t *const *b, const uint32_t *const *c);
+
+int rj_arith_v_wmma_f32_16x16x16_bf16_w64(uint64_t flags, uint64_t instruction_flags,
+                                          uint32_t *const *d, const uint32_t *const *a,
+                                          const uint32_t *const *b, const uint32_t *const *c);
+
 // Instruction flags must be zero. Only CPU-level and semantics fields (with supported
 // values) and RJ_ARITH_FP16_OVFL are accepted; all other flag bits are rejected.
 // RJ_ARITH_FP16_OVFL is accepted but has no effect on the FP32 result.
