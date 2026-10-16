@@ -9,6 +9,7 @@ add_library(
     STATIC
     common/cpu.cpp
     common/cpu_decode.cpp
+    fp/arithmetic.cpp
     fp/half_fma.cpp
     wmma/wmma.cpp
 )
