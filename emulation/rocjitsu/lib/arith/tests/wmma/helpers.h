@@ -33,6 +33,20 @@ void expect_matrix_invalid_flags(Call call, const Registers<RegistersCount, Lane
       supported_modifiers);
 }
 
+// Select two increasing K positions per group of four, using high engine bits.
+// Draw order is row-major and part of the deterministic golden-input contract.
+template <int K> void make_sparse_indices(std::minstd_rand &random, int (&selected)[16][K]) {
+  static_assert(K % 2 == 0);
+  const uint32_t pairs[] = {0x4, 0x8, 0xc, 0x9, 0xd, 0xe};
+  for (int row = 0; row < 16; ++row) {
+    for (int k = 0; k < K; k += 2) {
+      uint32_t pair = pairs[(random() >> 16) % 6];
+      selected[row][k] = 2 * k + (pair & 3);
+      selected[row][k + 1] = 2 * k + (pair >> 2);
+    }
+  }
+}
+
 // Write an A/B element in the gfx11 dense WMMA layout. Coordinate is the
 // A row or B column; each 16-lane group repeats the complete K vector.
 template <int Bits, int Lanes>
