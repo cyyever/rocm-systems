@@ -60,7 +60,7 @@ inline uint32_t fma_value_f32(uint32_t a, uint32_t b, uint32_t c, bool clamp, ui
 // Full ordinary FMA policy, shared by the scalar path and SIMD lane repair.
 [[gnu::always_inline]] inline uint32_t fma_instruction_value(uint32_t a, uint32_t b, uint32_t c,
                                                              uint64_t flags, uint32_t mode,
-                                                             bool rdna3) {
+                                                             bool rdna3, bool dx9_zero) {
   unsigned omod = (mode >> 6) & 3;
   uint32_t input[] = {a, b, c};
   for (int operand = 0; operand < 3; ++operand) {
@@ -74,7 +74,13 @@ inline uint32_t fma_value_f32(uint32_t a, uint32_t b, uint32_t c, bool clamp, ui
       input[operand] &= 0x80000000;
     }
   }
-
+  if (dx9_zero) {
+    if (!(input[0] & 0x7fffffff) || !(input[1] & 0x7fffffff)) {
+      // DX9 supplies a positive zero product before adding C.
+      input[0] = 0;
+      input[1] = 0x3f800000;
+    }
+  }
   // OMOD flushes a tiny intermediate before scaling, independently of MODE.
   uint32_t value = rocjitsu::arith::fma_value_f32(
       input[0], input[1], input[2], false, flags | (omod ? RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS : 0),

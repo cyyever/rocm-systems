@@ -6,11 +6,11 @@
 
 #pragma once
 
-#include "rj_arith/rj_arith.h"
-
 #include "common/float_formats.h"
 #include "common/internal.h"
 #include "fp/fma_integer.h"
+#include "fp/fp64.h"
+#include "rj_arith/rj_arith.h"
 
 #include <cmath>
 #include <stdint.h>

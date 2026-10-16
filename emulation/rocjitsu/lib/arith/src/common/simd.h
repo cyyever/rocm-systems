@@ -43,15 +43,34 @@ void wmma_packed_x86_64_v3(uint32_t modifiers, bool saturate, uint32_t *const *d
                            const uint32_t *const *a, const uint32_t *const *b,
                            const uint32_t *const *c);
 
+// Evaluate literal fma for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+template <bool Multiply>
+void literal_fma_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t literal, uint32_t *d,
+                           const uint32_t *a, const uint32_t *b);
+
 // Evaluate fma for the caller-selected operation. Preserve destination lanes outside
 // exec_mask.
 // Requires the named CPU features and validated instruction controls.
 void fma_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t modifiers, uint32_t *d,
                    const uint32_t *a, const uint32_t *b, const uint32_t *c);
 
+// Evaluate fma dx9 zero for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+void fma_dx9_zero_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t modifiers, uint32_t *d,
+                            const uint32_t *a, const uint32_t *b, const uint32_t *c);
 #endif
 
 #if defined(RJ_ARITH_HAVE_X86_64_V4)
+
+// Evaluate literal fma for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+template <bool Multiply>
+void literal_fma_x86_64_v4(uint64_t flags, uint32_t exec_mask, uint32_t literal, uint32_t *d,
+                           const uint32_t *a, const uint32_t *b);
 
 // Evaluate fma for the caller-selected operation. Preserve destination lanes outside
 // exec_mask.
@@ -59,6 +78,11 @@ void fma_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t modifiers, uint3
 void fma_x86_64_v4(uint64_t flags, uint32_t exec_mask, uint32_t modifiers, uint32_t *d,
                    const uint32_t *a, const uint32_t *b, const uint32_t *c);
 
+// Evaluate fma dx9 zero for the caller-selected operation. Preserve destination lanes outside
+// exec_mask.
+// Requires the named CPU features and validated instruction controls.
+void fma_dx9_zero_x86_64_v4(uint64_t flags, uint32_t exec_mask, uint32_t modifiers, uint32_t *d,
+                            const uint32_t *a, const uint32_t *b, const uint32_t *c);
 #endif
 
 #if defined(RJ_ARITH_HAVE_AVX512BF16)
