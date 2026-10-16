@@ -1,32 +1,5 @@
 # Rocjitsu Arithmetic Library design
 
-## Current implementation
-
-Dense WMMA supports FP16/BF16, packed accumulators, gfx12 FP8/BF8 and
-integer formats, in both wave sizes. Sparse WMMA adds 2:4 metadata selection
-with tied accumulators. Fused arithmetic includes FP16/FP32, packed halves,
-literals and mixed precision. Add, subtract, multiply and exponent operations
-are also available. Min/max/median selection and FP64 arithmetic currently
-support loose results only. Division helpers cover SCALE, FMAS and FIXUP;
-Dot products cover integer, FP16/BF16 and FP8/BF8 formats.
-Math includes reciprocal/root, rounding, log/exp and trigonometric operations.
-Comparisons produce scalar predicate masks, with gfx12 FP-status reporting.
-Integer operations include arithmetic, packed halves, bit manipulation and carry results.
-Conversions cover integer, FP16/FP32/FP64, normalized and packed FP8 formats.
-Register operations provide movement, lane transfers and cross-lane routing.
-Graphics operations add cube-map selection, interpolation and lighting multiply.
-Scalar instructions include arithmetic, comparisons and explicit SCC/EXEC/state outputs.
-Decoded dual-issue operations reuse the corresponding Wave32 arithmetic.
-Family headers describe exact-result and FP-status support.
-FP status is available for gfx12 FP16 FMA under default guest rounding and denormals,
-and for gfx12 FP32 MUL under nearest-even guest rounding.
-WMMA has no FP-status output; mode 3 has the same numeric requirements as mode 2.
-Source/output modifiers and FMA DPP routing are supported. Compatibility selects
-the established instruction policy. CPU implementations are scalar, AVX2, AVX-512 and native BF16.
-Benchmark commands and Rocjitsu integration described below are planned.
-
-The remaining design describes the intended interface; family headers state current support.
-
 This document describes the Rocjitsu Arithmetic Library (`rj-arith`), located in
 [`lib/arith/`](../lib/arith/). It implements GPU arithmetic on a CPU. Its interface follows GPU
 instructions and register layouts; its implementation uses portable C++ and
@@ -258,9 +231,7 @@ sanitizers provide broader validation; ordinary tests need no GPU.
 Each `*_test.cpp` builds as a separate executable, with individual GTest cases
 exposed to CTest. Public headers are compiled independently as C23 and C++17.
 
-## Benchmarking (planned)
-
-No benchmark executable is built at this stage. The following describes its intended interface.
+## Benchmarking
 
 ### Workloads and reported results
 

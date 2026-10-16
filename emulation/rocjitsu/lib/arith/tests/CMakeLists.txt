@@ -333,4 +333,5 @@ endif()
 add_subdirectory(headers)
 
 # Standalone utilities.
+add_subdirectory(benchmark)
 add_subdirectory(cpuinfo)
