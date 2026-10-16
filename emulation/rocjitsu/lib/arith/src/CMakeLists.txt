@@ -9,6 +9,10 @@ add_library(
     STATIC
     common/cpu.cpp
     common/cpu_decode.cpp
+    compare/class.cpp
+    compare/constant_compare.cpp
+    compare/float_compare.cpp
+    compare/integer_compare.cpp
     dot/dot.cpp
     dot/fp8_dot.cpp
     dot/half_dot.cpp

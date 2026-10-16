@@ -126,6 +126,30 @@ foreach(
     endif()
 endforeach()
 
+# Related comparison predicates share a binary; every entry point has its own test.
+foreach(
+    family
+    IN
+    ITEMS
+        constant
+        integer_equality
+        integer_ordering
+        class
+        float_equality
+        float_ordered
+        float_unordered
+)
+    set(target "rj_arith_compare_${family}_test")
+    add_executable(${target} compare/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    rj_configure_target(${target} WARNINGS)
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+    if(RJ_INSTALL_TESTS)
+        file(APPEND "${RJ_INSTALL_CTEST_FILE}" "include(\"${target}.cmake\")\n")
+    endif()
+endforeach()
+
 # Dot-product formats retain family-specific arithmetic and status expectations.
 foreach(family IN ITEMS integer fp8 half dot2)
     set(target "rj_arith_dot_${family}_test")
