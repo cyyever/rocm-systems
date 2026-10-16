@@ -134,7 +134,9 @@ unsupported behavior rather than silently falling back to loose arithmetic.
 Mode 7 is a temporary, instruction-specific policy outside the ordered modes.
 Each entry point resolves it before validation or calling another entry point;
 the resolved mode determines both numerical behavior and FP status reporting.
-Rocjitsu's JSON policy setting is planned for the later integration step.
+Rocjitsu's [`arithmetic.semantics`](configuration.md#cpu-arithmetic-policy)
+setting maps directly to these modes and defaults to compatibility. Its string
+values are the lowercase constant names without `RJ_ARITH_SEMANTICS_`.
 
 ### Guest FP controls
 
