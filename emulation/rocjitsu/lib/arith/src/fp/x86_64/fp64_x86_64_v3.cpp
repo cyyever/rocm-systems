@@ -37,7 +37,7 @@ __m256d flush_denorm(__m256d value) {
 template <Fp64 Op>
 void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
          const uint32_t *const *a, const uint32_t *const *b, const uint32_t *const *c) {
-  constexpr bool basic = Op == Fp64::Fma;
+  constexpr bool basic = Op == Fp64::Add || Op == Fp64::Mul || Op == Fp64::Fma;
 
   auto ka = _mm256_set1_epi64x(mode & RJ_ARITH_ALU_ABS_A ? INT64_MAX : -1);
   auto kb = _mm256_set1_epi64x(mode & RJ_ARITH_ALU_ABS_B ? INT64_MAX : -1);
@@ -58,7 +58,12 @@ void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
       y = flush_denorm(y);
     }
     __m256d value;
-
+    if constexpr (Op == Fp64::Add) {
+      value = _mm256_add_pd(x, y);
+    }
+    if constexpr (Op == Fp64::Mul) {
+      value = _mm256_mul_pd(x, y);
+    }
     if constexpr (Op == Fp64::Fma) {
       auto z = load(c, lane, kc, nc);
       if (flags & RJ_ARITH_FP_FLUSH_INPUT_DENORMALS) {
@@ -67,6 +72,22 @@ void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
       value = _mm256_fmadd_pd(x, y, z);
     }
 
+    if constexpr (Op == Fp64::FrexpMant) {
+      auto original = _mm256_castpd_si256(x);
+      auto magnitude = _mm256_and_si256(original, _mm256_set1_epi64x(INT64_MAX));
+      auto subnormal =
+          _mm256_cmpgt_epi64(_mm256_set1_epi64x(INT64_C(0x0010000000000000)), magnitude);
+      auto normalized = _mm256_blendv_pd(x, _mm256_mul_pd(x, _mm256_set1_pd(0x1p54)),
+                                         _mm256_castsi256_pd(subnormal));
+      auto mantissa =
+          _mm256_or_si256(_mm256_and_si256(_mm256_castpd_si256(normalized),
+                                           _mm256_set1_epi64x(int64_t(0x800fffffffffffffULL))),
+                          _mm256_set1_epi64x(INT64_C(0x3fe0000000000000)));
+      auto special = _mm256_or_si256(
+          _mm256_cmpeq_epi64(magnitude, _mm256_setzero_si256()),
+          _mm256_cmpgt_epi64(magnitude, _mm256_set1_epi64x(INT64_C(0x7ff0000000000000) - 1)));
+      value = _mm256_castsi256_pd(_mm256_blendv_epi8(mantissa, original, special));
+    }
     if constexpr (Op == Fp64::Trunc) {
       value = _mm256_round_pd(x, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
     }
@@ -134,7 +155,8 @@ void run(uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
 void fp64_x86_64_v3(Fp64 op, uint64_t flags, uint32_t exec_mask, uint32_t mode, uint32_t *const *d,
                     const uint32_t *const *a, const uint32_t *const *b, const uint32_t *const *c) {
   switch (op) {
-
+  case Fp64::FrexpMant:
+    return run<Fp64::FrexpMant>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Trunc:
     return run<Fp64::Trunc>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Ceil:
@@ -152,6 +174,10 @@ void fp64_x86_64_v3(Fp64 op, uint64_t flags, uint32_t exec_mask, uint32_t mode, 
   case Fp64::Rsq:
     return run<Fp64::Rsq>(flags, exec_mask, mode, d, a, b, c);
 
+  case Fp64::Add:
+    return run<Fp64::Add>(flags, exec_mask, mode, d, a, b, c);
+  case Fp64::Mul:
+    return run<Fp64::Mul>(flags, exec_mask, mode, d, a, b, c);
   case Fp64::Fma:
     return run<Fp64::Fma>(flags, exec_mask, mode, d, a, b, c);
   }
