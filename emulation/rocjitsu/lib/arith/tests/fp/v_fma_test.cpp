@@ -1,51 +1,80 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// FMA arithmetic and storage contracts for both wave sizes and element types.
+// Tests for fused arithmetic across FP widths, aliases, and guest controls.
 
 #include "common/cpu.h"
 #include "common/registers.h"
 #include "fp/fma_test.h"
+#include "fp/half_fma_test.h"
 #include "rj_arith/rj_arith.h"
 
-// Check FP16 arithmetic for Wave32.
+#include <gtest/gtest.h>
+#include <stdint.h>
+
+namespace {
+
+// Literal exception contributions from the inherited rocjitsu model and the
+// old suite's gfx1201-validated cases. Test each cause alone, then accumulated;
+// an inactive exceptional lane must not contribute. No host flags are read.
+struct StatusCase {
+  uint64_t a, b, c;
+  uint32_t causes;
+};
+
+const StatusCase status_cases_f16[] = {
+    {0x3c00U, 0x3c00U, 0x0U, 0},
+    {0x0U, 0x7c00U, 0x0U, RJ_ARITH_EXCEPTION_INVALID},
+    {0x7bffU, 0x4000U, 0x0U, RJ_ARITH_EXCEPTION_OVERFLOW | RJ_ARITH_EXCEPTION_INEXACT},
+    {0x3c01U, 0x3c01U, 0x0U, RJ_ARITH_EXCEPTION_INEXACT},
+    {0x1U, 0x3800U, 0x0U,
+     RJ_ARITH_EXCEPTION_INPUT_DENORM | RJ_ARITH_EXCEPTION_UNDERFLOW | RJ_ARITH_EXCEPTION_INEXACT},
+};
+
+} // namespace
+
+// Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W32Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_fma16<32>(rj_arith_v_fma_f16_w32_gfx12);
+  rocjitsu::arith::test::check_half_fma<32>(rj_arith_v_fma_f16_w32_gfx12, /*gfx12=*/true,
+                                            status_cases_f16);
 }
 
-// Check FP16 arithmetic for Wave64.
-TEST(FpFmaF16W64Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_fma16<64>(rj_arith_v_fma_f16_w64_gfx12);
-}
-
-// Check FP32 arithmetic for Wave32.
-TEST(FpFmaF32W32Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_fma32<32>(rj_arith_v_fma_f32_w32_gfx12);
-}
-
-// Check FP32 arithmetic for Wave64.
-TEST(FpFmaF32W64Gfx12, Arithmetic) {
-  rocjitsu::arith::test::check_fma32<64>(rj_arith_v_fma_f32_w64_gfx12);
-}
-
-// Check the gfx11 arithmetic and unsupported status contract.
+// Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W32, Arithmetic) {
-  rocjitsu::arith::test::check_fma16<32, true>(rj_arith_v_fma_f16_w32);
+  rocjitsu::arith::test::check_half_fma<32>(rj_arith_v_fma_f16_w32, /*gfx12=*/false,
+                                            status_cases_f16);
 }
 
-// Check the gfx11 arithmetic and unsupported status contract.
+// Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
+TEST(FpFmaF16W64Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_half_fma<64>(rj_arith_v_fma_f16_w64_gfx12, /*gfx12=*/true,
+                                            status_cases_f16);
+}
+
+// Check FP16 fused arithmetic, halfword selection, aliases, and FP-status cases.
 TEST(FpFmaF16W64, Arithmetic) {
-  rocjitsu::arith::test::check_fma16<64, true>(rj_arith_v_fma_f16_w64);
+  rocjitsu::arith::test::check_half_fma<64>(rj_arith_v_fma_f16_w64, /*gfx12=*/false,
+                                            status_cases_f16);
 }
 
-// Check the gfx11 arithmetic and unsupported status contract.
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF32W32Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma<32, 32>(rj_arith_v_fma_f32_w32_gfx12, /*gfx12=*/true);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
 TEST(FpFmaF32W32, Arithmetic) {
-  rocjitsu::arith::test::check_fma32<32, true>(rj_arith_v_fma_f32_w32);
+  rocjitsu::arith::test::check_fma<32, 32>(rj_arith_v_fma_f32_w32, /*gfx12=*/false);
 }
 
-// Check the gfx11 arithmetic and unsupported status contract.
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
+TEST(FpFmaF32W64Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma<32, 64>(rj_arith_v_fma_f32_w64_gfx12, /*gfx12=*/true);
+}
+
+// Check fused arithmetic, modifiers, aliases, and supported FP-status behavior.
 TEST(FpFmaF32W64, Arithmetic) {
-  rocjitsu::arith::test::check_fma32<64, true>(rj_arith_v_fma_f32_w64);
+  rocjitsu::arith::test::check_fma<32, 64>(rj_arith_v_fma_f32_w64, /*gfx12=*/false);
 }
 
 // Guard the finite/infinite boundary against double rounding, on every CPU path.
@@ -77,18 +106,6 @@ TEST(FpFmaF16W32Gfx12, OverflowBoundary) {
         }
       }
     }
-  }
-}
-
-// Reject controls not implemented by this slice, before accessing operands.
-TEST(FpFmaF16W32Gfx12, UnsupportedGuestControls) {
-  for (uint64_t flag : {RJ_ARITH_FP_FLUSH_INPUT_DENORMALS, RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS,
-                        RJ_ARITH_FP_IEEE_MODE}) {
-    EXPECT_EQ(rj_arith_v_fma_f16_w32_gfx12(flag, 1, 0, nullptr, nullptr, nullptr, nullptr, nullptr),
-              RJ_ARITH_ERROR_INVALID_FLAGS);
-    EXPECT_EQ(
-        rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12(flag, 0, nullptr, nullptr, nullptr, nullptr),
-        RJ_ARITH_ERROR_INVALID_FLAGS);
   }
 }
 

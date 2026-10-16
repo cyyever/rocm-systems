@@ -15,6 +15,11 @@
 
 namespace rocjitsu::arith {
 
+// Floating matrix arithmetic ignores guest denormal and IEEE controls.
+// FP16 finite overflow remains a separate, effective packed-output setting.
+inline constexpr uint64_t matrix_ignored_fp_flags =
+    RJ_ARITH_FP_FLUSH_INPUT_DENORMALS | RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS | RJ_ARITH_FP_IEEE_MODE;
+
 // EXEC has one bit per lane in the instruction wave.
 template <int Lanes> using ExecMask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
 
@@ -23,6 +28,14 @@ inline float as_float(uint32_t v) { return std::bit_cast<float>(v); }
 
 // Return the FP32 bit pattern without numeric conversion.
 inline uint32_t as_bits(float f) { return std::bit_cast<uint32_t>(f); }
+
+// Resolve the legacy rocjitsu policy selected by this entry point's wrapper.
+// Explicit semantics are never reinterpreted.
+inline uint64_t resolve_compatibility(uint64_t flags, uint64_t semantics) {
+  return (flags & RJ_ARITH_SEMANTICS_MASK) == RJ_ARITH_SEMANTICS_COMPATIBILITY
+             ? (flags & ~RJ_ARITH_SEMANTICS_MASK) | semantics
+             : flags;
+}
 
 // These queries operate on resolved semantics; validation rejects reserved values.
 inline bool is_exact(uint64_t flags) {
