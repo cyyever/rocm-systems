@@ -1,146 +1,36 @@
 // Copyright (c) 2026 Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// gfx12 FP16 FMA: deterministic fractional inputs, exceptional values,
-// EXEC, whole-register aliases, preserved halfwords, and errors.
+// FMA arithmetic and storage contracts for both wave sizes and element types.
 
-#include "common/contracts.h"
 #include "common/cpu.h"
-#include "common/floating_point.h"
-#include "common/half_reference.h"
 #include "common/registers.h"
-#include "common/semantics.h"
-#include "fp/half_fma_reference.h"
+#include "fp/fma_test.h"
 #include "rj_arith/rj_arith.h"
-#include <bit>
 
-#include <cmath>
-#include <gtest/gtest.h>
-#include <random>
-
-namespace {
-using RegBank = rocjitsu::arith::test::Registers<5, 32>;
-} // namespace
-
-// Check low-half arithmetic and that all storage outside active results is preserved.
+// Check FP16 arithmetic for Wave32.
 TEST(FpFmaF16W32Gfx12, Arithmetic) {
-  using namespace rocjitsu::arith::test;
-  RegBank input;
-  std::minstd_rand random;
-  for (int reg = 0; reg < 5; ++reg) {
-    for (int lane = 0; lane < 32; ++lane) {
-      input.v[reg][lane] = (random_f16_pair(random) & 0xffff0000U) | random_f16_bits(random);
-    }
-  }
-  for (int reg = 0; reg < 3; ++reg) {
-    input.v[reg][reg * 2] = kF16QuietNaNBits;
-    input.v[reg][reg * 2 + 1] = kF16PositiveInfinityBits;
-  }
-  expect_invalid_flags(
-      [&](uint64_t flags, uint64_t mode) {
-        return rj_arith_v_fma_f16_w32_gfx12(flags, 0xffffffffU, mode, nullptr, nullptr, nullptr,
-                                            nullptr, nullptr);
-      },
-      0);
-  for (uint64_t cpu : supported_cpu_levels()) {
-    for (uint64_t semantics : semantics_modes()) {
-      for (uint32_t exec_mask : {0U, 0xffffffffU, 0xaaaaaaaaU, 0x80000000U}) {
-        for (int aliasing_offset : {0, 1, 2, 3}) {
-          RegBank r = input;
-          uint32_t status = 0x80000000U;
-          ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(cpu | semantics, exec_mask, 0,
-                                                 r.v + aliasing_offset, r.v, r.v + 1, r.v + 2,
-                                                 &status),
-                    RJ_ARITH_SUCCESS);
-          if (semantics != RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL || !exec_mask) {
-            EXPECT_EQ(status, 0x80000000U);
-          } else {
-            EXPECT_EQ(status & 0x80000000U, 0x80000000U);
-          }
-          r.expect_preserved(input, aliasing_offset, 1);
-          for (int lane = 0; lane < 32; ++lane) {
-            uint32_t actual = r.v[aliasing_offset][lane];
-            if (!((exec_mask >> lane) & 1)) {
-              EXPECT_EQ(actual, input.v[aliasing_offset][lane]);
-              continue;
-            }
-            EXPECT_EQ(actual >> 16, input.v[aliasing_offset][lane] >> 16);
-            // A computed reference is sufficient for loose arithmetic.
-            double value = std::fma(half_value(uint16_t(input.v[0][lane])),
-                                    half_value(uint16_t(input.v[1][lane])),
-                                    half_value(uint16_t(input.v[2][lane])));
-            uint16_t expected_bits =
-                semantics == RJ_ARITH_SEMANTICS_LOOSE
-                    ? half_bits(value)
-                    : half_fma_reference::evaluate(input.v[0][lane], input.v[1][lane],
-                                                   input.v[2][lane], false);
-            float expected = float(half_value(expected_bits));
-            expect_f32(std::bit_cast<uint32_t>(float(half_value(uint16_t(actual)))), expected,
-                       semantics,
-                       /*atol=*/1e-5, /*rtol=*/5e-4);
-          }
-        }
-      }
-    }
-  }
+  rocjitsu::arith::test::check_fma16<32>(rj_arith_v_fma_f16_w32_gfx12);
 }
 
-// The existing rocjitsu FP32 FMA model agrees with std::fma on these inputs.
+// Check FP16 arithmetic for Wave64.
+TEST(FpFmaF16W64Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma16<64>(rj_arith_v_fma_f16_w64_gfx12);
+}
+
+// Check FP32 arithmetic for Wave32.
 TEST(FpFmaF32W32Gfx12, Arithmetic) {
-  using namespace rocjitsu::arith::test;
-  RegBank input;
-  std::minstd_rand random;
-  for (int reg = 0; reg < 5; ++reg) {
-    for (int lane = 0; lane < 32; ++lane) {
-      input.v[reg][lane] = random_f32_bits(random);
-    }
-  }
-  for (int reg = 0; reg < 3; ++reg) {
-    input.v[reg][2 * reg] = kF32QuietNaNBits;
-    input.v[reg][2 * reg + 1] = kF32PositiveInfinityBits;
-  }
-  expect_invalid_flags(
-      [&](uint64_t flags, uint64_t mode) {
-        return rj_arith_v_fma_f32_w32_gfx12(flags, 0xffffffffU, mode, nullptr, nullptr, nullptr,
-                                            nullptr, nullptr);
-      },
-      0);
-  for (uint64_t cpu : supported_cpu_levels()) {
-    for (uint64_t semantics : semantics_modes()) {
-      for (uint32_t exec_mask : {0U, 0xffffffffU, 0xaaaaaaaaU, 0x80000000U}) {
-        for (int aliasing_offset : {0, 1, 2, 3}) {
-          RegBank r = input;
-          uint32_t status = 0x80000000U;
-          int result = rj_arith_v_fma_f32_w32_gfx12(
-              cpu | semantics, exec_mask, 0, r.v + aliasing_offset, r.v, r.v + 1, r.v + 2, &status);
-          EXPECT_EQ(status, 0x80000000U);
-          if (semantics == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL) {
-            EXPECT_EQ(result, RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
-            r.expect_preserved(input, 0, 0);
-            continue;
-          }
-          ASSERT_EQ(result, RJ_ARITH_SUCCESS);
-          r.expect_preserved(input, aliasing_offset, 1);
-          for (int lane = 0; lane < 32; ++lane) {
-            uint32_t actual = r.v[aliasing_offset][lane];
-            if (!((exec_mask >> lane) & 1)) {
-              EXPECT_EQ(actual, input.v[aliasing_offset][lane]);
-              continue;
-            }
-            float expected = std::fma(std::bit_cast<float>(input.v[0][lane]),
-                                      std::bit_cast<float>(input.v[1][lane]),
-                                      std::bit_cast<float>(input.v[2][lane]));
-            expect_f32(actual, expected, semantics, /*atol=*/1e-6, /*rtol=*/1e-6);
-          }
-        }
-      }
-    }
-  }
+  rocjitsu::arith::test::check_fma32<32>(rj_arith_v_fma_f32_w32_gfx12);
+}
+
+// Check FP32 arithmetic for Wave64.
+TEST(FpFmaF32W64Gfx12, Arithmetic) {
+  rocjitsu::arith::test::check_fma32<64>(rj_arith_v_fma_f32_w64_gfx12);
 }
 
 // Raw encodings from rocjitsu shared/fp_mode.h's default-mode FP32 FMA rules.
 // The finite witness distinguishes fused arithmetic from a rounded multiply plus add.
-TEST(FpFmaF32W32Gfx12, ExactEncodings) {
+template <int Lanes, typename Call> static void check_fma32_encodings(Call call) {
   using namespace rocjitsu::arith::test;
   const struct {
     uint32_t a, b, c, expected;
@@ -156,18 +46,21 @@ TEST(FpFmaF32W32Gfx12, ExactEncodings) {
                                RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS}) {
       for (const auto &sample : cases) {
         SCOPED_TRACE(testing::Message() << cpu << '/' << semantics << '/' << sample.a);
-        Registers<4, 32> r;
+        Registers<4, Lanes> r;
         r.v[0][0] = sample.a;
         r.v[1][0] = sample.b;
         r.v[2][0] = sample.c;
-        ASSERT_EQ(rj_arith_v_fma_f32_w32_gfx12(cpu | semantics, 1, 0, r.v + 3, r.v, r.v + 1,
-                                               r.v + 2, nullptr),
+        ASSERT_EQ(call(cpu | semantics, 1, 0, r.v + 3, r.v, r.v + 1, r.v + 2, nullptr),
                   RJ_ARITH_SUCCESS);
         EXPECT_EQ(r.v[3][0], sample.expected);
       }
     }
   }
 }
+
+// Check exact FP32 encodings for both wave widths against the same model cases.
+TEST(FpFmaF32W32Gfx12, ExactEncodings) { check_fma32_encodings<32>(rj_arith_v_fma_f32_w32_gfx12); }
+TEST(FpFmaF32W64Gfx12, ExactEncodings) { check_fma32_encodings<64>(rj_arith_v_fma_f32_w64_gfx12); }
 
 // Guard ordinary midpoints and the finite/infinite boundary against double rounding.
 TEST(FpFmaF16W32Gfx12, RoundingBoundaries) {
@@ -260,8 +153,10 @@ TEST(FpFmaF16W32Gfx12, ExactEncodings) {
 
 // gfx1201 WAVE_EXCP_FLAG_USER observations under MODE=0xf0 (RNE, preserve denormals).
 // These literal cases distinguish tininess, NaN suppression, and finite saturation.
-TEST(FpFmaF16W32Gfx12, StatusBoundariesAndExec) {
+template <int Lanes, typename Call> static void check_fma16_status(Call call) {
   using namespace rocjitsu::arith::test;
+  using Mask = std::conditional_t<Lanes == 32, uint32_t, uint64_t>;
+  constexpr Mask high_lane = Mask(1) << (Lanes - 1);
   const struct {
     uint16_t a, b, c, expected;
     uint32_t causes;
@@ -292,40 +187,47 @@ TEST(FpFmaF16W32Gfx12, StatusBoundariesAndExec) {
   for (uint64_t cpu : supported_cpu_levels()) {
     for (const auto &sample : cases) {
       SCOPED_TRACE(testing::Message() << "cpu=" << cpu << " a=" << sample.a << " b=" << sample.b);
-      Registers<4, 32> r;
-      r.v[0][31] = sample.a;
-      r.v[1][31] = sample.b;
-      r.v[2][31] = sample.c;
+      Registers<4, Lanes> r;
+      r.v[0][Lanes - 1] = sample.a;
+      r.v[1][Lanes - 1] = sample.b;
+      r.v[2][Lanes - 1] = sample.c;
       uint32_t status = preserved;
-      ASSERT_EQ(
-          rj_arith_v_fma_f16_w32_gfx12(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL | sample.flags,
-                                       0x80000000U, 0, r.v + 3, r.v, r.v + 1, r.v + 2, &status),
-          RJ_ARITH_SUCCESS);
-      EXPECT_EQ(uint16_t(r.v[3][31]), sample.expected);
+      ASSERT_EQ(call(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL | sample.flags, high_lane, 0,
+                     r.v + 3, r.v, r.v + 1, r.v + 2, &status),
+                RJ_ARITH_SUCCESS);
+      EXPECT_EQ(uint16_t(r.v[3][Lanes - 1]), sample.expected);
       EXPECT_EQ(status, preserved | sample.causes);
     }
     // Each exceptional lane contributes independently, and masked lanes contribute nothing.
-    for (uint32_t exec_mask : {0U, 1U, 0x80000000U, 0x80000001U}) {
+    for (Mask exec_mask : {Mask(0), Mask(1), high_lane, high_lane | Mask(1)}) {
       SCOPED_TRACE(testing::Message() << "cpu=" << cpu << " exec_mask=" << exec_mask);
-      Registers<4, 32> r;
+      Registers<4, Lanes> r;
       r.v[0][0] = 0;
       r.v[1][0] = 0x7c00;
       r.v[2][0] = 0;
-      r.v[0][31] = 0x7bff;
-      r.v[1][31] = 0x4000;
-      r.v[2][31] = 0;
+      r.v[0][Lanes - 1] = 0x7bff;
+      r.v[1][Lanes - 1] = 0x4000;
+      r.v[2][Lanes - 1] = 0;
       uint32_t status = preserved;
-      ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL,
-                                             exec_mask, 0, r.v + 3, r.v, r.v + 1, r.v + 2, &status),
+      ASSERT_EQ(call(cpu | RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL, exec_mask, 0, r.v + 3, r.v,
+                     r.v + 1, r.v + 2, &status),
                 RJ_ARITH_SUCCESS);
       uint32_t expected = preserved;
       if (exec_mask & 1) {
         expected |= RJ_ARITH_EXCEPTION_INVALID;
       }
-      if (exec_mask & 0x80000000U) {
+      if (exec_mask & high_lane) {
         expected |= RJ_ARITH_EXCEPTION_OVERFLOW | RJ_ARITH_EXCEPTION_INEXACT;
       }
       EXPECT_EQ(status, expected);
     }
   }
+}
+
+// The architectural causes accumulate identically across both EXEC widths.
+TEST(FpFmaF16W32Gfx12, StatusBoundariesAndExec) {
+  check_fma16_status<32>(rj_arith_v_fma_f16_w32_gfx12);
+}
+TEST(FpFmaF16W64Gfx12, StatusBoundariesAndExec) {
+  check_fma16_status<64>(rj_arith_v_fma_f16_w64_gfx12);
 }
