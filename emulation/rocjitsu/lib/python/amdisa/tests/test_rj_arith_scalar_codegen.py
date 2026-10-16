@@ -3,6 +3,7 @@
 
 from rj_arith_headers import public_headers
 
+from pathlib import Path
 import re
 
 import pytest
@@ -65,9 +66,7 @@ def test_comparisons_only_write_scc_and_read_encoded_destination(name):
         body = gen_scalar(arch, name, dst, src)
         assert 'registers.write_scalar' not in body
         assert 'wf.read_scc' not in body
-        assert body.index('status != RJ_ARITH_SUCCESS') < body.index(
-            'wf.write_scc(scc)'
-        )
+        assert body.index('status != RJ_ARITH_SUCCESS') < body.index('wf.write_scc(scc)')
         if immediate:
             assert 'read_scalar(sdst)' in body
             assert 'uint16_t(registers.read_scalar(imm))' in body
@@ -78,9 +77,7 @@ def test_comparisons_only_write_scc_and_read_encoded_destination(name):
 def test_immediate_arithmetic_reads_old_destination_before_commit(name):
     body = gen_scalar('rdna3', name, ['dst'], ['imm'])
     assert body.index('read_scalar(dst)') < body.index('status != RJ_ARITH_SUCCESS')
-    assert body.index('status != RJ_ARITH_SUCCESS') < body.index(
-        'write_scalar(dst, result)'
-    )
+    assert body.index('status != RJ_ARITH_SUCCESS') < body.index('write_scalar(dst, result)')
     assert 'uint16_t(registers.read_scalar(imm))' in body
     assert ('wf.write_scc(scc)' in body) == IMMEDIATE[name]
     assert 'wf.read_scc' not in body
@@ -109,6 +106,28 @@ def test_select_observes_only_selected_source(bits):
     assert f'input_scc ? registers.read_scalar{suffix}(a) : 0' in body
     assert f'!input_scc ? registers.read_scalar{suffix}(b) : 0' in body
     assert '&result, input0, input1, input_scc)' in body
+
+
+@pytest.mark.parametrize('arch', ['rdna3', 'rdna4'])
+def test_generated_scalar_selection_bit_updates_and_masks_route_to_rj_arith(arch):
+    generated = (
+        Path(__file__).resolve().parents[3]
+        / 'rocjitsu/src/rocjitsu/isa/arch/amdgpu/generated'
+        / arch
+    )
+    text = '\n'.join(
+        (generated / f'{encoding}_exec.cpp').read_text()
+        for encoding in ('sop1', 'sop2')
+    )
+    names = set(BITSET)
+    names.update(
+        f'S_{op}_B{bits}' for op in ('CSELECT', 'QUADMASK', 'WQM') for bits in (32, 64)
+    )
+    if arch == 'rdna4':
+        names.add('S_MUL_U64')
+    for name in names:
+        assert text.count(f'rj_arith_{name.lower()}(') == 1, name
+        assert f'amdgpu::execute_{name.lower()}_' not in text, name
 
 
 @pytest.mark.parametrize(
@@ -145,6 +164,20 @@ def test_scalar_float_bindings_preserve_results_and_optional_state(name, bits):
     ]
 
 
+def test_generated_rdna4_scalar_float_comparisons_and_rounding_route_to_rj_arith():
+    generated = (
+        Path(__file__).resolve().parents[3]
+        / 'rocjitsu/src/rocjitsu/isa/arch/amdgpu/generated/rdna4'
+    )
+    text = '\n'.join(
+        (generated / f'{encoding}_exec.cpp').read_text()
+        for encoding in ('sop1', 'sopc')
+    )
+    for name in FLOAT_COMPARISONS | FLOAT_ROUNDING:
+        assert text.count(f'rj_arith_{name.lower()}(') == 1, name
+        assert f'amdgpu::execute_{name.lower()}_' not in text, name
+
+
 @pytest.mark.parametrize('name', sorted(FLOAT_ARITHMETIC))
 def test_scalar_float_arithmetic_api_shape_and_policy(name):
     operation = FLOAT_ARITHMETIC[name]
@@ -156,12 +189,8 @@ def test_scalar_float_arithmetic_api_shape_and_policy(name):
     assert ('wf.fp_round_mode_f32()' in body) == (
         name.startswith('S_FMA') and name.endswith('F32')
     )
-    assert ('RJ_ARITH_FP_FLUSH_INPUT_DENORMALS' in body) == bool(
-        operation.input_fp_bits
-    )
-    assert ('RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS' in body) == bool(
-        operation.output_fp_bits
-    )
+    assert ('RJ_ARITH_FP_FLUSH_INPUT_DENORMALS' in body) == bool(operation.input_fp_bits)
+    assert ('RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS' in body) == bool(operation.output_fp_bits)
     assert ', &causes)' in body
     assert 'RJ_ARITH_SEMANTICS_' not in body
     assert 'wf.exec()' not in body and 'wf.write_scc' not in body
@@ -179,6 +208,20 @@ def test_scalar_float_arithmetic_api_shape_and_policy(name):
     ] * operation.inputs + ['uint32_t *']
 
 
+def test_generated_rdna4_scalar_float_arithmetic_routes_to_rj_arith():
+    generated = (
+        Path(__file__).resolve().parents[3]
+        / 'rocjitsu/src/rocjitsu/isa/arch/amdgpu/generated/rdna4'
+    )
+    text = '\n'.join(
+        (generated / f'{encoding}_exec.cpp').read_text()
+        for encoding in ('sop1', 'sop2')
+    )
+    for name in FLOAT_ARITHMETIC:
+        assert text.count(f'rj_arith_{name.lower()}(') == 1, name
+        assert f'amdgpu::execute_{name.lower()}_' not in text, name
+
+
 @pytest.mark.parametrize('name', ['S_ROUND_MODE', 'S_DENORM_MODE'])
 def test_guest_mode_updates_are_functional_state_independent_of_exec(name):
     for arch in ('rdna3', 'rdna4'):
@@ -186,9 +229,7 @@ def test_guest_mode_updates_are_functional_state_independent_of_exec(name):
         assert f'rj_arith_{name.lower()}(' in body
         assert 'uint16_t(simm16.encoding_value()), &mode' in body
         assert body.index('wf.mode_raw()') < body.index('status != RJ_ARITH_SUCCESS')
-        assert body.index('status != RJ_ARITH_SUCCESS') < body.index(
-            'wf.set_mode_raw(mode)'
-        )
+        assert body.index('status != RJ_ARITH_SUCCESS') < body.index('wf.set_mode_raw(mode)')
         assert 'arithmetic_reports_fp_status' not in body
         assert 'wf.exec()' not in body
     assert gen_scalar('cdna5', name, [], ['simm16']) is None
