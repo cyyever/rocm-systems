@@ -7,7 +7,8 @@ integer formats, in both wave sizes. Sparse WMMA adds 2:4 metadata selection
 with tied accumulators. Fused arithmetic includes FP16/FP32, packed halves,
 literals and mixed precision. Add, subtract, multiply and exponent operations
 are also available. Min/max/median selection and FP64 arithmetic currently
-support loose results only.
+support loose results only. Division helpers cover SCALE, FMAS and FIXUP;
+family headers describe their exact-result and FP-status support.
 FP status is available for gfx12 FP16 FMA under default guest rounding and denormals,
 and for gfx12 FP32 MUL under nearest-even guest rounding.
 WMMA has no FP-status output; mode 3 has the same numeric requirements as mode 2.
