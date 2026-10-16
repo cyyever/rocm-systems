@@ -126,6 +126,19 @@ foreach(
     endif()
 endforeach()
 
+# Dot-product formats retain family-specific arithmetic and status expectations.
+foreach(family IN ITEMS integer fp8 half dot2)
+    set(target "rj_arith_dot_${family}_test")
+    add_executable(${target} dot/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    rj_configure_target(${target} WARNINGS)
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+    if(RJ_INSTALL_TESTS)
+        file(APPEND "${RJ_INSTALL_CTEST_FILE}" "include(\"${target}.cmake\")\n")
+    endif()
+endforeach()
+
 # Infrastructure has no all-entry-point registry; contracts live in family helpers.
 add_executable(rj_arith_cpu_test common/cpu_test.cpp)
 target_link_libraries(rj_arith_cpu_test PRIVATE rj_arith GTest::gtest_main)
