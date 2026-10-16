@@ -16,6 +16,12 @@ enum class Binary {
   Subrev,
   Mul,
   MulDx9Zero,
+  MinNum,
+  MaxNum,
+  Minimum,
+  Maximum,
+  MinLegacy,
+  MaxLegacy
 };
 
 #if defined(RJ_ARITH_HAVE_X86_64_V3)

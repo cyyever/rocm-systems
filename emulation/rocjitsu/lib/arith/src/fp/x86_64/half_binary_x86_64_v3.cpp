@@ -8,6 +8,7 @@
 #include "common/x86_64/half_x86_64_v3.h"
 #include "fp/binary.h"
 #include "fp/half_binary.h"
+#include "fp/x86_64/minmax_x86_64_v3.h"
 #include "rj_arith/rj_arith.h"
 
 #include <immintrin.h>
@@ -22,9 +23,9 @@ void half_binary_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t mode, ui
                            const uint32_t *a, const uint32_t *b) {
   constexpr bool arithmetic =
       Op == Binary::Add || Op == Binary::Sub || Op == Binary::Subrev || Op == Binary::Mul;
-
-  constexpr bool preserve_nan_inputs = false;
-  constexpr bool selection = preserve_nan_inputs;
+  constexpr bool legacy = Op == Binary::MinLegacy || Op == Binary::MaxLegacy;
+  constexpr bool preserve_nan_inputs = legacy || Op == Binary::Minimum || Op == Binary::Maximum;
+  constexpr bool selection = preserve_nan_inputs || Op == Binary::MinNum || Op == Binary::MaxNum;
   uint32_t modes[] = {Packed ? packed_half_mode(mode, false) : mode, packed_half_mode(mode, true)};
   int d_shift = mode & RJ_ARITH_ALU_HIGH_D ? 16 : 0;
   auto keep = _mm256_set1_epi32(d_shift ? 65535 : -65536);
@@ -64,7 +65,21 @@ void half_binary_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t mode, ui
       if constexpr (Op == Binary::Mul) {
         value = _mm256_mul_ps(x, y);
       }
-
+      if constexpr (Op == Binary::MinLegacy || Op == Binary::MaxLegacy) {
+        value = minmax_rdna3<Op == Binary::MaxLegacy>(x, y, flags & RJ_ARITH_FP_IEEE_MODE);
+      }
+      if constexpr (Op == Binary::MinNum) {
+        value = minmax<false, false>(x, y);
+      }
+      if constexpr (Op == Binary::MaxNum) {
+        value = minmax<true, false>(x, y);
+      }
+      if constexpr (Op == Binary::Minimum) {
+        value = minmax<false, true>(x, y);
+      }
+      if constexpr (Op == Binary::Maximum) {
+        value = minmax<true, true>(x, y);
+      }
       if (m & RJ_ARITH_ALU_OMOD_HALF) {
         value = prepare_omod_f16(value, m);
         value = _mm256_mul_ps(value, _mm256_set1_ps(scales[(m >> 6) & 3]));
@@ -79,7 +94,7 @@ void half_binary_x86_64_v3(uint64_t flags, uint32_t exec_mask, uint32_t mode, ui
         }
         value = clamped;
       }
-      auto encoded = half_narrow<false, false>(value, flags & RJ_ARITH_FP16_OVFL);
+      auto encoded = half_narrow<false, legacy>(value, flags & RJ_ARITH_FP16_OVFL);
       if ((arithmetic || (Packed && selection)) && (flags & RJ_ARITH_FP_FLUSH_OUTPUT_DENORMALS)) {
         auto magnitude = _mm256_and_si256(encoded, _mm256_set1_epi32(0x7fff));
         auto tiny = _mm256_cmpgt_epi32(_mm256_set1_epi32(0x0400), magnitude);
@@ -110,10 +125,37 @@ template void half_binary_x86_64_v3<Binary::Subrev>(uint64_t, uint32_t, uint32_t
                                                     const uint32_t *, const uint32_t *);
 template void half_binary_x86_64_v3<Binary::Mul>(uint64_t, uint32_t, uint32_t, uint32_t *,
                                                  const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MinNum>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                    const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MaxNum>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                    const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::Minimum>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                     const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::Maximum>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                     const uint32_t *, const uint32_t *);
 
 template void half_binary_x86_64_v3<Binary::Add, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
                                                        const uint32_t *, const uint32_t *);
 template void half_binary_x86_64_v3<Binary::Mul, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
                                                        const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MinNum, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                          const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MaxNum, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                          const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::Minimum, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                           const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::Maximum, true>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                           const uint32_t *, const uint32_t *);
+
+template void half_binary_x86_64_v3<Binary::MinLegacy>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                       const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MaxLegacy>(uint64_t, uint32_t, uint32_t, uint32_t *,
+                                                       const uint32_t *, const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MinLegacy, true>(uint64_t, uint32_t, uint32_t,
+                                                             uint32_t *, const uint32_t *,
+                                                             const uint32_t *);
+template void half_binary_x86_64_v3<Binary::MaxLegacy, true>(uint64_t, uint32_t, uint32_t,
+                                                             uint32_t *, const uint32_t *,
+                                                             const uint32_t *);
 
 } // namespace rocjitsu::arith
