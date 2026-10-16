@@ -235,6 +235,23 @@ foreach(family IN ITEMS integer fp8 half dot2)
 endforeach()
 
 # Register-only operations share routing and preservation checks.
+foreach(
+    family
+    IN
+    ITEMS move swap ds permlane relative lane
+)
+    set(target "rj_arith_register_${family}_test")
+    add_executable(${target} register/${family}_test.cpp)
+    target_link_libraries(${target} PRIVATE rj_arith GTest::gtest_main)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(
+            ${target}
+            PRIVATE -Wall -Wextra -Werror -pedantic
+        )
+    endif()
+    rj_add_gtest_tests(${target} TEST_PREFIX "rj_arith.")
+endforeach()
 
 # Graphics families retain their independent interpolation and selection references.
 
