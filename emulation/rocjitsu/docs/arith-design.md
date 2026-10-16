@@ -2,7 +2,7 @@
 
 ## Current implementation
 
-Scalar WMMA and FP16 FMA support loose semantics and allow-loose fallback.
+Empirical exact arithmetic is available for the seed WMMA/FMA; other declarations state their support.
 FP status support is not implemented yet.
 CPU implementations are scalar; SIMD backends are planned.
 Compatibility and instruction modifiers are planned; mode 7 is currently rejected.

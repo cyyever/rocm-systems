@@ -10,6 +10,7 @@
 #include "common/half_reference.h"
 #include "common/registers.h"
 #include "common/semantics.h"
+#include "fp/half_fma_reference.h"
 #include "rj_arith/rj_arith.h"
 #include <bit>
 
@@ -62,7 +63,13 @@ TEST(FpFmaF16W32Gfx12, Arithmetic) {
           double value = std::fma(half_value(uint16_t(input.v[0][lane])),
                                   half_value(uint16_t(input.v[1][lane])),
                                   half_value(uint16_t(input.v[2][lane])));
-          float expected = float(half_value(half_bits(value)));
+          // Existing independent integer oracle, validated against rocjitsu's model.
+          uint16_t expected_bits =
+              semantics == RJ_ARITH_SEMANTICS_LOOSE
+                  ? half_bits(value)
+                  : half_fma_reference::evaluate(input.v[0][lane], input.v[1][lane],
+                                                 input.v[2][lane], false);
+          float expected = float(half_value(expected_bits));
           expect_f32(std::bit_cast<uint32_t>(float(half_value(uint16_t(actual)))), expected,
                      semantics,
                      /*atol=*/1e-5, /*rtol=*/5e-4);
@@ -70,9 +77,9 @@ TEST(FpFmaF16W32Gfx12, Arithmetic) {
       }
     }
   }
-  EXPECT_EQ(rj_arith_v_fma_f16_w32_gfx12(RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS, 0, 0,
-                                         nullptr, nullptr, nullptr, nullptr, nullptr),
-            RJ_ARITH_ERROR_UNSUPPORTED_SEMANTICS);
+  EXPECT_EQ(rj_arith_v_fma_f16_w32_gfx12(RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL, 0, 0, nullptr,
+                                         nullptr, nullptr, nullptr, nullptr),
+            RJ_ARITH_ERROR_UNSUPPORTED_FP_STATUS);
 }
 
 // Guard the finite/infinite boundary against double rounding, on every CPU path.
@@ -116,5 +123,40 @@ TEST(FpFmaF16W32Gfx12, UnsupportedGuestControls) {
     EXPECT_EQ(
         rj_arith_v_wmma_f32_16x16x16_f16_w32_gfx12(flag, 0, nullptr, nullptr, nullptr, nullptr),
         RJ_ARITH_ERROR_INVALID_FLAGS);
+  }
+}
+
+// Raw encodings from rocjitsu's gfx12 FP16 FMA model: rounding and NaN precedence.
+TEST(FpFmaF16W32Gfx12, ExactEncodings) {
+  using namespace rocjitsu::arith::test;
+  const struct {
+    uint16_t a, b, c, expected;
+    uint64_t flags;
+  } cases[] = {
+      {0x4782, 0xda00, 0x03e1, 0xe5a1, 0},
+      {0, 0x7c00, 0x7e01, 0xfe00, 0},
+      {0x7c03, 0x7e01, 0, 0x7e03, 0},
+      {0x7bff, 0x7bff, 0, 0x7c00, 0},
+      {0x7bff, 0x7bff, 0, 0x7bff, RJ_ARITH_FP16_OVFL},
+      {0x3c00, 0x3c00, 0xbc00, 0, 0},
+      {1, 0x3c00, 0, 1, 0},
+  };
+  for (uint64_t cpu : supported_cpu_levels()) {
+    for (uint64_t semantics : {RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_ALLOW_LOOSE,
+                               RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_NO_FP_STATUS}) {
+      for (const auto &sample : cases) {
+        SCOPED_TRACE(testing::Message()
+                     << "cpu=" << cpu << " semantics=" << semantics << " a=" << sample.a);
+        Registers<4, 32> r;
+        r.v[0][0] = sample.a;
+        r.v[1][0] = sample.b;
+        r.v[2][0] = sample.c;
+        uint32_t status = 0;
+        ASSERT_EQ(rj_arith_v_fma_f16_w32_gfx12(cpu | semantics | sample.flags, 1, 0, r.v + 3, r.v,
+                                               r.v + 1, r.v + 2, &status),
+                  RJ_ARITH_SUCCESS);
+        EXPECT_EQ(uint16_t(r.v[3][0]), sample.expected);
+      }
+    }
   }
 }

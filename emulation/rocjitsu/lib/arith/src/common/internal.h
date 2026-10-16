@@ -21,6 +21,18 @@ inline float as_float(uint32_t v) { return std::bit_cast<float>(v); }
 // Return the FP32 bit pattern without numeric conversion.
 inline uint32_t as_bits(float f) { return std::bit_cast<uint32_t>(f); }
 
+// These queries operate on resolved semantics; validation rejects reserved values.
+inline bool is_exact(uint64_t flags) {
+  const uint64_t semantics = flags & RJ_ARITH_SEMANTICS_MASK;
+  return semantics >= RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL_ALLOW_LOOSE &&
+         semantics <= RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL;
+}
+
+// Return whether resolved semantics require guest FP status reporting.
+inline bool reports_fp_status(uint64_t flags) {
+  return (flags & RJ_ARITH_SEMANTICS_MASK) == RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL;
+}
+
 // Accept ordinary semantics modes 0..3; reject reserved or unresolved compatibility modes.
 inline int validate_semantics(uint64_t flags) {
   return (flags & RJ_ARITH_SEMANTICS_MASK) > RJ_ARITH_SEMANTICS_BIT_EXACT_EMPIRICAL

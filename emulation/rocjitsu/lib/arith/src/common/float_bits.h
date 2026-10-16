@@ -1,0 +1,41 @@
+// Copyright (c) 2026 Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+// Type traits and alias-safe bit casts for FP32/FP64 representations.
+// Internal helpers shared by instruction implementations; not part of the public C API.
+
+#pragma once
+
+#include <cstring>
+#include <stdint.h>
+#include <type_traits>
+
+namespace rocjitsu::arith {
+
+// Raw IEEE binary32/binary64 storage and representation casts.
+template <typename Float> struct FloatBits {
+  static_assert(std::is_same_v<Float, float> || std::is_same_v<Float, double>);
+  using UInt = std::conditional_t<std::is_same_v<Float, float>, uint32_t, uint64_t>;
+
+  // Copy a floating-point representation into its matching unsigned integer type.
+  static UInt bits(Float value) {
+    UInt result;
+    std::memcpy(&result, &value, sizeof(result));
+    return result;
+  }
+
+  // Copy an unsigned bit pattern into its matching floating-point type.
+  static Float value(UInt bits) {
+    Float result;
+    std::memcpy(&result, &bits, sizeof(result));
+    return result;
+  }
+};
+
+// Reinterpret FP64 bits without numeric conversion.
+inline double as_double(uint64_t bits) { return FloatBits<double>::value(bits); }
+
+// Return the FP64 representation without numeric conversion.
+inline uint64_t double_bits(double value) { return FloatBits<double>::bits(value); }
+
+} // namespace rocjitsu::arith
