@@ -1,5 +1,12 @@
 # Two-node RCCL NET smoke (unqualified control)
 
+This is a control only. The active exit gate is the four-node, two-GPU-per-node
+mixed P2P/IPC and NET workload in
+[same-host-pod-rccl-gate.md](same-host-pod-rccl-gate.md), run in both VFIO and
+emulated KFD modes.
+The [2026-10-15 record](same-host-pod-rccl-result-20261015.md) qualifies that
+gate with a zero-patch guest driver and standard VFIO-user peer transport.
+
 `configs/gfx1250_mi455x_kmd_2node_net.json` is a schematic system
 manifest with one gfx1250 GPU on each of two nodes. Its network link records
 intended reachability. The GPUs have distinct KFD identities and each node
