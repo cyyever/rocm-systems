@@ -1619,14 +1619,14 @@ ncclResult_t rcclSelectAllReduce(struct ncclComm* comm, const void* sendbuff, vo
   // and goes straight to taskAppend), so /*acc=*/nullptr here is always correct.
   const bool ceAr2ShotEligible = rcclUseCeAr2Shot(comm, count, datatype, op, /*acc=*/nullptr);
   const bool ceAllReduceAllowed = ncclGroupDepth == 0 && ceArGraphAllowed &&
-                                  ceAr2ShotEligible && (force || symReg);
+                                  ceAr2ShotEligible && force;
   if (!query)
     INFO(NCCL_TUNING,
          "AR CE-2SHOT symkRequested=%d criteria:ceAllReduceAllowed=%d"
-         " twoShotWindow=%d [min=%zu max=%zu] (force=%d ctaZero=%d)"
+         " twoShotWindow=%d [min=%zu max=%zu] (force=%d)"
          " rcclUseCeAr2Shot=%d ceARTmpBuf!=NULL:%d",
          (int)symkRequested, (int)ceAllReduceAllowed, (int)twoShotWindow,
-         arTwoShotMin, arTwoShotMax, (int)force, (int)ctaZero,
+         arTwoShotMin, arTwoShotMax, (int)force,
          (int)ceAr2ShotEligible, (int)(comm->ceColl.ceARTmpBuf != NULL));
     
     // preferred: soft suggestion from CTAPolicy / force-env vars.
