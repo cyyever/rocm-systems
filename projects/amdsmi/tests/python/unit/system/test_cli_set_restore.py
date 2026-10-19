@@ -41,9 +41,6 @@ class TestCliSetRestore(unittest.TestCase):
         self.sweep.partition_data = {
             "current_partition": [{"memory": "NPS1", "accelerator_type": "SPX"}]
         }
-        patcher = mock.patch.object(test_set.common, "has_gpu_od_interface", return_value=False)
-        self.addCleanup(patcher.stop)
-        self.gpu_od = patcher.start()
 
     def _remaining_commands(self, index: int = 0) -> list:
         return [
@@ -85,12 +82,10 @@ class TestCliSetRestore(unittest.TestCase):
 
     def test_restore_with_omitted_fan_runs_remaining_cleanup(self) -> None:
         self._restore(self._remaining_commands())
-        self.gpu_od.assert_not_called()
 
     def test_restore_with_na_fan_runs_remaining_cleanup(self) -> None:
         self.sweep.metric_data["gpu_data"][0]["fan"] = "N/A"
         self._restore(self._remaining_commands())
-        self.gpu_od.assert_not_called()
 
     def test_restore_without_static_clock_levels_runs_remaining_cleanup(self) -> None:
         for fields in (
@@ -136,7 +131,6 @@ class TestCliSetRestore(unittest.TestCase):
             with self.subTest(fan=fan):
                 self.sweep.metric_data["gpu_data"][0]["fan"] = fan
                 self._restore(self._remaining_commands())
-        self.gpu_od.assert_not_called()
 
     def test_restore_dgpu_fan_fields_are_independently_readable(self) -> None:
         for maximum, speed in (("N/A", 80), (255, "N/A"), (255, 80), (255, 0)):
@@ -148,20 +142,17 @@ class TestCliSetRestore(unittest.TestCase):
                 self._restore(expected)
 
     def test_restore_rejects_invalid_dgpu_fan_max(self) -> None:
-        for gpu_od, maximum in ((False, 0), (False, -1), (False, 256), (True, 101)):
-            with self.subTest(gpu_od=gpu_od, maximum=maximum):
-                self.gpu_od.return_value = gpu_od
+        for maximum in (0, -1, 256):
+            with self.subTest(maximum=maximum):
                 self.sweep.metric_data["gpu_data"][0]["fan"] = {"max": maximum, "speed": 80}
                 self._mock_commands([])
                 with self.assertRaisesRegex(AssertionError, "max fan speed must be"):
                     self.sweep._restore_starting_values()
                 self.sweep.util.RunCmdSync.assert_not_called()
 
-    def test_restore_gpu_od_fan_accepts_percentage_maximum(self) -> None:
-        self.gpu_od.return_value = True
-        self.sweep.metric_data["gpu_data"][0]["fan"] = {"max": 100, "speed": 50}
+    def test_restore_fan_accepts_hwmon_maximum(self) -> None:
+        self.sweep.metric_data["gpu_data"][0]["fan"] = {"max": 255, "speed": 128}
         self._restore(["amd-smi reset --fans --gpu 0"] + self._remaining_commands())
-        self.gpu_od.assert_called_once_with("0000:01:00.0")
 
     def test_restore_mixed_apu_dgpu_preserves_clock_and_cleanup_order(self) -> None:
         dgpu = {
