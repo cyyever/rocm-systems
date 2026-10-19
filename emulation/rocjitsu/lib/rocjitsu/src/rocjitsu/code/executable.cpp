@@ -66,6 +66,17 @@ Executable::Executable(const std::string &path) {
     return;
   }
 
+  parse_image();
+}
+
+Executable::Executable(std::span<const uint8_t> image) {
+  if (!image.empty())
+    image_.assign(reinterpret_cast<const char *>(image.data()),
+                  reinterpret_cast<const char *>(image.data()) + image.size());
+  parse_image();
+}
+
+void Executable::parse_image() {
   if (image_.size() < sizeof(Elf64_Ehdr)) {
     is_valid_ = false;
     return;
@@ -143,8 +154,9 @@ void Executable::load_fat_binary() {
     return;
   }
   std::vector<Elf64_Shdr> section_hdrs(static_cast<size_t>(num_shdrs));
-  std::memcpy(section_hdrs.data(), image_.data() + header_->sectionHeaderOff(),
-              section_hdrs.size() * sizeof(Elf64_Shdr));
+  if (!section_hdrs.empty())
+    std::memcpy(section_hdrs.data(), image_.data() + header_->sectionHeaderOff(),
+                section_hdrs.size() * sizeof(Elf64_Shdr));
 
   int shstrndx = header_->sectionHeaderStrIdx();
   if (shstrndx < 0 || static_cast<size_t>(shstrndx) >= section_hdrs.size()) {
