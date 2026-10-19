@@ -2033,7 +2033,18 @@ template <bool EnableAsync>
   const bool was_in_trap_handler = active->in_trap_handler();
 
   const uint32_t executing_process = active->process_id();
-  const util::Result execution_result = execute_instruction(inst, *active);
+  util::Result execution_result;
+  std::string execution_detail;
+  try {
+    execution_result = execute_instruction(inst, *active);
+  } catch (const util::UnimplementedInst &exception) {
+    // This fetch/issue boundary translates unsupported guest callbacks into a wave failure.
+    // Keep direct execute_instruction() callers' contract intact while routing
+    // fetched instructions through the ordinary wave-failure path.
+    active->report_instruction_execution_error(InstructionExecutionError::UnimplementedInstruction);
+    execution_result = util::Result::failure();
+    execution_detail = exception.what();
+  }
 
   if (execution_result.failed()) [[unlikely]] {
     return_decoded.discard();
@@ -2042,9 +2053,11 @@ template <bool EnableAsync>
         window->drain();
     }
     const InstructionExecutionError error = active->instruction_execution_error();
-    const std::string failure = std::format("CU {}: wf{} could not execute {} at pc={:#x}: {}",
-                                            this->name(), active->wf_id(), inst->mnemonic(),
-                                            active->pc, instruction_execution_error_name(error));
+    std::string failure = std::format("CU {}: wf{} could not execute {} at pc={:#x}: {}",
+                                      this->name(), active->wf_id(), inst->mnemonic(), active->pc,
+                                      instruction_execution_error_name(error));
+    if (!execution_detail.empty())
+      failure += ": " + execution_detail;
     util::Logger::warn(failure);
     if (!active->fail_pm4_submission()) {
       // Notify the queue owner without hiding the simulator's failure status.
