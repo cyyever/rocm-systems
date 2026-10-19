@@ -250,14 +250,13 @@ TEST(Vop3ModifierSimd, DstModF32OverflowFollowsGuestRounding) {
       {0x7f000000u, 1, {0x7f800000u, 0x7f800000u, 0x7f7fffffu, 0x7f7fffffu}},
       {0xff7fffffu, 1, {0xff800000u, 0xff7fffffu, 0xff800000u, 0xff7fffffu}},
       {0x7e800000u, 2, {0x7f800000u, 0x7f800000u, 0x7f7fffffu, 0x7f7fffffu}},
-      {0x7e800000u, 1, {0x7f800000u, 0x7f800000u, 0x7f800000u, 0x7f800000u}},
+      // 2^126 * 2 does not overflow: exact in every mode.
+      {0x7e800000u, 1, {0x7f000000u, 0x7f000000u, 0x7f000000u, 0x7f000000u}},
   }};
   for (const Case &test : cases) {
     const util::native<float> v(std::bit_cast<float>(test.value));
     for (uint32_t mode = 0; mode < 4; ++mode) {
-      // The last case does not overflow: 2^126 * 2 is exact.
-      const uint32_t expected =
-          test.value == 0x7e800000u && test.omod == 1 ? 0x7f000000u : test.by_mode[mode];
+      const uint32_t expected = test.by_mode[mode];
       for (const int host : {FE_TONEAREST, FE_TOWARDZERO}) {
         ASSERT_EQ(std::fesetround(host), 0);
         const auto out = apply_vop3_dst_mod_f32(v, test.omod, 0, false, mode);

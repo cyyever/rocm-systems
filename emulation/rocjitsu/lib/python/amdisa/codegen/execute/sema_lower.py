@@ -13,6 +13,7 @@ from amdisa.codegen.execute.floating_policy import (
     F16_FLUSHED_SOURCE_CALLS,
     F16_TRANSCENDENTAL_CALLS,
     FLUSH_NEAREST_F32_OPS,
+    TRANS_F32_OPS,
 )
 
 from dataclasses import dataclass, field, replace
@@ -150,6 +151,8 @@ class LoweringContext:
     mode_arithmetic: bool = True
     dx9_zero_fma: bool = False
     flush_nearest_f32: bool = False
+    # F32 TRANS: OMOD overflow ignores MODE rounding (TRANS_F32_OPS).
+    trans_f32: bool = False
     arithmetic_flush_output: str | None = None
     integer_saturation_dtype: str | None = None
 
@@ -230,6 +233,7 @@ def lower_sema_block(block: SemaBlock, ctx: LoweringContext | None = None) -> st
         'V_FMAC_DX9_ZERO_F32',
     )
     ctx.flush_nearest_f32 = block.instruction_name in FLUSH_NEAREST_F32_OPS
+    ctx.trans_f32 = block.instruction_name in TRANS_F32_OPS
     body_lines = _lower_stmt(block.body, ctx)
 
     if ctx.exec_model == ExecModel.VECTOR:
@@ -2488,20 +2492,18 @@ def _lower_apply_omod(node: SemaNode, ctx: LoweringContext) -> str:
         child.kind == SemaNodeKind.LDEXP for child in node.children[1].walk()
     ):
         return f'amdgpu::div_apply_omod({rhs}, wf.fp_round_mode_{mode}(), {omod_expr})'
+    # Raw-bit scaling: overflow rounds by MODE, except for TRANS results.
+    omod_round = '0' if ctx.trans_f32 else 'wf.fp_round_mode_f32()'
     if arithmetic_f32:
         # The arithmetic helper establishes MODE and restores the host state.
-        # Only active scaling needs a second environment, after the operation.
         return (
             f'[&]() {{ float v = {rhs};'
-            f' const uint32_t effective_omod = {omod_expr};'
-            ' if (effective_omod == 0) return v;'
-            f' {environment}'
-            ' return amdgpu::fp_mode::apply_omod_f32(v, effective_omod); }()'
+            f' return amdgpu::fp_mode::apply_omod_f32(v, {omod_expr}, {omod_round}); }}()'
         )
     if node.ty == SemaType.F32:
         return (
             f'[&]() {{ {environment}float v = {rhs};'
-            f' return amdgpu::fp_mode::apply_omod_f32(v, {omod_expr}); }}()'
+            f' return amdgpu::fp_mode::apply_omod_f32(v, {omod_expr}, {omod_round}); }}()'
         )
     return (
         f'[&]() {{ {environment}{fp_type} v = {rhs};'

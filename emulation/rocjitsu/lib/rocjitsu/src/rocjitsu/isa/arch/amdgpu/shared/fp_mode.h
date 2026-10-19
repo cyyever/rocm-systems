@@ -12,6 +12,7 @@
 #include "rocjitsu/isa/arch/amdgpu/shared/division.h"
 #include "rocjitsu/isa/arch/amdgpu/shared/input_denormal.h"
 #include "rocjitsu/isa/arch/amdgpu/shared/output_denormal.h"
+#include "rocjitsu/isa/arch/amdgpu/shared/output_modifier.h"
 #include "rocjitsu/isa/arch/amdgpu/shared/pseudo_scalar.h"
 #include "util/data_types.h"
 
@@ -753,29 +754,16 @@ inline float finalize_omod_f32(float value, uint32_t omod) {
   return std::bit_cast<float>(bits);
 }
 
-/// @brief Scale an F32 host result in the caller's rounding environment.
-/// @details Live scalar/SDWA helper outside the shared raw-bit output stage;
-/// see output_modifier.h for migration scope.
-/// Zeros and tiny arithmetic results become +0 before scaling; a normal result
-/// that becomes tiny when halved retains its sign and flushes before packing.
-inline float apply_omod_f32(float value, uint32_t omod) {
-  if (omod == 0)
-    return value;
-  const uint32_t bits = std::bit_cast<uint32_t>(value);
-  const uint32_t magnitude = bits & 0x7fffffffu;
-  if (magnitude > 0x7f800000u)
-    return value;
-  if (magnitude < 0x00800000u)
-    return 0.0f;
-  if (omod == 3 && magnitude < 0x01000000u)
-    return std::bit_cast<float>(bits & 0x80000000u);
-  if (omod == 1)
-    value *= 2.0f;
-  else if (omod == 2)
-    value *= 4.0f;
-  else if (omod == 3)
-    value *= 0.5f;
-  return value;
+/// @brief Scale an F32 result by OMOD through the shared raw-bit stage.
+/// @details Zeros and tiny results become +0 before scaling; a normal result that
+/// becomes tiny when halved keeps its sign as a zero. Overflow rounds by
+/// `round_mode` (MODE.FP_ROUND); TRANS callers pass nearest-even.
+inline float apply_omod_f32(float value, uint32_t omod, uint32_t round_mode) {
+  output_modifier::Policy policy;
+  policy.omod = omod;
+  policy.round_mode = round_mode;
+  return std::bit_cast<float>(
+      output_modifier::scale<fp_format::F32>(std::bit_cast<uint32_t>(value), policy));
 }
 
 /// @brief Scale an already rounded half result represented in F32.

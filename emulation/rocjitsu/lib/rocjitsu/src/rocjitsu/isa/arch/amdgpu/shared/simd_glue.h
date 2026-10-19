@@ -714,43 +714,23 @@ inline util::native<double> apply_vop3_dst_mod_f64(util::native<double> v, uint3
   return apply_vop3_dst_mod<double>(v, omod, clamp, clamp_nan_to_zero);
 }
 
-/// @brief Apply F32 OMOD, then CLAMP, independently of the host FP environment.
-/// @details Power-of-two scaling of a flushed F32 value is exact except on
-/// overflow, which rounds by `round_mode` (MODE.FP_ROUND): infinity, or the
-/// largest finite value when rounding toward zero or away from the sign. The
-/// host arithmetic runs under a scoped default environment, keeping its
-/// exception flags from the caller.
+/// @brief Apply F32 OMOD, then CLAMP, through the shared raw-bit output stage.
+/// @details Scaling and clamping use only integer operations, so neither host
+/// rounding nor host exception state affects or observes them. Overflow rounds by
+/// `round_mode` (MODE.FP_ROUND); TRANS callers pass nearest-even.
 inline util::native<float> apply_vop3_dst_mod_f32(util::native<float> v, uint32_t omod,
                                                   uint32_t clamp, bool clamp_nan_to_zero,
                                                   uint32_t round_mode) {
   if (omod == 0 && clamp == 0)
     return v;
-  util::native<float> result;
-  {
-    fp_mode::ScopedEnvironment environment(0);
-    result = apply_vop3_dst_mod<float>(v, omod, clamp, clamp_nan_to_zero);
-  }
-  if ((omod != 1 && omod != 2) || clamp)
-    return result;
+  output_modifier::Policy policy;
+  policy.omod = omod;
+  policy.clamp = clamp != 0;
+  policy.clamp_nan_to_zero = clamp_nan_to_zero;
+  policy.round_mode = round_mode;
   using U = util::native<uint32_t>;
-  const U bits = std::bit_cast<U>(v);
-  const U sign = bits & U(0x80000000u);
-  const U exponent = (bits >> 23) & U(0xffu);
-  const auto overflow = exponent != U(0xffu) && exponent + U(omod) > U(254u);
-  if (!util::stdx::any_of(overflow))
-    return result;
-  // Toward zero saturates both signs; toward +inf saturates negatives and toward
-  // -inf positives.
-  using Mask = std::remove_const_t<decltype(overflow)>;
-  Mask saturates(round_mode == 3u);
-  if (round_mode == 1u)
-    saturates = sign != U(0);
-  else if (round_mode == 2u)
-    saturates = sign == U(0);
-  U out = std::bit_cast<U>(result);
-  util::stdx::where(overflow, out) = sign | U(0x7f800000u);
-  util::stdx::where(overflow && saturates, out) = sign | U(0x7f7fffffu);
-  return std::bit_cast<util::native<float>>(out);
+  return std::bit_cast<util::native<float>>(
+      output_modifier::apply<fp_format::F32>(std::bit_cast<U>(v), policy));
 }
 
 inline uint32_t effective_vop3_omod_f32(const Wavefront &wf, uint32_t omod,

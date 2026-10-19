@@ -3456,6 +3456,70 @@ std::vector<ArithmeticCase> mullit_cases() {
   return cases;
 }
 
+// RDNA3 VOP3 MAX/MIN OMOD overflow rounds by MODE.FP_ROUND: infinity, or the
+// largest finite value toward zero or away from the result's sign. Lanes are
+// gfx1100 captures with IEEE=0 and flushed output denormals (OMOD active),
+// matching gfx1201. The scalar and SIMD paths share this rule.
+std::vector<ArithmeticCase> rdna3_minmax_omod_overflow_cases() {
+  struct Form {
+    const char *name;
+    uint16_t op;
+    uint8_t omod;
+  };
+  constexpr std::array<Form, 4> forms = {{
+      {"MaxMul2", rdna3::kVMaxF32Vop3, 1},
+      {"MaxMul4", rdna3::kVMaxF32Vop3, 2},
+      {"MinMul2", rdna3::kVMinF32Vop3, 1},
+      {"MinMul4", rdna3::kVMinF32Vop3, 2},
+  }};
+  struct Lane {
+    const char *name;
+    uint32_t a;
+    uint32_t b;
+    bool max;
+    std::array<uint32_t, 4> by_mode;
+  };
+  // MAX selects +max_finite, MIN selects -max_finite; the other form selects a zero.
+  constexpr std::array<Lane, 2> lanes = {{
+      {"PositiveOverflow",
+       0x7f7fffffu,
+       0u,
+       true,
+       {0x7f800000u, 0x7f800000u, 0x7f7fffffu, 0x7f7fffffu}},
+      {"NegativeOverflow",
+       0xff7fffffu,
+       0x80000000u,
+       false,
+       {0xff800000u, 0xff7fffffu, 0xff800000u, 0xff7fffffu}},
+  }};
+  // llvm-mc: v_max_f32_e64 v6, v0, v1 mul:2 and v_min_f32_e64 v6, v0, v1 mul:4 (gfx1100).
+  static_assert(
+      rdna3::build_vop3(rdna3::kVMaxF32Vop3, {.vdst = 6, .src0 = 256, .src1 = 257, .omod = 1}) ==
+      std::array<uint32_t, 2>{0xd5100006u, 0x08020300u});
+  static_assert(
+      rdna3::build_vop3(rdna3::kVMinF32Vop3, {.vdst = 6, .src0 = 256, .src1 = 257, .omod = 2}) ==
+      std::array<uint32_t, 2>{0xd50f0006u, 0x10020300u});
+  std::vector<ArithmeticCase> cases;
+  for (const Form &form : forms) {
+    const bool max = form.op == rdna3::kVMaxF32Vop3;
+    const auto words =
+        rdna3::build_vop3(form.op, {.vdst = 6, .src0 = 256, .src1 = 257, .omod = form.omod});
+    for (const Lane &lane : lanes) {
+      if (lane.max != max)
+        continue;
+      for (uint32_t mode = 0; mode < 4; ++mode)
+        cases.push_back({std::format("Gfx1100{}{}Mode{:02X}", form.name, lane.name, mode),
+                         ROCJITSU_CODE_ARCH_RDNA3,
+                         {words[0], words[1], 0u},
+                         {{0, lane.a}, {1, lane.b}},
+                         {{6, lane.by_mode[mode]}},
+                         mode,
+                         FE_TONEAREST});
+    }
+  }
+  return cases;
+}
+
 // On gfx1100, encoded OMOD is disabled with IEEE=1 or with output denormals kept
 // (IEEE=0, MODE 0xf0): mul:2 neither scales nor forces a flush, so the tiny
 // product rounds to min_normal. With IEEE=0 and MODE 0x00, OMOD applies and the
@@ -3853,6 +3917,23 @@ TEST_P(ValuCndmaskB16HalfSelectionTest, AppliesModifiersToSelectedHalves) {
 
 INSTANTIATE_TEST_SUITE_P(OpSel, ValuCndmaskB16HalfSelectionTest,
                          testing::ValuesIn(cndmask_b16_half_selection_cases()),
+                         [](const testing::TestParamInfo<ArithmeticCase> &info) {
+                           return info.param.name;
+                         });
+
+class ValuRdna3OmodOverflowTest : public testing::TestWithParam<ArithmeticCase> {};
+
+TEST_P(ValuRdna3OmodOverflowTest, MatchesCapturesWithSimdEnabledAndForcedScalar) {
+  ForceScalarGuard guard;
+  for (const bool scalar : {true, false}) {
+    SCOPED_TRACE(scalar ? "scalar" : "SIMD enabled");
+    util::set_force_scalar_for_testing(scalar);
+    expect_arithmetic_case(GetParam());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(MinMax, ValuRdna3OmodOverflowTest,
+                         testing::ValuesIn(rdna3_minmax_omod_overflow_cases()),
                          [](const testing::TestParamInfo<ArithmeticCase> &info) {
                            return info.param.name;
                          });

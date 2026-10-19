@@ -148,8 +148,10 @@ void VTanhF32Vop3::execute_impl(amdgpu::Wavefront &wf) {
               return amdgpu::source_modifier::apply_to_float(sv, 0, inst_.abs, inst_.neg);
             }());
             return amdgpu::fp_mode::apply_omod_f32(
-                v, amdgpu::fp_mode::effective_omod(wf.cu().arch(), wf.fp_denorm_mode_f32(),
-                                                   wf.ieee_mode(), inst_.omod));
+                v,
+                amdgpu::fp_mode::effective_omod(wf.cu().arch(), wf.fp_denorm_mode_f32(),
+                                                wf.ieee_mode(), inst_.omod),
+                wf.fp_round_mode_f32());
           }();
           if (inst_.clamp)
             v = amdgpu::clamp_floating_result(v, wf);
@@ -186,8 +188,10 @@ RJ_NOINLINE void VTanhF32Vop3::execute_modifier_impl(amdgpu::Wavefront &wf) {
               return amdgpu::source_modifier::apply_to_float(sv, 0, inst_.abs, inst_.neg);
             }());
             return amdgpu::fp_mode::apply_omod_f32(
-                v, amdgpu::fp_mode::effective_omod(wf.cu().arch(), wf.fp_denorm_mode_f32(),
-                                                   wf.ieee_mode(), inst_.omod));
+                v,
+                amdgpu::fp_mode::effective_omod(wf.cu().arch(), wf.fp_denorm_mode_f32(),
+                                                wf.ieee_mode(), inst_.omod),
+                wf.fp_round_mode_f32());
           }();
           if (inst_.clamp)
             v = amdgpu::clamp_floating_result(v, wf);
