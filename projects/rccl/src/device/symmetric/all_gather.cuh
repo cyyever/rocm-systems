@@ -355,39 +355,29 @@ __device__ __forceinline__ void ncclSymkRun_AllGather_HierLsaLDST(ncclSymkDevWor
     int nWarps = nBlocks * (blockDim.x / WARP_SIZE);
     int w = flattenIx(block, nBlocks, threadIdx.x / WARP_SIZE, blockDim.x / WARP_SIZE);
     int lane = threadIdx.x % WARP_SIZE;
-    ncclSymPtr<char> mySlot = output + rank * nAllElts;
-    bool inPlace = input == mySlot;
+    bool inPlace = input == output + rank * nAllElts;
 
-    // Our own contribution is a local read, far quicker than a pull, so it doesn't get a group of
-    // its own that would finish early and idle. It takes one warp per tile, counted down from the
-    // highest index: the pulls below fill their groups from the lowest index up, so when a chunk is
-    // too small to occupy every warp, the copy runs on warps the pulls leave idle.
-    constexpr size_t BytePerTile = ncclSymkGetBytesPerChunk(1, ncclSymkUnrollPacks);
-    int nLocalWarps = (int)min((size_t)nWarps, divUp(nElts, BytePerTile));
-    int lw = nWarps - 1 - w;
-    if (lw < nLocalWarps) {
-      bcast<char, /*EnableTma=*/false>(handler, nLocalWarps * WARP_SIZE, lw * WARP_SIZE + lane, /*nBlocks=*/1,
-                                       /*waitNeeded=*/false, bar, input, mySlot, nElts, scaleIn, /*srcSlot=*/-1);
-    }
-
-    // Then one group of warps per remote scale-up member so every package is pulled from at once.
-    // On a mesh each package pair has its own link, and visiting one package at a time would leave
-    // all but one of them idle. Grouping warps rather than blocks keeps the groups even when the
-    // block count is not a multiple of the package count, such as fewer blocks than packages.
-    int nGroups = min(nWarps, scaleUp.nRanks - 1);
+    // One group per package so every package is served at once. On a mesh each package pair has its
+    // own link, and visiting one package at a time would leave all but one of them idle. Group 0
+    // copies our own slot to our package alongside the pulls; it writes as much as any of them, so it
+    // gets as many warps. Grouping warps, rather than blocks, keeps the groups even when the block
+    // count is not a multiple of the package count, such as fewer blocks than packages.
+    int nGroups = min(nWarps, scaleUp.nRanks);
     int group = w % nGroups;
     int nGroupWarps = nWarps / nGroups + (group < nWarps % nGroups ? 1 : 0);
     // Threads numbered over the group.
     int t = (w / nGroups) * WARP_SIZE + lane;
     int tn = nGroupWarps * WARP_SIZE;
-    // Remote packages are numbered from our own so they don't all pull from the same one at once.
-    for (int k = 1 + group; k < scaleUp.nRanks; k += nGroups) {
+    // Packages are numbered from our own so they don't all pull from the same one at once.
+    for (int k = group; k < scaleUp.nRanks; k += nGroups) {
       int su = scaleUp.rank + k;
       if (su >= scaleUp.nRanks) su -= scaleUp.nRanks;
       ncclSymPtr<char> slot = output + ncclTeamRankToWorld(handler.comm, scaleUp, su) * nAllElts;
-      int srcSlot = ncclTeamRankToLsa(handler.comm, scaleUp, su);
+      // Our own slot is read from our input, and bcast() skips the store to self when that is in place.
+      int srcSlot = k == 0 ? -1 : ncclTeamRankToLsa(handler.comm, scaleUp, su);
+      ncclSymPtr<char> src = k != 0 && inPlace ? slot : input;
       bcast<char, /*EnableTma=*/false, /*Pull=*/true>(handler, tn, t, /*nBlocks=*/1, /*waitNeeded=*/false, bar,
-                                                       inPlace ? slot : input, slot, nElts, scaleIn, srcSlot);
+                                                       src, slot, nElts, scaleIn, srcSlot);
     }
   });
 
