@@ -936,7 +936,7 @@ __device__ void IPCContext::alltoallv([[maybe_unused]] rocshmem_team_t team,
 template <typename T>
 __device__ void IPCContext::fcollect_wg(rocshmem_team_t team, T *dst,
                                      const T *src, int nelems) {
-  fcollectmem_linear_wg(team, dst, src, nelems * sizeof(T));
+  internal_fcollectmem_wg(team, dst, src, nelems * sizeof(T));
 }
 
 template <typename T>
@@ -945,7 +945,7 @@ __device__ int IPCContext::fcollect_wave(rocshmem_team_t team, T *dst,
   if (dst == nullptr || src == nullptr || team == ROCSHMEM_TEAM_INVALID)
     return ROCSHMEM_ERROR;
 
-  fcollectmem_linear_wave(team, dst, src, nelems * sizeof(T));
+  internal_fcollectmem_wave(team, dst, src, nelems * sizeof(T));
 
   return ROCSHMEM_SUCCESS;
 }

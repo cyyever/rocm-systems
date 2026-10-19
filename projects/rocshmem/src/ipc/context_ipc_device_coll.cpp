@@ -510,9 +510,21 @@ __device__ int IPCContext::fcollectmem_wave(rocshmem_team_t team, void *dst,
   if (dst == nullptr || src == nullptr || team == ROCSHMEM_TEAM_INVALID)
     return ROCSHMEM_ERROR;
 
-  fcollectmem_linear_wave(team, dst, src, nelems);
+  internal_fcollectmem_wave(team, dst, src, nelems);
 
   return ROCSHMEM_SUCCESS;
+}
+
+__device__ void IPCContext::internal_fcollectmem_wave(rocshmem_team_t team, void *dst,
+                                            const void *src, int nelems) {
+#if defined(USE_SDMA)
+  if (nelems < 512 || constmem.ipc_sdma_threshold != SDMA_THRESHOLD_DISABLED)
+#else
+  if (nelems < 512)
+#endif
+    fcollectmem_linear_thread_puts_wave(team, dst, src, nelems);
+  else
+    fcollectmem_linear_wave(team, dst, src, nelems);
 }
 
 __device__ void IPCContext::fcollectmem_linear_wave(rocshmem_team_t team, void *dst,
@@ -540,7 +552,19 @@ __device__ void IPCContext::fcollectmem_linear_wave(rocshmem_team_t team, void *
 
 __device__ void IPCContext::fcollectmem_wg(rocshmem_team_t team, void *dst,
                                      const void *src, int nelems) {
-  fcollectmem_linear_wg(team, dst, src, nelems);
+  internal_fcollectmem_wg(team, dst, src, nelems);
+}
+
+__device__ void IPCContext::internal_fcollectmem_wg(rocshmem_team_t team, void *dst,
+                                     const void *src, int nelems) {
+#if defined(USE_SDMA)
+  if (nelems < 512 || constmem.ipc_sdma_threshold != SDMA_THRESHOLD_DISABLED)
+#else
+  if (nelems < 512)
+#endif
+    fcollectmem_linear_thread_puts_wg(team, dst, src, nelems);
+  else
+    fcollectmem_linear_wg(team, dst, src, nelems);
 }
 
 __device__ void IPCContext::fcollectmem_linear_wg(rocshmem_team_t team, void *dst,
@@ -566,4 +590,87 @@ __device__ void IPCContext::fcollectmem_linear_wg(rocshmem_team_t team, void *ds
   internal_sync_wg(my_pe, pe_start, stride, pe_size, pSync);
 }
 
+
+__device__ void IPCContext::fcollectmem_linear_thread_puts_wave(rocshmem_team_t team,
+    void *dst, const void *src, int nelems) {
+  IPCTeam *team_obj = reinterpret_cast<IPCTeam *>(team);
+
+  int pe_size = team_obj->num_pes;
+  long *pSync = team_obj->alltoall_pSync;
+  int my_pe_in_team = team_obj->my_pe;
+  size_t alltoall_pSync_offset = (team_obj->alltoall_sequence_number % 2) * pe_size;
+
+  // Use lane ID within the wave so any wave in a multi-wave WG works correctly.
+  int tid = get_flat_block_id() % WF_SIZE;
+  int step_size = get_flat_block_size() < WF_SIZE ? get_flat_block_size() : WF_SIZE;
+
+  // Have each PE put their designated data to the other PEs
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+    putmem_nbi(reinterpret_cast<char *>(dst) + my_pe_in_team * nelems, src, nelems, dest_pe);
+  }
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+    fence(dest_pe);
+    ptrdiff_t L_offset = reinterpret_cast<char*>(&pSync[alltoall_pSync_offset + my_pe_in_team]) - wrk_sync_pool_bases_[my_pe];
+    ipcImpl_.ipcAMOAdd(reinterpret_cast<long*>(wrk_sync_pool_bases_[dest_pe] + L_offset), 1L);
+  }
+
+  // wait until everyone has obtained their designated data
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+
+    long *sync_flag = &pSync[alltoall_pSync_offset + dest_pe];
+    while (uncached_load(sync_flag) != 1) { }
+
+    pSync[alltoall_pSync_offset + dest_pe] = ROCSHMEM_SYNC_VALUE;
+  }
+
+  if (is_thread_zero_in_wave()) {
+    team_obj->alltoall_sequence_number++;
+  }
+
+  sync_wave(team);
+}
+
+__device__ void IPCContext::fcollectmem_linear_thread_puts_wg(rocshmem_team_t team,
+    void *dst, const void *src, int nelems) {
+  IPCTeam *team_obj = reinterpret_cast<IPCTeam *>(team);
+
+  int pe_size = team_obj->num_pes;
+  long *pSync = team_obj->alltoall_pSync;
+  int my_pe_in_team = team_obj->my_pe;
+  size_t alltoall_pSync_offset = (team_obj->alltoall_sequence_number % 2) * pe_size;
+
+  int tid = get_flat_block_id();
+  int step_size = get_flat_block_size() < WF_SIZE ? get_flat_block_size() : WF_SIZE;
+
+  // Have each PE put their designated data to the other PEs
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+    putmem_nbi(reinterpret_cast<char *>(dst) + my_pe_in_team * nelems, src, nelems, dest_pe);
+  }
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+    fence(dest_pe);
+    ptrdiff_t L_offset = reinterpret_cast<char*>(&pSync[alltoall_pSync_offset + my_pe_in_team]) - wrk_sync_pool_bases_[my_pe];
+    ipcImpl_.ipcAMOAdd(reinterpret_cast<long*>(wrk_sync_pool_bases_[dest_pe] + L_offset), 1L);
+  }
+
+  // wait until everyone has obtained their designated data
+  for (int j = tid; j < pe_size; j += step_size) {
+    int dest_pe = team_obj->get_pe_in_world(j);
+
+    long *sync_flag = &pSync[alltoall_pSync_offset + dest_pe];
+    while (uncached_load(sync_flag) != 1) { }
+
+    pSync[alltoall_pSync_offset + dest_pe] = ROCSHMEM_SYNC_VALUE;
+  }
+
+  if (is_thread_zero_in_block()) {
+    team_obj->alltoall_sequence_number++;
+  }
+
+  __syncthreads();
+}
 }  // namespace rocshmem

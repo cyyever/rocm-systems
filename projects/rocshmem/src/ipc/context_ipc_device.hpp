@@ -492,6 +492,18 @@ class IPCContext : public Context {
   __device__ void fcollectmem_linear_wave(rocshmem_team_t team, void *dest,
                                   const void *source, int nelems);
 
+  __device__ void fcollectmem_linear_thread_puts_wave(rocshmem_team_t team,
+      void *dest, const void *source, int nelems);
+
+  __device__ void fcollectmem_linear_thread_puts_wg(rocshmem_team_t team,
+      void *dest, const void *source, int nelems);
+
+  __device__ void internal_fcollectmem_wave(rocshmem_team_t team, void *dest,
+                                            const void *source, int nelems);
+
+  __device__ void internal_fcollectmem_wg(rocshmem_team_t team, void *dest,
+                                     const void *source, int nelems);
+
   __device__ void internal_sync(int pe, int PE_start, int stride, int PE_size,
                                 int64_t *pSync);
 
