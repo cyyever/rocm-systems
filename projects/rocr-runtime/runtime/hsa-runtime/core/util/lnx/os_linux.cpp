@@ -179,6 +179,7 @@ static void FillCpuSetFromNumaNodes(cpu_set_t* cpuset, int cores, unsigned long 
     return;
   }
 
+  bool added_cpu = false;
   for (int node = 0; node <= max_node; node++) {
     // Safety check: ensure we don't shift beyond the width of unsigned long
     if (node >= static_cast<int>(sizeof(unsigned long) * 8)) {
@@ -200,11 +201,20 @@ static void FillCpuSetFromNumaNodes(cpu_set_t* cpuset, int cores, unsigned long 
     for (int cpu = 0; cpu < num_cpus && cpu < cores; cpu++) {
       if (numa_bitmask_isbitset(node_cpus, cpu)) {
         CPU_SET_S(cpu, CPU_ALLOC_SIZE(cores), cpuset);
+        added_cpu = true;
       }
     }
   }
 
   numa_free_cpumask(node_cpus);
+
+  // An empty affinity mask makes pthread_setaffinity_np fail and the helper
+  // thread is never created. Preserve the previous all-CPU behavior instead.
+  if (!added_cpu) {
+    for (int i = 0; i < cores; i++) {
+      CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
+    }
+  }
 }
 #endif  // HAS_NUMA
 
