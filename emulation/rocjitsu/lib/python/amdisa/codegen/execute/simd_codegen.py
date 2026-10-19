@@ -46,13 +46,13 @@ def _binary_f32_op(name: str, *, modifiers: bool = False) -> str:
 
 
 # F16 VOP3 arithmetic with explicit MODE flushing and post-rounding modifiers:
-# template_name -> (operation, negated source or -1). SUB and SUBREV add the
+# template_name -> (operation, amdgpu::NegatedSource). SUB and SUBREV add the
 # negated subtrahend in operand order, as in scalar lowering.
 SIMD_VOP3_BINARY_MODE_FP16 = {
-    'v_add_f16_vop3': ('ADD', -1),
-    'v_sub_f16_vop3': ('ADD', 1),
-    'v_subrev_f16_vop3': ('ADD', 0),
-    'v_mul_f16_vop3': ('MUL', -1),
+    'v_add_f16_vop3': ('ADD', 'NONE'),
+    'v_sub_f16_vop3': ('ADD', 'SRC1'),
+    'v_subrev_f16_vop3': ('ADD', 'SRC0'),
+    'v_mul_f16_vop3': ('MUL', 'NONE'),
 }
 
 # template_name -> (cpp_element_type, cpp_binary_op_functor)
@@ -2697,7 +2697,7 @@ def _simd_probe_line(
         return (
             '  ROCJITSU_TRY_SIMD_VOP3_BINARY_MODE_FP16('
             f'{str(true16_vop3).lower()}, amdgpu::fp_mode::Arithmetic::{operation}, '
-            f'{negated_source});'
+            f'amdgpu::NegatedSource::{negated_source});'
         )
     minmax_probe = float_minmax.simd_probe(template_name, true16_vop3)
     if minmax_probe is not None:
