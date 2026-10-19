@@ -903,16 +903,6 @@ fma_f16_mode_simd(util::native<uint32_t> src0, util::native<uint32_t> src1,
   return util::native<uint32_t>(out, util::stdx::vector_aligned);
 }
 
-/// @brief Whether register access in this wave can run no caller code.
-/// @details Register observers and the debugger run caller code during register
-/// access. With them, F32 MODE-aware SIMD runs only when MODE matches the host
-/// default, so observation keeps the scalar path's per-lane granularity otherwise.
-/// The guest environment never spans register access: it is scoped to arithmetic
-/// (fma_f32_simd) and output scaling (apply_vop3_dst_mod_f32).
-inline bool register_access_runs_no_caller_code(const Wavefront &wf) {
-  return !wf.cu().observes_register_access() && !wf.cu().debug_active();
-}
-
 /// F32 FMA under MODE rounding and denormal controls. The guest environment is
 /// scoped to this arithmetic, keeping it and its exception flags away from
 /// register-access callbacks. Exceptional lanes use scalar NaN selection and

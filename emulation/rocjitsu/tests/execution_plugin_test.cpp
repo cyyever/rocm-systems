@@ -1762,11 +1762,11 @@ public:
   }
 };
 
-// F32 MODE-aware arithmetic scopes the guest environment to arithmetic and
-// output scaling (amdgpu::fma_f32_simd), so register-access callbacks see the
-// caller's rounding, exception flags and trap masks, and inexact results leave
-// the caller's flags unchanged. MODE 0xF1 rounds toward +infinity and falls back
-// to scalar under an observer; 0xF0 matches the host and runs SIMD.
+// F32 MODE-aware arithmetic scopes the guest environment to its arithmetic
+// (amdgpu::fma_f32_simd), so register-access callbacks see the caller's rounding,
+// exception flags and trap masks on SIMD and scalar paths alike, and inexact
+// results leave the caller's flags unchanged. MODE 0xF1 rounds toward
+// +infinity, unlike the host; 0xF0 matches it. Both run SIMD when enabled.
 TEST(ExecutionPluginTest, F32ModeArithmeticObserversSeeCallerRounding) {
   struct Case {
     const char *name;

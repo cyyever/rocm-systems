@@ -346,15 +346,11 @@ def test_vop3_f16_subtraction_uses_mode_aware_add_route(mnemonic, negated, true1
 def test_f32_mode_aware_probes_share_one_guest_environment_policy(template):
     probe = simd_probe_line(template)
 
-    # One probe, without a probe-level environment: the helpers scope it to
-    # arithmetic. With callbacks, SIMD runs only in the host's default MODE.
+    # One ungated probe: the helpers scope the guest environment themselves.
     assert probe.count('ROCJITSU_TRY_SIMD_') == 1
+    assert probe.lstrip().startswith('ROCJITSU_TRY_SIMD_')
     assert 'ScopedEnvironment' not in probe
-    assert probe.startswith(
-        '  if (amdgpu::register_access_runs_no_caller_code(wf) ||\n'
-        '      amdgpu::fp_mode::native_arithmetic_matches('
-        'wf.fp_round_mode_f32(), wf.fp_denorm_mode_f32())) {\n'
-    )
+    assert 'native_arithmetic_matches' not in probe
     assert 'amdgpu::fma_f32_simd(' in probe or 'amdgpu::binary_f32_simd<' in probe
 
 

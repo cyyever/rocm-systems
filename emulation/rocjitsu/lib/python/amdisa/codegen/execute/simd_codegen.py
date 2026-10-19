@@ -2664,17 +2664,9 @@ def _guard_mode_arithmetic_probe(template_name: str, probe: str | None) -> str |
         and 'dx9' not in fields
         and ('amdgpu::fma_f32_simd(' in probe or 'amdgpu::binary_f32_simd<' in probe)
     ):
-        # The helpers scope the guest environment to arithmetic and output
-        # scaling, so callbacks keep the caller's FP environment. With callbacks
-        # (amdgpu::register_access_runs_no_caller_code), SIMD runs only in the
-        # host's default MODE.
-        return (
-            '  if (amdgpu::register_access_runs_no_caller_code(wf) ||\n'
-            '      amdgpu::fp_mode::native_arithmetic_matches('
-            'wf.fp_round_mode_f32(), wf.fp_denorm_mode_f32())) {\n'
-            f'{_indent_probe(probe)}\n'
-            '  }'
-        )
+        # The helpers scope the guest environment to their arithmetic and output
+        # scaling is raw-bit, so callbacks keep the caller's FP state in every MODE.
+        return probe
     if dtype in ('f16', 'f64') and fields[1] in ('fma', 'fmac', 'fmaak', 'fmamk'):
         return probe
     mode = 'f32' if dtype == 'f32' else 'f16_f64'

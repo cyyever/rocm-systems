@@ -2533,8 +2533,11 @@ def _lower_apply_clamp(node: SemaNode, ctx: LoweringContext) -> str:
         else ''
     )
     if node.ty == SemaType.F32 and any(
-        child.kind == SemaNodeKind.FMA for child in node.children[1].walk()
+        child.kind in (SemaNodeKind.ADD, SemaNodeKind.MUL, SemaNodeKind.FMA)
+        for child in node.children[1].walk()
     ):
+        # The arithmetic helper scopes MODE itself; scope only CLAMP here, after
+        # the operand reads, so register-access callbacks keep the caller's FP state.
         return (
             f'[&]() {{ float v = {rhs};'
             f' if (inst_.clamp) {{ {environment}'
