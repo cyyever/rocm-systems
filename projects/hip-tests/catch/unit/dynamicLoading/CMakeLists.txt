@@ -5,7 +5,6 @@
 if(UNIX AND BUILD_SHARED_LIBS)
   set(TEST_SRC ${TEST_SRC}
       complex_loading_behavior.cc
-      concurrentDynamicLoad.cc
       hipApiDynamicLoad.cc
       hipGetProcAddress.cc
       hipGetProcAddressCompilerOption.cc

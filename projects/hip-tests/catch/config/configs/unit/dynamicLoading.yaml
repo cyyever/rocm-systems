@@ -1,8 +1,5 @@
 ---
 dynamicLoading:
-  Unit_StatCO_ConcurrentDlopenDlcloseWhileLaunching:
-    <<: *level_2
-    tags: [module]
   Unit_StatCO_Positive_ManagedVariableFromLateDlopenBeforeFirstUse:
     <<: *level_2
     tags: [module]

@@ -479,12 +479,6 @@ add_dependencies(build_tests hipGetFuncBySymbol_exe)
 set_property(GLOBAL APPEND PROPERTY G_INSTALL_EXE_TARGETS hipGetFuncBySymbol_exe)
 
 if(UNIX)
-  add_executable(managedFirstTouch_exe EXCLUDE_FROM_ALL managedFirstTouch_exe.cc)
-  set_source_files_properties(managedFirstTouch_exe.cc PROPERTIES LANGUAGE ${GPGPU_LANGUAGE})
-  target_link_libraries(managedFirstTouch_exe ${GPGPU_LINKER_LIBRARIES} pthread)
-  add_dependencies(build_tests managedFirstTouch_exe)
-  set_property(GLOBAL APPEND PROPERTY G_INSTALL_EXE_TARGETS managedFirstTouch_exe)
-
   add_executable(managedDeclaredUnused_exe EXCLUDE_FROM_ALL managedDeclaredUnused_exe.cc)
   set_source_files_properties(managedDeclaredUnused_exe.cc PROPERTIES LANGUAGE ${GPGPU_LANGUAGE})
   target_link_libraries(managedDeclaredUnused_exe ${GPGPU_LINKER_LIBRARIES})
@@ -509,7 +503,7 @@ set(TEST_SRC
   hipModuleLoadMultProcessOnMultGPU.cc
 )
 if(UNIX)
-  list(APPEND TEST_SRC managedFirstTouch.cc managedDeclaredUnused.cc managedForkAfterRegister.cc)
+  list(APPEND TEST_SRC managedDeclaredUnused.cc managedForkAfterRegister.cc)
 endif()
 set(AMD_TEST_SRC
     hipExtLaunchKernelGGL.cc

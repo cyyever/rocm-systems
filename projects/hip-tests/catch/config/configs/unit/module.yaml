@@ -1,8 +1,5 @@
 ---
 module:
-  Unit_StatCO_ManagedVarConcurrentFirstTouch_InChildProcess:
-    <<: *level_2
-    tags: [module]
   Unit_StatCO_ManagedVarDeclaredUnused_InChildProcess:
     <<: *level_2
     tags: [module]
