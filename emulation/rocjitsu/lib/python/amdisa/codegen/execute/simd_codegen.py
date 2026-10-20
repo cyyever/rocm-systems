@@ -2712,6 +2712,11 @@ def _guard_mode_arithmetic_probe(template_name: str, probe: str | None) -> str |
         # The probe scopes the guest environment to the chunk loop and output
         # scaling is raw-bit, so callbacks keep the caller's FP state in every MODE.
         return probe
+    if 'amdgpu::binary_f16_simd_unscoped<' in probe:
+        # The helper flushes by MODE and the probe installs nearest-even rounding
+        # with host flushing cleared, so only the guest rounding mode restricts
+        # this route, as in the VOP3 forms sharing the helper.
+        return f'  if (wf.fp_round_mode_f16_f64() == 0) {{\n{probe}\n  }}'
     if dtype in ('f16', 'f64') and fields[1] in ('fma', 'fmac', 'fmaak', 'fmamk'):
         return probe
     mode = 'f32' if dtype == 'f32' else 'f16_f64'
@@ -3357,6 +3362,13 @@ def _local_coverage_probe(
     def call(arity: int, half_dst: bool, half_inputs: int, functor: str) -> str:
         functor = functor.replace('float32_t', 'float')
         args = f'{arity}, {str(e32).lower()}, {str(half_dst).lower()}, {half_inputs}'
+        # Callbacks on the unscoped F16 core need the probe to install nearest-even
+        # rounding once for the instruction, as the shared VOP2 probe does.
+        if 'amdgpu::binary_f16_simd_unscoped<' in functor:
+            return (
+                f'  if (amdgpu::try_execute_words_simd<{args}, true>('
+                f'inst, wf, {functor}, 0)) return;'
+            )
         return f'  if (amdgpu::try_execute_words_simd<{args}>(inst, wf, {functor})) return;'
 
     if template_name in ('v_pk_fmac_f16_vop2', 'v_pk_fmac_f16_vop3'):

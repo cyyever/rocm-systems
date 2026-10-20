@@ -3202,11 +3202,15 @@ std::vector<ArithmeticCase> subtraction_mode_cases() {
   for (const Lane &lane : lanes) {
     const bool vop3_form = lane.encoding.vop3;
     for (const auto &[mode, result] : lane.mode_results) {
+      // Both encodings share one MODE-aware helper, so both take SIMD under
+      // guest nearest-even in every denormal mode and fall back for directed
+      // rounding, which the helper cannot honor.
       const bool nearest = ((mode >> 2) & 3u) == 0;
       const SimdPathExpectation simd =
-          !vop3_form ? SimdPathExpectation{}
-          : nearest  ? expect_simd_path(amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16)
-                     : expect_simd_fallback();
+          !nearest  ? expect_simd_fallback()
+          : vop3_form
+              ? expect_simd_path(amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16)
+              : expect_simd_path(amdgpu::SimdFastPath::VOP_WORDS);
       cases.push_back({std::format("{}Mode{:02X}", lane.name, mode),
                        ROCJITSU_CODE_ARCH_RDNA4,
                        {lane.encoding.words[0], lane.encoding.words[1], 0u},

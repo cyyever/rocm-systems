@@ -2908,8 +2908,7 @@ inline void execute_v_add_co_u32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
 
 template <typename Inst>
 inline void execute_v_add_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
-  if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
-                                                 wf.fp_denorm_mode_f16_f64())) {
+  if (wf.fp_round_mode_f16_f64() == 0) {
     ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(
         uint32_t,
         [&wf](auto a, auto b) {
@@ -15662,8 +15661,7 @@ inline void execute_v_mul_dx9_zero_f32_vop3([[maybe_unused]] Inst &inst,
 
 template <typename Inst>
 inline void execute_v_mul_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
-  if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
-                                                 wf.fp_denorm_mode_f16_f64())) {
+  if (wf.fp_round_mode_f16_f64() == 0) {
     ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(
         uint32_t,
         [&wf](auto a, auto b) {
@@ -18342,8 +18340,7 @@ inline void execute_v_sub_co_u32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
 
 template <typename Inst>
 inline void execute_v_sub_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
-  if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
-                                                 wf.fp_denorm_mode_f16_f64())) {
+  if (wf.fp_round_mode_f16_f64() == 0) {
     ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(
         uint32_t,
         [&wf](auto a, auto b) {
@@ -18838,8 +18835,7 @@ inline void execute_v_subrev_co_u32_vop3([[maybe_unused]] Inst &inst,
 
 template <typename Inst>
 inline void execute_v_subrev_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
-  if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
-                                                 wf.fp_denorm_mode_f16_f64())) {
+  if (wf.fp_round_mode_f16_f64() == 0) {
     ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(
         uint32_t,
         [&wf](auto a, auto b) {

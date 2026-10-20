@@ -100,6 +100,7 @@ enum class SimdFastPath : uint8_t {
   VOP3_FMA_FP16,
   VOP_WORDS,
   VOPD,
+  VOP2_BINARY,
 };
 
 namespace detail {
@@ -1191,17 +1192,20 @@ template <typename T, bool Scoped = false, typename Inst, typename BinOp>
   auto src0 = regs.read_operand(inst.src0, exec);
   auto src1 = regs.read_operand(inst.vsrc1, exec);
   auto dst = regs.write_operand(inst.vdst, exec);
-  return run_instruction_chunks<Scoped>(dst, round_mode, [&] {
-    for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
-      const uint64_t chunk = (exec >> base) & chunk_full;
-      if (chunk == 0)
-        continue;
-      const auto a = src0.template load_native<T>(base);
-      const auto b = src1.template load_native<T>(base);
-      const auto r = bin_op(a, b);
-      dst.template store_native<T>(base, r, chunk);
-    }
-  });
+  if (!run_instruction_chunks<Scoped>(dst, round_mode, [&] {
+        for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
+          const uint64_t chunk = (exec >> base) & chunk_full;
+          if (chunk == 0)
+            continue;
+          const auto a = src0.template load_native<T>(base);
+          const auto b = src1.template load_native<T>(base);
+          const auto r = bin_op(a, b);
+          dst.template store_native<T>(base, r, chunk);
+        }
+      }))
+    return false;
+  detail::record_simd_fast_path(SimdFastPath::VOP2_BINARY);
+  return true;
 }
 
 /// Unconstrained fallback selected when `util::has_stdx_simd` is false.
