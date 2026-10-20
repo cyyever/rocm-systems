@@ -4034,25 +4034,43 @@ void expect_f16_binary_host_environment(uint32_t host_mxcsr, int host_rounding =
       // Exact cancellation is +0 under guest RNE, but -0 under host round-down.
       {"ExactCancellationAdd", false, 0x3c00u, 0xbc00u, 0x0000u},
   }};
-  for (const Sample &sample : samples) {
-    const auto words =
-        rdna4::build_vop3(sample.multiply ? rdna4::kVMulF16Vop3 : rdna4::kVAddF16Vop3,
-                          {.vdst = 6, .src0 = 256, .src1 = 257});
-    const ArithmeticCase test{sample.name,
-                              ROCJITSU_CODE_ARCH_RDNA4,
-                              {words[0], words[1], 0},
-                              {{0, sample.a}, {1, sample.b}, {6, 0xa5a5a5a5u}},
-                              {{6, 0xa5a50000u | sample.expected}},
-                              0x40u,
-                              host_rounding,
-                              0xffffu,
-                              host_mxcsr,
-                              expect_simd_path(amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16)};
-    for (const bool scalar : {true, false}) {
-      SCOPED_TRACE(test.name);
-      SCOPED_TRACE(scalar ? "scalar" : "SIMD enabled");
-      util::set_force_scalar_for_testing(scalar);
-      expect_arithmetic_case(test, simd_expectation_for_run(test, scalar));
+  // Both encodings share one helper and one guest environment, so both must be
+  // independent of host rounding and flags. MODE 0x40 keeps guest nearest-even
+  // with F16 input denormals flushed, which the VOP2 route reaches only because
+  // its probe installs the environment rather than requiring a matching host.
+  struct Form {
+    const char *name;
+    bool vop3;
+    amdgpu::SimdFastPath path;
+  };
+  constexpr std::array<Form, 2> forms = {{
+      {"E64", true, amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16},
+      {"E32", false, amdgpu::SimdFastPath::VOP_WORDS},
+  }};
+  for (const Form &form : forms) {
+    for (const Sample &sample : samples) {
+      const uint16_t op = form.vop3 ? (sample.multiply ? rdna4::kVMulF16Vop3 : rdna4::kVAddF16Vop3)
+                                    : (sample.multiply ? rdna4::kVMulF16Vop2 : rdna4::kVAddF16Vop2);
+      const auto words =
+          form.vop3 ? rdna4::build_vop3(op, {.vdst = 6, .src0 = 256, .src1 = 257})
+                    : std::array<uint32_t, 2>{
+                          rdna4::build_vop2(op, {.src0 = 256, .vsrc1 = 1, .vdst = 6})[0], 0u};
+      const ArithmeticCase test{std::format("{}{}", sample.name, form.name),
+                                ROCJITSU_CODE_ARCH_RDNA4,
+                                {words[0], words[1], 0},
+                                {{0, sample.a}, {1, sample.b}, {6, 0xa5a5a5a5u}},
+                                {{6, 0xa5a50000u | sample.expected}},
+                                0x40u,
+                                host_rounding,
+                                0xffffu,
+                                host_mxcsr,
+                                expect_simd_path(form.path)};
+      for (const bool scalar : {true, false}) {
+        SCOPED_TRACE(test.name);
+        SCOPED_TRACE(scalar ? "scalar" : "SIMD enabled");
+        util::set_force_scalar_for_testing(scalar);
+        expect_arithmetic_case(test, simd_expectation_for_run(test, scalar));
+      }
     }
   }
 }

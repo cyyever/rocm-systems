@@ -328,8 +328,8 @@ SIMD_VOP2_BINARY: dict[str, tuple[str, str]] = {
     ),
     # --- f16 binary (low 16 bits f16, result zero-extended). These share the
     # MODE-aware arithmetic helper the VOP3 forms use, so source flushing,
-    # FP16_OVFL narrowing and NaN selection have one implementation. The
-    # surrounding gate still restricts VOP2 to a host-matching environment. ---
+    # FP16_OVFL narrowing and NaN selection have one implementation. The probe
+    # installs nearest-even rounding, so only the guest rounding mode gates them. ---
     'v_add_f16_vop2': ('uint32_t', _binary_f16_op('add')),
     'v_sub_f16_vop2': ('uint32_t', _binary_f16_op('sub')),
     'v_subrev_f16_vop2': ('uint32_t', _binary_f16_op('subrev')),
