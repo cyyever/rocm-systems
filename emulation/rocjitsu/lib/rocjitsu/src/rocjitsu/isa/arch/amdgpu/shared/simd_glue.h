@@ -989,11 +989,11 @@ inline util::native<uint32_t> binary_f16_simd(util::native<uint32_t> a, util::na
 }
 
 /// DX9 accumulator and three-source forms share the scalar flushing, zero-product,
-/// NaN and underflow policies.
+/// NaN and underflow policies. Source preparation is raw-bit and fma_f32_simd
+/// scopes the guest environment around the arithmetic itself.
 inline util::native<float> fma_dx9_zero_f32_simd(util::native<float> a, util::native<float> b,
                                                  util::native<float> c, const Wavefront &wf) {
   using U = util::native<uint32_t>;
-  fp_mode::ScopedEnvironment environment(wf.fp_round_mode_f32());
   a = denormal::flush_value(a);
   b = denormal::flush_value(b);
   const auto zero_product = (std::bit_cast<U>(a) & U(0x7fffffffu)) == U(0) ||
@@ -1734,6 +1734,8 @@ inline util::native<float> cvt_f32_f16_mode_simd(util::native<uint32_t> raw, con
 /// writes the full f32 dword, matching non-true16 scalar write_lane semantics.
 /// The true16 form selects src0 with op_sel[0] before widening; the destination
 /// is f32 in both cases, so no destination half merge is needed.
+/// Widening is exact and the output stage is raw-bit, so neither needs a guest
+/// FP environment.
 template <bool True16, typename Inst>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_cvt_f32_f16_vop3_simd(Inst &inst, Wavefront &wf) {
@@ -1746,9 +1748,6 @@ template <bool True16, typename Inst>
   const uint32_t opsel = vop3_opsel(inst.inst_);
   const uint32_t omod = effective_vop3_omod_f32(wf, inst.inst_.omod);
   const uint32_t clamp = inst.inst_.clamp;
-  std::optional<fp_mode::ScopedEnvironment> environment;
-  if (omod || clamp)
-    environment.emplace(wf.fp_round_mode_f32());
   constexpr std::size_t W = util::native_width_v<T>;
   const uint64_t chunk_full = util::mask<uint64_t>(static_cast<int>(W));
   const uint64_t exec = dpp::execution_lane_mask(inst, wf);
