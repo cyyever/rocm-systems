@@ -36,13 +36,28 @@ _BINARY_F32_FORMS = {
 }
 
 
+def _uses_unscoped_f32_core(cpp_op: str) -> bool:
+    """Whether a functor leaves the guest FP environment to its probe.
+
+    Only these take the instruction-wide scope. Host-float functors such as the
+    DX9 and legacy multiplies, MAD, min/max and DIV_FIXUP keep the plain probe:
+    scoping them buys nothing and perturbs the host NaN selection they rely on.
+    """
+    return (
+        'amdgpu::fma_f32_simd_unscoped(' in cpp_op
+        or 'amdgpu::binary_f32_simd_unscoped<' in cpp_op
+        or 'amdgpu::fma_dx9_zero_f32_simd<false>(' in cpp_op
+    )
+
+
 def _binary_f32_op(name: str, *, modifiers: bool = False) -> str:
     operation, operands = _BINARY_F32_FORMS[name]
     capture = '&inst, &wf' if modifiers else '&wf'
     omod = ', amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)' if modifiers else ''
     return (
         f'[{capture}](auto a, auto b) {{ return '
-        f'amdgpu::binary_f32_simd<amdgpu::fp_mode::Arithmetic::{operation}>({operands}, wf{omod}); }}'
+        f'amdgpu::binary_f32_simd_unscoped<amdgpu::fp_mode::Arithmetic::{operation}>('
+        f'{operands}, wf{omod}); }}'
     )
 
 
@@ -72,9 +87,23 @@ def _binary_f16_op(name: str) -> str:
     )
 
 
-# VOP2 probes needing one guest FP environment around the chunk loop.
-SIMD_VOP2_SCOPED = frozenset(
-    f'v_{name}_f16_vop2' for name in _BINARY_F16_FORMS
+# VOP2 probes taking one guest FP environment around the chunk loop, mapped to
+# the rounding it installs. The F16 helper always rounds nearest-even; the F32
+# cores round by MODE, as their per-chunk scopes did.
+SIMD_VOP2_SCOPED = {f'v_{name}_f16_vop2': '0' for name in _BINARY_F16_FORMS} | {
+    f'v_{name}_f32_vop2': 'wf.fp_round_mode_f32()' for name in _BINARY_F32_FORMS
+}
+
+# VOP2 ternary probes taking the same per-instruction environment, accumulate
+# and inline-literal forms alike.
+SIMD_VOP2_TERNARY_SCOPED = frozenset(
+    {
+        'v_fmac_f32_vop2',
+        'v_mac_f32_vop2',
+        'v_fmac_dx9_zero_f32_vop2',
+        'v_fmaak_f32_vop2',
+        'v_fmamk_f32_vop2',
+    }
 )
 
 
@@ -921,13 +950,13 @@ SIMD_VOP2_CARRY.update(
 # FP16 MODE controls without an intervening f32 rounding. v_fmac_f64 likewise
 # has a dedicated split-VGPR, MODE-aware path in SIMD_VOP2_FMA_F64.
 _FMA_ACC_F32 = (
-    '[&wf](auto a, auto b, auto d, auto) { return amdgpu::fma_f32_simd(a, b, d, wf); }'
+    '[&wf](auto a, auto b, auto d, auto) { return amdgpu::fma_f32_simd_unscoped(a, b, d, wf); }'
 )
 _FMA_ADDK_F32 = (
-    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd(a, b, k, wf); }'
+    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, b, k, wf); }'
 )
 _FMA_MULK_F32 = (
-    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd(a, k, b, wf); }'
+    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, k, b, wf); }'
 )
 _FMA_ACC_F16 = (
     '[](auto a, auto b, auto d, auto) {'
@@ -955,7 +984,8 @@ SIMD_VOP2_TERNARY: dict[str, tuple[str, str, str]] = {
     'v_fmac_dx9_zero_f32_vop2': (
         'float32_t',
         '0u',
-        '[&wf](auto a, auto b, auto d, auto) { return amdgpu::fma_dx9_zero_f32_simd(a, b, d, wf); }',
+        '[&wf](auto a, auto b, auto d, auto) {'
+        ' return amdgpu::fma_dx9_zero_f32_simd<false>(a, b, d, wf); }',
     ),
     'v_mac_f32_vop2': ('float32_t', '0u', _FMA_ACC_F32),
     # --- f32 inline literal ---
@@ -2099,7 +2129,7 @@ SIMD_VOP3_FREXP_FP: dict[str, tuple[str, str]] = {
 # F32 FMA and accumulator forms share scalar NaN policy; finite lanes retain
 # native SIMD arithmetic. MAD retains its non-fused multiply/add semantics.
 SIMD_VOP3_TERNARY_FP32: dict[str, str] = {
-    'v_fma_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
+    'v_fma_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd_unscoped(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
     'v_mad_f32_vop3': '[](auto a, auto b, auto c) { return a * b + c; }',
     'v_mad_legacy_f32_vop3': '[](auto a, auto b, auto c) { return a * b + c; }',
     # min3/max3/med3 (f32): the scalar body composes std::fmax/std::fmin
@@ -2110,7 +2140,7 @@ SIMD_VOP3_TERNARY_FP32: dict[str, str] = {
     # lanes and uses no ±0 inputs). omod/clamp applied by the glue.
     # DX9 FMA has zero-product and mandatory flushing rules distinct from FMA.
     'v_fma_dx9_zero_f32_vop3': (
-        '[&wf](auto a, auto b, auto c) { return amdgpu::fma_dx9_zero_f32_simd(a, b, c, wf); }'
+        '[&wf](auto a, auto b, auto c) { return amdgpu::fma_dx9_zero_f32_simd<false>(a, b, c, wf); }'
     ),
     'v_max3_f32_vop3': '[](auto a, auto b, auto c) { return util::stdx::fmax(util::stdx::fmax(a, b), c); }',
     'v_min3_f32_vop3': '[](auto a, auto b, auto c) { return util::stdx::fmin(util::stdx::fmin(a, b), c); }',
@@ -2181,8 +2211,8 @@ SIMD_VOP3_TERNARY_FP64: dict[str, str] = {
 # as the third operand and applies abs/neg only to src0/src1 (per scalar body).
 # F32 NaN selection matches the non-accumulate ternary slice.
 SIMD_VOP3_FMAC_FP32: dict[str, str] = {
-    'v_fmac_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
-    'v_mac_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
+    'v_fmac_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd_unscoped(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
+    'v_mac_f32_vop3': '[&inst, &wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd_unscoped(a, b, c, wf, amdgpu::effective_vop3_omod_f32(wf, inst.inst_.omod)); }',
     'v_fmac_dx9_zero_f32_vop3': SIMD_VOP3_TERNARY_FP32['v_fma_dx9_zero_f32_vop3'],
 }
 SIMD_VOP3_FMAC_FP16 = {'v_fmac_f16_vop3'}
@@ -2677,9 +2707,9 @@ def _guard_mode_arithmetic_probe(template_name: str, probe: str | None) -> str |
     if (
         dtype == 'f32'
         and 'dx9' not in fields
-        and ('amdgpu::fma_f32_simd(' in probe or 'amdgpu::binary_f32_simd<' in probe)
+        and _uses_unscoped_f32_core(probe)
     ):
-        # The helpers scope the guest environment to their arithmetic and output
+        # The probe scopes the guest environment to the chunk loop and output
         # scaling is raw-bit, so callbacks keep the caller's FP state in every MODE.
         return probe
     if dtype in ('f16', 'f64') and fields[1] in ('fma', 'fmac', 'fmaak', 'fmamk'):
@@ -2721,12 +2751,13 @@ def _simd_probe_line(
     spec2 = SIMD_VOP2_BINARY.get(template_name)
     if spec2 is not None:
         cpp_t, cpp_op = spec2
-        macro = (
-            'ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED'
-            if template_name in SIMD_VOP2_SCOPED
-            else 'ROCJITSU_TRY_SIMD_VOP2_BINARY'
-        )
-        probe = f'  {macro}({cpp_t}, {cpp_op});'
+        round_mode = SIMD_VOP2_SCOPED.get(template_name)
+        if round_mode is not None:
+            probe = (
+                f'  ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED({cpp_t}, {cpp_op}, {round_mode});'
+            )
+        else:
+            probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {cpp_op});'
         if _probe_uses_fp16_ovfl_f16_result_narrow(cpp_op):
             ovfl_probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {_fp16_ovfl_cpp_op(cpp_op)});'
             return _mode_aware_f16_result_simd_probe(probe, ovfl_probe)
@@ -2755,9 +2786,19 @@ def _simd_probe_line(
     spect = SIMD_VOP2_TERNARY.get(template_name)
     if spect is not None:
         cpp_t, k_expr, cpp_op = spect
+        accumulate = template_name in SIMD_VOP2_TERNARY_ACCUMULATE
+        if template_name in SIMD_VOP2_TERNARY_SCOPED:
+            scoped = (
+                'ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC_SCOPED'
+                if accumulate
+                else 'ROCJITSU_TRY_SIMD_VOP2_TERNARY_SCOPED'
+            )
+            return (
+                f'  {scoped}({cpp_t}, {k_expr}, {cpp_op}, wf.fp_round_mode_f32());'
+            )
         macro = (
             'ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC'
-            if template_name in SIMD_VOP2_TERNARY_ACCUMULATE
+            if accumulate
             else 'ROCJITSU_TRY_SIMD_VOP2_TERNARY'
         )
         probe = f'  {macro}({cpp_t}, {k_expr}, {cpp_op});'
@@ -2893,7 +2934,12 @@ def _simd_probe_line(
             if template_name == 'v_fma_dx9_zero_f32_vop3'
             else ''
         )
-        return f'  ROCJITSU_TRY_SIMD_VOP3_TERNARY_FP32({spec3tf32}{policy});'
+        ternary_macro = (
+            'ROCJITSU_TRY_SIMD_VOP3_TERNARY_FP32_SCOPED'
+            if _uses_unscoped_f32_core(spec3tf32)
+            else 'ROCJITSU_TRY_SIMD_VOP3_TERNARY_FP32'
+        )
+        return f'  {ternary_macro}({spec3tf32}{policy});'
     spec3tf16 = SIMD_VOP3_TERNARY_FP16.get(template_name)
     if spec3tf16 is not None:
         macro = (
@@ -2976,7 +3022,12 @@ def _simd_probe_line(
             if template_name == 'v_fmac_dx9_zero_f32_vop3'
             else ''
         )
-        return f'  ROCJITSU_TRY_SIMD_FMAC_VOP3_FP32({specfmacf32}{policy});'
+        fmac_macro = (
+            'ROCJITSU_TRY_SIMD_FMAC_VOP3_FP32_SCOPED'
+            if _uses_unscoped_f32_core(specfmacf32)
+            else 'ROCJITSU_TRY_SIMD_FMAC_VOP3_FP32'
+        )
+        return f'  {fmac_macro}({specfmacf32}{policy});'
     if template_name in SIMD_VOP3_FMAC_FP16:
         macro = (
             'ROCJITSU_TRY_SIMD_FMAC_VOP3_MODE_TRUE16_FP16'
@@ -3077,7 +3128,12 @@ def _simd_probe_line(
             if cpp_t == 'float32_t':
                 if base in ('v_add_f32', 'v_mul_f32', 'v_sub_f32', 'v_subrev_f32'):
                     cpp_op = _binary_f32_op(base.split('_')[1], modifiers=True)
-                return f'  ROCJITSU_TRY_SIMD_VOP3_BINARY_FP({cpp_t}, {cpp_op});'
+                binary_macro = (
+                    'ROCJITSU_TRY_SIMD_VOP3_BINARY_FP_SCOPED'
+                    if _uses_unscoped_f32_core(cpp_op)
+                    else 'ROCJITSU_TRY_SIMD_VOP3_BINARY_FP'
+                )
+                return f'  {binary_macro}({cpp_t}, {cpp_op});'
             # Remaining F16 binaries reuse unmodified VOP2 functors and reject
             # modifiers. ADD/SUB/SUBREV/MUL use the MODE-aware route above;
             # min/max has its own route. Keep a probe for the shared cross-ISA plan.
