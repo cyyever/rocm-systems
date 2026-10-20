@@ -137,9 +137,10 @@ class PrepareTests(unittest.TestCase):
                 destination = self.root / f'accepted-{samples}'
                 self.assert_ok(self.invoke([value], extra=('--data-dir', str(destination))))
                 published = json.loads((destination / 'runs/default-branch/attempt-1.json').read_text())
-                actual = published['configurations'][0]['results'][0]
+                actual = published['configurations'][0]['benchmark_results'][0]
                 self.assertEqual(actual['timing_results_s'], samples)
-                self.assertGreater(actual['durationSeconds'], 0)
+                self.assertEqual(actual['status'], 'completed')
+                self.assertNotIn('durationSeconds', actual)
 
     def test_rejects_decimal_exponent_and_underflow_tokens(self):
         import importlib.util
@@ -164,7 +165,7 @@ class PrepareTests(unittest.TestCase):
                     row['timing_results_s'] = [value, value + 1 if value == 9007199254740993 else value]
                 else:
                     row['problem'] = {'nested': [value]}
-                destination = self.root / f"numeric-{value}-{timing}"
+                destination = self.root / 'unsupported-numeric'
                 process = self.invoke([data], extra=('--data-dir', str(destination)))
                 self.assertNotEqual(process.returncode, 0)
                 self.assertIn('numeric', process.stderr.lower())
@@ -211,6 +212,8 @@ class PrepareTests(unittest.TestCase):
             run_id,
             '--expected-sha',
             SHA,
+            '--workflow-commit-sha', 'c' * 40,
+            '--tensile-commit-sha', 'd' * 40,
             '--expected-corpus-sha',
             self.corpus_sha,
             '--corpus-dir', str(repository), '--manifest', 'suite.toml',
@@ -248,13 +251,13 @@ class PrepareTests(unittest.TestCase):
         value['benchmark_results'][0]['problem'] = problem
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        catalog = self.read(run['testCatalog'])
-        self.assertEqual(catalog['tests'][0]['problem'], problem)
+        catalog = self.read(run['benchmark_catalog'])
+        self.assertEqual(catalog['benchmark_definitions']['case-1']['problem'], problem)
         self.assert_ok(subprocess.run([sys.executable, str(UPDATE), '--data-dir', str(self.data), '--run-path', 'runs/default-branch/attempt-1.json'], capture_output=True, text=True))
         processed = subprocess.run(['node', str(HERE.parents[1] / 'process-dashboard-data.mjs'), str(self.data)], capture_output=True, text=True)
         self.assert_ok(processed)
         exported = json.loads(processed.stdout)
-        self.assertEqual(exported['sourceData']['catalogs'][run['testCatalog']]['tests'][0]['problem'], problem)
+        self.assertEqual(exported['sourceData']['catalogs'][run['benchmark_catalog']]['benchmark_definitions']['case-1']['problem'], problem)
         self.assertEqual(exported['data']['runs'][0]['tests'][0]['problem'], problem)
 
     def test_cli_omits_unused_website_metadata_arguments(self):
@@ -308,6 +311,8 @@ class PrepareTests(unittest.TestCase):
                 'attempt-1',
                 '--expected-sha',
                 SHA,
+                '--workflow-commit-sha', 'c' * 40,
+                '--tensile-commit-sha', 'd' * 40,
                 '--expected-corpus-sha',
                 corpus_sha,
                 '--corpus-dir', str(repository), '--manifest', 'suite.toml',
@@ -340,6 +345,73 @@ class PrepareTests(unittest.TestCase):
         self.assertTrue((self.data / 'runs/default-branch/attempt-1.json').is_file())
         self.assertFalse((self.data / 'index.json').exists())
 
+    def test_new_schema_one_preserves_raw_metadata_and_explicit_tool_revisions(self):
+        value = raw()
+        value['provenance']['auxiliary']['nested'] = {'value': [None, True, 'null']}
+        self.assert_ok(self.invoke([value], extra=(
+            '--workflow-commit-sha', 'c' * 40,
+            '--tensile-commit-sha', 'd' * 40,
+        )))
+        run = self.read('runs/default-branch/attempt-1.json')
+        self.assertEqual(set(run), {'schemaVersion', 'id', 'benchmark_catalog',
+                                    'source', 'execution', 'execution_summary',
+                                    'provenance', 'configurations'})
+        self.assertEqual(run['execution_summary'], value['execution_summary'])
+        self.assertEqual(run['source'], {'branch': 'develop', 'message': 'Example commit'})
+        self.assertEqual(run['execution'], {'trigger': 'auto', 'machine_label': 'worker-1'})
+        self.assertEqual(run['provenance']['rocjitsu']['rocjitsu_commit_sha'], SHA)
+        self.assertEqual(run['provenance']['rocjitsu']['workflow_commit_sha'], 'c' * 40)
+        self.assertEqual(run['provenance']['auxiliary']['tensile_commit_sha'], 'd' * 40)
+        self.assertEqual(run['provenance']['auxiliary']['nested'], {'value': [None, True, 'null']})
+        catalog = self.read(run['benchmark_catalog'])
+        self.assertEqual(catalog, {
+            'benchmark_suite': 'smoke',
+            'benchmark_definitions': {'case-1': {
+                'suite': 'smoke', 'name': 'Example', 'operation': 'Example computation',
+                'problem': {'size': 8},
+            }},
+            'membership': {'gfx950': {'single': ['case-1']}},
+        })
+        self.assertEqual(run['configurations'], [{
+            'target': 'gfx950', 'thread_policy': 'single', 'benchmark_results': [{
+                'id': 'case-1', 'status': 'completed', 'timing_results_s': [1, 9, 2], 'error': None,
+            }],
+        }])
+
+    def test_tool_revision_conflicts_reject_before_writes(self):
+        for section, key, actual in (
+            ('rocjitsu', 'workflow_commit_sha', 'e' * 40),
+            ('auxiliary', 'tensile_commit_sha', None),
+        ):
+            with self.subTest(key=key):
+                value = raw()
+                value['provenance'][section][key] = actual
+                rejected = self.invoke([value], extra=(
+                    '--workflow-commit-sha', 'c' * 40,
+                    '--tensile-commit-sha', 'd' * 40,
+                ))
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn('Conflicting raw ' + key, rejected.stderr)
+                self.assertFalse(self.data.exists())
+
+    def test_cli_requires_valid_explicit_tool_revisions(self):
+        for flag in ('--workflow-commit-sha', '--tensile-commit-sha'):
+            for invalid in ('', 'abc', 'g' * 40, 'a' * 40 + ' '):
+                with self.subTest(flag=flag, invalid=invalid):
+                    rejected = self.invoke(extra=(flag, invalid))
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn('40-hex SHA', rejected.stderr)
+                    self.assertFalse(self.data.exists())
+
+    def test_open_provenance_extension_must_agree_across_inputs(self):
+        first, second = raw(), raw('default')
+        first['provenance']['extension'] = {'nested': {'a': True}}
+        second['provenance']['extension'] = {'nested': {'a': 1}}
+        result = self.invoke([first, second])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Inconsistent extension provenance', result.stderr)
+        self.assertFalse(self.data.exists())
+
     def test_produces_schema_one_median_results(self):
         self.assert_ok(self.invoke())
         self.assertFalse((self.data / 'metadata.json').exists())
@@ -347,22 +419,22 @@ class PrepareTests(unittest.TestCase):
         self.assertIs(type(run['schemaVersion']), int)
         self.assertEqual(run['schemaVersion'], 1)
         self.assertFalse((self.data / 'index.json').exists())
-        self.assertNotIn('schemaVersion', self.read(run['testCatalog']))
-        self.assertEqual(run['source']['commit'], SHA)
-        self.assertEqual(run['execution']['completedAt'], '2026-01-01T01:01:00Z')
+        self.assertNotIn('schemaVersion', self.read(run['benchmark_catalog']))
+        self.assertEqual(run['provenance']['rocjitsu']['rocjitsu_commit_sha'], SHA)
+        self.assertEqual(run['execution_summary']['finished_at'], '2026-01-01T01:01:00Z')
         config = run['configurations'][0]
         self.assertEqual(config['thread_policy'], 'single')
         self.assertNotIn('threadingMode', config)
-        self.assertEqual(config['results'][0]['thread_policy'], 'single')
+        self.assertNotIn('thread_policy', config['benchmark_results'][0])
         self.assertEqual(
-            self.read(run['testCatalog'])['configurations'],
-            {'gfx950/single': ['case-1']},
+            self.read(run['benchmark_catalog'])['membership'],
+            {'gfx950': {'single': ['case-1']}},
         )
-        self.assertEqual(config['results'][0]['durationSeconds'], 2)
-        self.assertEqual(config['results'][0]['error'], None)
-        self.assertEqual(config['results'][0]['testId'], 'case-1')
+        self.assertEqual(config['benchmark_results'][0]['timing_results_s'], [1, 9, 2])
+        self.assertEqual(config['benchmark_results'][0]['error'], None)
+        self.assertEqual(config['benchmark_results'][0]['id'], 'case-1')
         self.assertEqual(
-            self.read(run['testCatalog'])['tests'][0]['operation'],
+            self.read(run['benchmark_catalog'])['benchmark_definitions']['case-1']['operation'],
             'Example computation',
         )
         self.assertEqual(
@@ -373,7 +445,7 @@ class PrepareTests(unittest.TestCase):
             sorted(
                 [
                     'runs/default-branch/attempt-1.json',
-                    run['testCatalog'],
+                    run['benchmark_catalog'],
                 ]
             ),
         )
@@ -402,11 +474,10 @@ class PrepareTests(unittest.TestCase):
             value['benchmark_results'].append(result)
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        catalog = self.read(run['testCatalog'])
-        self.assertEqual(len(catalog['tests']), 1)
-        self.assertEqual(catalog['tests'][0]['id'], 'gemm-and-reduce.default')
+        catalog = self.read(run['benchmark_catalog'])
+        self.assertEqual(list(catalog['benchmark_definitions']), ['gemm-and-reduce.default'])
         self.assertEqual(
-            catalog['tests'][0]['operation'],
+            catalog['benchmark_definitions']['gemm-and-reduce.default']['operation'],
             'Matrix multiplication followed by reduction',
         )
         configs = {(c['target'], c['thread_policy']): c for c in run['configurations']}
@@ -415,21 +486,14 @@ class PrepareTests(unittest.TestCase):
             {('gfx950', 'default'), ('gfx950', 'single'), ('gfx1250', 'default'), ('gfx1250', 'single')},
         )
         for result in value['benchmark_results']:
-            prepared = configs[result['target'], result['thread_policy']]['results'][0]
-            self.assertEqual(prepared['thread_policy'], result['thread_policy'])
-            self.assertEqual(prepared['testId'], result['id'])
+            prepared = configs[result['target'], result['thread_policy']]['benchmark_results'][0]
+            self.assertNotIn('thread_policy', prepared)
+            self.assertEqual(prepared['id'], result['id'])
             self.assertEqual(prepared['timing_results_s'], result['timing_results_s'])
             self.assertEqual(prepared['status'], result['status'])
-            self.assertEqual(
-                prepared['durationSeconds'],
-                2 if result['status'] == 'completed' else None,
-            )
-        details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['execution.benchmark_suite'], 'performance-v1')
-        self.assertEqual(details['execution.samples'], 3)
-        self.assertFalse(
-            any('threading_mode' in key or 'target_config' in key for key in details)
-        )
+            self.assertNotIn('durationSeconds', prepared)
+        self.assertEqual(run['execution_summary']['benchmark_suite'], 'performance-v1')
+        self.assertEqual(run['execution_summary']['samples'], 3)
         original = self.snapshot()
         value['benchmark_results'].reverse()
         self.assert_ok(self.invoke([value]))
@@ -443,7 +507,7 @@ class PrepareTests(unittest.TestCase):
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
         self.assertEqual(
-            [test['id'] for test in self.read(run['testCatalog'])['tests']],
+            list(self.read(run['benchmark_catalog'])['benchmark_definitions']),
             ['case-1', 'case-2'],
         )
 
@@ -479,13 +543,12 @@ class PrepareTests(unittest.TestCase):
             sorted(pairs),
         )
         self.assertEqual(
-            self.read(run['testCatalog'])['configurations'],
-            {f'{target}/{policy}': ['variant-case' if target == 'gfx950-variant' else 'case-1'] for target, policy in pairs},
+            self.read(run['benchmark_catalog'])['membership'],
+            {'gfx950': {'default': ['case-1'], 'single': ['case-1']},
+             'gfx950-variant': {'single': ['variant-case']}},
         )
         for config in run['configurations']:
-            self.assertEqual(
-                config['results'][0]['thread_policy'], config['thread_policy']
-            )
+            self.assertNotIn('thread_policy', config['benchmark_results'][0])
         before = self.snapshot()
         value['benchmark_results'].reverse()
         self.assert_ok(self.invoke([value]))
@@ -504,10 +567,8 @@ class PrepareTests(unittest.TestCase):
         )
         for config in run['configurations']:
             self.assertEqual(config['target'], 'gfx950')
-            self.assertEqual(config['results'][0]['testId'], 'case-1')
-            self.assertEqual(
-                config['results'][0]['thread_policy'], config['thread_policy']
-            )
+            self.assertEqual(config['benchmark_results'][0]['id'], 'case-1')
+            self.assertNotIn('thread_policy', config['benchmark_results'][0])
         self.assert_ok(
             subprocess.run(
                 [
@@ -581,21 +642,18 @@ class PrepareTests(unittest.TestCase):
         value['provenance']['rocjitsu']['rocm_sdk_version'] = None
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['rocjitsu.rocm_sdk_version'], 'null')
+        self.assertIsNone(run['provenance']['rocjitsu']['rocm_sdk_version'])
 
     def test_same_policy_disjoint_targets_can_be_prepared_without_hash_checks(self):
         first, second = raw(), raw()
         second['benchmark_results'][0]['target'] = 'gfx1250'
-        # Obsolete producer fields are neither required nor checked/published.
+        # Target hashes are retained as typed provenance, not validated as identities.
         first['provenance']['rocjitsu']['target_config_sha256'] = {'gfx950': 'unused'}
         second['provenance']['rocjitsu']['target_config_sha256'] = None
         self.assert_ok(self.invoke([consolidated(first, second)]))
         run = self.read('runs/default-branch/attempt-1.json')
         self.assertEqual(len(run['configurations']), 2)
-        self.assertFalse(
-            any('target_config_sha256' in item['key'] for item in run['environment'])
-        )
+        self.assertEqual(run['provenance']['rocjitsu']['target_config_sha256'], {'gfx950': 'unused'})
 
     def test_missing_row_policy_or_operation_is_not_inferred_from_summary(self):
         for field in ('thread_policy', 'operation'):
@@ -642,11 +700,11 @@ class PrepareTests(unittest.TestCase):
             value['benchmark_results'].append(result)
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        catalog = self.read(run['testCatalog'])
-        names = {test['id']: test['name'] for test in catalog['tests']}
+        catalog = self.read(run['benchmark_catalog'])
+        names = {identity: test['name'] for identity, test in catalog['benchmark_definitions'].items()}
         published = {
-            names[result['testId']]: result
-            for result in run['configurations'][0]['results']
+            names[result['id']]: result
+            for result in run['configurations'][0]['benchmark_results']
         }
         (self.data / 'index.json').write_text(
             json.dumps(
@@ -675,7 +733,8 @@ class PrepareTests(unittest.TestCase):
                 result = results[f'Example {index}']
                 self.assertEqual(result.get('timing_results_s'), samples)
                 self.assertEqual(result['status'], status)
-                self.assertEqual(result['durationSeconds'], duration)
+            self.assertNotIn('durationSeconds', published[f'Example {index}'])
+            self.assertEqual(normalized[f'Example {index}']['durationSeconds'], duration)
             self.assertEqual(
                 normalized[f'Example {index}']['logicalTestId'], f'case-{index}'
             )
@@ -699,9 +758,8 @@ class PrepareTests(unittest.TestCase):
             )
         )
         run = self.read('runs/default-branch/attempt-1.json')
-        self.assertEqual(run['source']['commit'], SHA)
-        details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['corpus.corpus_commit_sha'], self.corpus_sha)
+        self.assertEqual(run['provenance']['rocjitsu']['rocjitsu_commit_sha'], SHA)
+        self.assertEqual(run['provenance']['corpus']['corpus_commit_sha'], self.corpus_sha)
         before = self.snapshot()
         self.assert_ok(self.invoke())
         self.assertEqual(self.snapshot(), before)
@@ -722,10 +780,9 @@ class PrepareTests(unittest.TestCase):
             )
         )
         run = self.read('runs/default-branch/attempt-1.json')
-        self.assertEqual(run['source']['commit'], SHA)
+        self.assertEqual(run['provenance']['rocjitsu']['rocjitsu_commit_sha'], SHA)
         self.assertEqual(len(run['configurations']), 2)
-        details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['corpus.corpus_commit_sha'], self.corpus_sha)
+        self.assertEqual(run['provenance']['corpus']['corpus_commit_sha'], self.corpus_sha)
         before = self.snapshot()
         for flag, expected in (
             ('--expected-sha', 'D' * 40),
@@ -745,10 +802,11 @@ class PrepareTests(unittest.TestCase):
         value['benchmark_results'][0]['exit_code'] = None
         self.assert_ok(self.invoke([value]))
         result = self.read('runs/default-branch/attempt-1.json')['configurations'][0][
-            'results'
+            'benchmark_results'
         ][0]
         self.assertEqual(result['status'], 'completed')
-        self.assertEqual(result['durationSeconds'], 2)
+        self.assertEqual(result['timing_results_s'], [1, 9, 2])
+        self.assertNotIn('durationSeconds', result)
         self.assertIsNone(result['error'])
 
     def test_explicit_policies_share_definitions_with_asymmetric_membership(self):
@@ -785,18 +843,16 @@ class PrepareTests(unittest.TestCase):
         run = self.read('runs/default-branch/attempt-1.json')
         configs = {c['thread_policy']: c for c in run['configurations']}
         single_success = next(
-            r for r in configs['single']['results'] if r['status'] == 'completed'
+            r for r in configs['single']['benchmark_results'] if r['status'] == 'completed'
         )
         self.assertEqual(
-            single_success['testId'], configs['default']['results'][0]['testId']
+            single_success['id'], configs['default']['benchmark_results'][0]['id']
         )
-        for result in configs['single']['results']:
+        for result in configs['single']['benchmark_results']:
             if result['status'] != 'completed':
-                self.assertIsNone(result['durationSeconds'])
-        catalog = self.read(run['testCatalog'])
-        definition = next(
-            t for t in catalog['tests'] if t['id'] == single_success['testId']
-        )
+                self.assertNotIn('durationSeconds', result)
+        catalog = self.read(run['benchmark_catalog'])
+        definition = catalog['benchmark_definitions'][single_success['id']]
         self.assertEqual(
             definition['problem'],
             {
@@ -806,17 +862,9 @@ class PrepareTests(unittest.TestCase):
                 'text': 'value',
             },
         )
-        details = {entry['key']: entry['value'] for entry in run['environment']}
-        self.assertEqual(details['machine.hostname'], 'worker')
-        self.assertFalse(any('target_config_sha256' in key for key in details))
-        self.assertEqual(details['auxiliary.nested'], '{"a":null,"b":1}')
-        self.assertFalse(
-            any(
-                'timestamp' in key or 'wall_time' in key
-                for key in details
-                if key.startswith('execution.')
-            )
-        )
+        self.assertEqual(run['provenance']['machine']['hostname'], 'worker')
+        self.assertEqual(run['provenance']['auxiliary']['nested'], {'a': None, 'b': 1})
+        self.assertEqual(run['execution_summary']['timestamp'], single['execution_summary']['timestamp'])
 
     def test_candidate_retry_and_definition_changes_are_immutable(self):
         self.assert_ok(self.invoke())
@@ -834,8 +882,8 @@ class PrepareTests(unittest.TestCase):
         self.assert_ok(self.invoke([revised], run_id='attempt-2'))
         old = self.read('runs/default-branch/attempt-1.json')
         new = self.read('runs/default-branch/attempt-2.json')
-        self.assertEqual(old['testCatalog'], new['testCatalog'])
-        self.assertEqual(old['environment'], new['environment'])
+        self.assertEqual(old['benchmark_catalog'], new['benchmark_catalog'])
+        self.assertEqual(old['provenance'], new['provenance'])
         revised['benchmark_results'][0]['problem']['size'] = 16
         rejected = self.invoke([revised], run_id='attempt-3')
         self.assertNotEqual(rejected.returncode, 0)
@@ -844,10 +892,10 @@ class PrepareTests(unittest.TestCase):
         revised['benchmark_results'][0]['id'] = 'case-v2'
         self.assert_ok(self.invoke([revised], run_id='attempt-3'))
         changed = self.read('runs/default-branch/attempt-3.json')
-        self.assertNotEqual(old['testCatalog'], changed['testCatalog'])
+        self.assertNotEqual(old['benchmark_catalog'], changed['benchmark_catalog'])
         self.assertNotEqual(
-            old['configurations'][0]['results'][0]['testId'],
-            changed['configurations'][0]['results'][0]['testId'],
+            old['configurations'][0]['benchmark_results'][0]['id'],
+            changed['configurations'][0]['benchmark_results'][0]['id'],
         )
         self.assertEqual(
             (self.data / 'runs/default-branch/attempt-1.json').read_bytes(),
@@ -947,7 +995,7 @@ class PrepareTests(unittest.TestCase):
             value['benchmark_results'].append(extra)
         self.assert_ok(self.invoke([consolidated(single, multi)]))
         self.assertEqual(
-            self.read('runs/default-branch/attempt-1.json')['execution']['completedAt'],
+            self.read('runs/default-branch/attempt-1.json')['execution_summary']['finished_at'],
             '2026-01-01T03:00:00Z',
         )
         original = self.snapshot()
@@ -1025,7 +1073,7 @@ class PrepareTests(unittest.TestCase):
         self.assert_ok(self.invoke())
         self.assertEqual(self.snapshot(), before)
         old_run = self.read('runs/default-branch/attempt-1.json')
-        old_run['configurations'][0]['results'] = []
+        old_run['configurations'][0]['benchmark_results'] = []
         (self.data / 'runs/default-branch/attempt-1.json').write_text(
             json.dumps(old_run)
         )
@@ -1049,9 +1097,9 @@ class PrepareTests(unittest.TestCase):
             existing_run,
         )
         run = self.read('runs/default-branch/attempt-1.json')
-        catalog = self.read(run['testCatalog'])
-        catalog['tests'][0]['name'] = 'Corrupted orphan'
-        (self.data / run['testCatalog']).write_text(json.dumps(catalog))
+        catalog = self.read(run['benchmark_catalog'])
+        catalog['benchmark_definitions']['case-1']['name'] = 'Corrupted orphan'
+        (self.data / run['benchmark_catalog']).write_text(json.dumps(catalog))
         before = self.snapshot()
         result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
@@ -1222,12 +1270,12 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(run['execution']['trigger'], 'manual')
         self.assertEqual(run['source']['branch'], 'feature/example')
         self.assertEqual(
-            run['configurations'][0]['results'][0]['testId'],
-            run['configurations'][1]['results'][0]['testId'],
+            run['configurations'][0]['benchmark_results'][0]['id'],
+            run['configurations'][1]['benchmark_results'][0]['id'],
         )
-        catalog = self.read(run['testCatalog'])
-        self.assertEqual(catalog['id'], 'smoke')
-        self.assertEqual(run['execution']['machine'], 'worker-1')
+        catalog = self.read(run['benchmark_catalog'])
+        self.assertEqual(catalog['benchmark_suite'], 'smoke')
+        self.assertEqual(run['execution']['machine_label'], 'worker-1')
 
     def test_retry_preserves_configuration_order_for_prefix_targets(self):
         value = raw()
@@ -1255,11 +1303,29 @@ class PrepareTests(unittest.TestCase):
             rocjitsu_commit_timestamp='2026-01-01T00:30:00Z',
         )
         self.assert_ok(
-            self.invoke([value], run_id='attempt-2', extra=('--expected-sha', 'f' * 40))
+            self.invoke([value], run_id='attempt-2', extra=(
+                '--expected-sha', 'f' * 40,
+                '--workflow-commit-sha', 'e' * 40,
+                '--tensile-commit-sha', '1' * 40,
+            ))
         )
         second = self.read('runs/default-branch/attempt-2.json')
-        self.assertEqual(first['environment'], second['environment'])
-        self.assertNotEqual(first['source']['commit'], second['source']['commit'])
+        for section in ('machine', 'corpus'):
+            self.assertEqual(first['provenance'][section], second['provenance'][section])
+        self.assertEqual(first['provenance']['rocjitsu']['rocm_sdk_version'], second['provenance']['rocjitsu']['rocm_sdk_version'])
+        self.assertNotEqual(first['provenance']['rocjitsu']['rocjitsu_commit_sha'], second['provenance']['rocjitsu']['rocjitsu_commit_sha'])
+        for identity in ('attempt-1', 'attempt-2'):
+            self.assert_ok(subprocess.run([
+                sys.executable, str(UPDATE), '--data-dir', str(self.data),
+                '--run-path', f'runs/default-branch/{identity}.json',
+            ], capture_output=True, text=True))
+        processed = subprocess.run([
+            'node', str(HERE.parents[1] / 'process-dashboard-data.mjs'), str(self.data),
+        ], capture_output=True, text=True)
+        self.assert_ok(processed)
+        normalized = json.loads(processed.stdout)['data']['runs']
+        self.assertEqual(len(normalized), 2)
+        self.assertEqual(normalized[0]['environmentId'], normalized[1]['environmentId'])
 
     def test_same_policy_inputs_cannot_silently_overwrite_provenance(self):
         first, second = raw(), raw()
@@ -1275,9 +1341,9 @@ class PrepareTests(unittest.TestCase):
         value['benchmark_results'][0]['problem'] = {'flag': False}
         self.assert_ok(self.invoke([value]))
         run = self.read('runs/default-branch/attempt-1.json')
-        catalog = self.read(run['testCatalog'])
-        catalog['tests'][0]['problem']['flag'] = 0
-        (self.data / run['testCatalog']).write_text(json.dumps(catalog))
+        catalog = self.read(run['benchmark_catalog'])
+        catalog['benchmark_definitions']['case-1']['problem']['flag'] = 0
+        (self.data / run['benchmark_catalog']).write_text(json.dumps(catalog))
         before = self.snapshot()
         result = self.invoke([value])
         self.assertNotEqual(result.returncode, 0)
@@ -1330,6 +1396,8 @@ def test_export_prepared_data_for_workflow(tmp_path):
                 run_id,
                 '--expected-sha',
                 SHA,
+                '--workflow-commit-sha', 'c' * 40,
+                '--tensile-commit-sha', 'd' * 40,
                 '--expected-corpus-sha',
                 corpus_sha,
                 '--corpus-dir', str(repository), '--manifest', 'suite.toml',
@@ -1351,7 +1419,7 @@ def test_export_prepared_data_for_workflow(tmp_path):
         run_dir = 'default-branch' if branch == 'develop' else 'side-branches'
         run_path = f'runs/{run_dir}/{run_id}.json'
         run = json.loads((build / run_path).read_text())
-        for candidate in (Path(run_path), Path(run['testCatalog'])):
+        for candidate in (Path(run_path), Path(run['benchmark_catalog'])):
             target = destination / candidate
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(build / candidate, target)

@@ -6,7 +6,7 @@ function maintainedPublication() {
   const document = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
   const [, index, catalog, run] = [...document.matchAll(/```json\n([\s\S]*?)\n```/g)]
     .map(([, json]) => JSON.parse(json));
-  return { index, runs: [run], catalogs: { [run.testCatalog]: catalog } };
+  return { index, runs: [run], catalogs: { [run.benchmark_catalog]: catalog } };
 }
 
 test('maintained publication preserves literal policies, typed definitions and published export', () => {
@@ -26,16 +26,16 @@ test('maintained publication preserves literal policies, typed definitions and p
 
 function repeatedPublication(left, right) {
   const source = maintainedPublication();
-  const catalog = source.catalogs[source.runs[0].testCatalog];
-  catalog.tests[0].problem = { value: left };
+  const catalog = source.catalogs[source.runs[0].benchmark_catalog];
+  Object.values(catalog.benchmark_definitions)[0].problem = { value: left };
   const secondCatalog = structuredClone(catalog);
-  secondCatalog.id = 'second';
-  secondCatalog.tests[0].problem = { value: right };
+  secondCatalog.benchmark_suite = 'second';
+  Object.values(secondCatalog.benchmark_definitions)[0].problem = { value: right };
   const secondRun = structuredClone(source.runs[0]);
   secondRun.id = 'run-002';
-  secondRun.testCatalog = 'test-catalogs/second.json';
-  secondRun.environment.find(({ key }) => key === 'execution.benchmark_suite').value = secondCatalog.id;
-  source.catalogs[secondRun.testCatalog] = secondCatalog;
+  secondRun.benchmark_catalog = 'test-catalogs/second.json';
+  secondRun.execution_summary.benchmark_suite = secondCatalog.benchmark_suite;
+  source.catalogs[secondRun.benchmark_catalog] = secondCatalog;
   source.runs.push(secondRun);
   source.index.runFiles.push('runs/default-branch/run-002.json');
   return source;
@@ -59,17 +59,17 @@ test.each([
 
 test.each([
   ['catalog-only key', (s) => { s.runs[0].configurations.pop(); }],
-  ['run-only group', (s) => { delete s.catalogs[s.runs[0].testCatalog].configurations['gfx950/default']; }],
-  ['empty group', (s) => { s.runs[0].configurations[0].results = []; }],
+  ['run-only group', (s) => { delete s.catalogs[s.runs[0].benchmark_catalog].membership.gfx950.default; }],
+  ['empty group', (s) => { s.runs[0].configurations[0].benchmark_results = []; }],
   ['duplicate group', (s) => { s.runs[0].configurations.push(s.runs[0].configurations[0]); }],
-  ['duplicate result', (s) => { s.runs[0].configurations[0].results.push(s.runs[0].configurations[0].results[0]); }],
-  ['empty membership', (s) => { s.catalogs[s.runs[0].testCatalog].configurations['gfx950/single'] = []; }],
-  ['policy mismatch', (s) => { s.runs[0].configurations[0].results[0].thread_policy = 'default'; }],
-  ['missing operation', (s) => { delete s.catalogs[s.runs[0].testCatalog].tests[0].operation; }],
-  ['missing samples', (s) => { delete s.runs[0].configurations[0].results[0].timing_results_s; }],
-  ['missing failure samples', (s) => { delete s.runs[0].configurations[1].results[0].timing_results_s; }],
-  ['zero duration', (s) => { s.runs[0].configurations[0].results[0].durationSeconds = 0; }],
-  ['nonfinite problem', (s) => { s.catalogs[s.runs[0].testCatalog].tests[0].problem = { nested: [Infinity] }; }],
+  ['duplicate result', (s) => { s.runs[0].configurations[0].benchmark_results.push(s.runs[0].configurations[0].benchmark_results[0]); }],
+  ['empty membership', (s) => { s.catalogs[s.runs[0].benchmark_catalog].membership.gfx950.single = []; }],
+  ['policy mismatch', (s) => { s.runs[0].configurations[0].benchmark_results[0].thread_policy = 'default'; }],
+  ['missing operation', (s) => { delete s.catalogs[s.runs[0].benchmark_catalog].benchmark_definitions.gemm.operation; }],
+  ['missing samples', (s) => { delete s.runs[0].configurations[0].benchmark_results[0].timing_results_s; }],
+  ['missing failure samples', (s) => { delete s.runs[0].configurations[1].benchmark_results[0].timing_results_s; }],
+  ['zero duration', (s) => { s.runs[0].configurations[0].benchmark_results[0].durationSeconds = 0; }],
+  ['nonfinite problem', (s) => { s.catalogs[s.runs[0].benchmark_catalog].benchmark_definitions.gemm.problem = { nested: [Infinity] }; }],
 ])('maintained validation rejects %s', (_, mutate) => {
   const source = maintainedPublication();
   mutate(source);

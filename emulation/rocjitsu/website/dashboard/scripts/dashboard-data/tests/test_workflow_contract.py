@@ -46,6 +46,22 @@ def test_benchmark_uses_one_consolidated_multi_policy_run():
     assert helper.index('validate-dashboard-data.mjs') < helper.index('git commit')
 
 
+def test_workflow_records_checked_tool_revisions_and_passes_them_to_preparer():
+    text = WORKFLOW.read_text(encoding='utf-8')
+    benchmark = text.split('\n  benchmark:', 1)[1].split('\n  publish:', 1)[0]
+    assert 'workflow_commit_sha: ${{ steps.source.outputs.workflow_commit_sha }}' in benchmark
+    assert 'tensile_commit_sha: ${{ steps.tensile.outputs.commit_sha }}' in benchmark
+    assert 'git rev-parse --verify HEAD^{commit}' in benchmark
+    assert 'git -C "${TENSILE_SOURCE}" rev-parse --verify HEAD^{commit}' in benchmark
+    publish = text.split('\n  publish:', 1)[1]
+    assert '--workflow-commit-sha "${WORKFLOW_COMMIT_SHA}"' in publish
+    assert '--tensile-commit-sha "${TENSILE_COMMIT_SHA}"' in publish
+    assert 'WORKFLOW_COMMIT_SHA: ${{ needs.benchmark.outputs.workflow_commit_sha }}' in publish
+    assert 'TENSILE_COMMIT_SHA: ${{ needs.benchmark.outputs.tensile_commit_sha }}' in publish
+    assert 'benchmark_catalog' in publish
+    assert 'benchmark_suite' in publish
+
+
 def test_publication_workflow_is_short_safe_orchestration():
     text = WORKFLOW.read_text(encoding='utf-8')
     publish = text.split('\n  publish:', 1)[1]

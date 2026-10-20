@@ -6,7 +6,7 @@ test('typed definitions render in details and remain intact in filtered JSON exp
   const publication = createMaintainedPublication();
   const problem = { shape: [16, 16], options: { transpose: false, note: null }, note: null, literal: '[16,16]' };
   for (const catalog of Object.values(publication.catalogs)) {
-    catalog.tests.find(({ id }) => id === 'a').problem = structuredClone(problem);
+    catalog.benchmark_definitions.a.problem = structuredClone(problem);
   }
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));

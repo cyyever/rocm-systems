@@ -9,9 +9,9 @@ import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 function publication({ onlyOther = false } = {}) {
   const source = createMaintainedPublication();
   for (const catalog of Object.values(source.catalogs)) {
-    const other = Object.entries(catalog.configurations).filter(([key]) => key.startsWith('gfx1250/'));
-    if (onlyOther) catalog.configurations = {};
-    for (const [key, ids] of other) catalog.configurations[key.replace('gfx1250/', 'gfx1201/')] = ids;
+    const other = structuredClone(catalog.membership.gfx1250);
+    if (onlyOther) catalog.membership = {};
+    catalog.membership.gfx1201 = other;
   }
   for (const run of source.runs) {
     const other = run.configurations.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));

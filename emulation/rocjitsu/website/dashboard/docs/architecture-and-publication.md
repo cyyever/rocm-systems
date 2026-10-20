@@ -47,13 +47,13 @@ The base URL comes from `scripts/dashboard-data-source.mjs`; `src/data/published
 | `src/config/metadata.json` | Target run `schemaVersion`, repository URL, Beta flag, canonical branch. Bundled, never fetched from the data branch. |
 | `data/index.json` | Publication time and the complete list of visible run-file paths. |
 | `data/test-catalogs/<id>.json` | Workload definitions and target/policy membership. No measured timings. |
-| `data/runs/default-branch/<id>.json` | A develop attempt: schema version, source commit, execution/machine/environment, configurations, timings, statuses, diagnostics. |
+| `data/runs/default-branch/<id>.json` | A develop attempt: schema version, source commit, execution summary/structured provenance, configurations, timings, statuses, diagnostics. |
 | `data/runs/side-branches/<id>.json` | The same run format for any other branch. Flat directory, not one directory per branch. |
 
 ```text
 index.runFiles[] → run file
-run.testCatalog → catalog file
-run result.testId → catalog.tests[].id
+run.benchmark_catalog → catalog file
+run result.id → catalog.benchmark_definitions[id]
 ```
 
 ## Browser loading
@@ -99,7 +99,7 @@ Prepare pinned dependencies, wheel, native adapter and four generated variants
   → Git commit + push
 ```
 
-- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; calculate median completed timings; and generate one maintained schema-1 run plus its suite-named catalog in an isolated build directory. Trusted `--corpus-dir`, repository-relative `--manifest` and `--expected-corpus-sha` inputs select committed TOML, not raw-artifact declarations. Each supplied raw input must independently match the full declared tuple set and typed workload definitions; diagnostic subsets reject even on first publication. Full finalized failures remain publishable. Preserve accepted sample order and corpus IDs. Failed/timeout rows retain partial samples but have null duration. Policies remain literal `single`/`default`, in groups and results, with catalog keys `target/policy`. Problem values retain JSON types recursively; environment facts remain scalar. See [implementation status](schema-1.md#implementation-status) for unresolved numeric precision acceptance before publication. Shared environment protocol facts are `execution.warmups`, `execution.samples`, `execution.timeout_seconds`, and `execution.benchmark_suite`, without policy prefixes or target config hashes.
+- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; preserve samples and derive medians only in normalized consumer data; and generate one maintained schema-1 run plus its suite-named catalog in an isolated build directory. Trusted `--corpus-dir`, repository-relative `--manifest` and `--expected-corpus-sha` inputs select committed TOML, not raw-artifact declarations. Each supplied raw input must independently match the full declared tuple set and typed workload definitions; diagnostic subsets reject even on first publication. Full finalized failures remain publishable. Preserve accepted sample order and corpus IDs. Failed/timeout wire rows retain partial samples and normalize to null duration. Policies remain literal `single`/`default` on configuration groups only; each group has `benchmark_results` with raw `id`, status, samples and error. Catalogs use `benchmark_suite`, ID-keyed `benchmark_definitions` and nested `membership[target][thread_policy]`. Problem/provenance values retain JSON types recursively. See [implementation status](schema-1.md#implementation-status) for implemented numeric rejection rules. Raw protocol lives in `execution_summary`. Four raw provenance sections retain typed facts, including explicit validated workflow_commit_sha in rocjitsu and tensile_commit_sha in auxiliary. Internal scalar environment projection preserves the earlier exclusions plus these tool revisions; it does not compare execution timestamps or the whole provenance object. The new-only wire shape still uses run schemaVersion1; old-shaped schema1 rejects and existing published resources must not be overwritten.
 - **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
 - **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
 - **Publish:** validate the complete dataset and stage only the index, run and catalog. Preserve the existing maximum of three normal push attempts: retry only confirmed non-fast-forward conflicts after reloading the branch, reapplying unchanged immutable inputs and validating the full index. Identical retries are idempotent; immutable conflicts, validation and other push errors fail immediately. No force-push or benchmark rerun.

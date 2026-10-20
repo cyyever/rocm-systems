@@ -1,14 +1,14 @@
-// Test-only publication editing. A sparse run requires its own equally sparse
-// catalog; never infer production membership or repair malformed input this way.
+// Test-only publication editing. Never repair malformed production membership.
 export function setFixtureConfigurations(publication, run, configurations) {
-  const original = publication.catalogs[run.testCatalog];
-  const catalog = structuredClone(original);
-  catalog.id = `${original.id}-${run.id}-scope`;
-  catalog.configurations = Object.fromEntries(configurations.map(({ target, thread_policy, results }) => [
-    `${target}/${thread_policy}`, results.map(({ testId }) => testId),
-  ]));
+  const catalog = structuredClone(publication.catalogs[run.benchmark_catalog]);
+  catalog.benchmark_suite = `${catalog.benchmark_suite}-${run.id}-scope`;
+  catalog.membership = {};
+  for (const { target, thread_policy, benchmark_results } of configurations) {
+    catalog.membership[target] ??= {};
+    catalog.membership[target][thread_policy] = benchmark_results.map(({ id }) => id);
+  }
   run.configurations = configurations;
-  run.testCatalog = `test-catalogs/${catalog.id}.json`;
-  publication.catalogs[run.testCatalog] = catalog;
-  run.environment.find(({ key }) => key === 'execution.benchmark_suite').value = catalog.id;
+  run.benchmark_catalog = `test-catalogs/${catalog.benchmark_suite}.json`;
+  publication.catalogs[run.benchmark_catalog] = catalog;
+  run.execution_summary.benchmark_suite = catalog.benchmark_suite;
 }

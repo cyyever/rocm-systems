@@ -260,6 +260,7 @@ export async function loadDashboardDataFiles({
   random = Math.random,
   reloadAll = false,
   cacheGeneration = null,
+  mutableData = false,
 }) {
   const loadController = new AbortController();
   const forwardAbort = () => loadController.abort();
@@ -302,7 +303,9 @@ export async function loadDashboardDataFiles({
     timeoutMs: requestTimeoutMs,
     retryDelaysMs,
     random,
-    cache: reloadAll ? 'reload' : 'force-cache',
+    // Only local mutable datasets bypass retained bodies. Production resources remain
+    // immutable, and an explicit reload keeps its cache refresh/token behavior.
+    cache: reloadAll ? 'reload' : mutableData ? 'no-store' : 'force-cache',
   };
   onManifest?.({ ...siteConfig, schemaVersion: CURRENT_SCHEMA_VERSION, generatedAt: index.generatedAt });
 
@@ -336,7 +339,7 @@ export async function loadDashboardDataFiles({
   });
 
   const catalogPaths = [...new Set(runResults
-    .map((result) => result.run?.testCatalog)
+    .map((result) => result.run?.benchmark_catalog)
     .filter((catalogPath) => hasText(catalogPath) && CATALOG_FILE_PATTERN.test(catalogPath)))];
   const catalogResults = await mapWithConcurrency(catalogPaths, concurrency, async (catalogPath) => {
     try {

@@ -1,73 +1,75 @@
 {
   "schemaVersion": 1,
   "id": "fictional-develop-06",
-  "testCatalog": "test-catalogs/fictional-old.json",
+  "benchmark_catalog": "test-catalogs/fictional-old.json",
   "source": {
     "branch": "develop",
-    "commit": "0007f1c70007f1c70007f1c70007f1c70007f1c7",
-    "committedAt": "2026-09-17T04:00:00.000Z",
     "message": "FICTIONAL develop measurement 6"
   },
-  "execution": {
-    "completedAt": "2026-09-17T06:00:00.000Z",
-    "trigger": "auto",
-    "machine": "fictional-node-a"
+  "execution_summary": {
+    "benchmark_suite": "fictional-old",
+    "timestamp": "2026-09-17T05:00:00.000Z",
+    "finished_at": "2026-09-17T06:00:00.000Z",
+    "wall_time_s": 1,
+    "samples": 1,
+    "warmups": 0,
+    "timeout_seconds": 1200
   },
-  "environment": [
-    {
-      "key": "sdk",
-      "label": "Fictional SDK",
-      "value": "test-a"
+  "execution": {
+    "trigger": "auto",
+    "machine_label": "fictional-node-a"
+  },
+  "provenance": {
+    "auxiliary": {
+      "sdk": "test-a",
+      "enabled": true,
+      "cores": 32,
+      "tensile_commit_sha": "0000000000000000000000000000000000000385"
     },
-    {
-      "key": "enabled",
-      "label": "Feature enabled",
-      "value": true
+    "corpus": {
+      "corpus_commit_sha": "0000000000000000000000000000000000000384",
+      "corpus_commit_timestamp": "2025-01-01T00:00:00.000Z"
     },
-    {
-      "key": "cores",
-      "label": "CPU cores",
-      "value": 32
+    "machine": {
+      "hostname": "fictional-host",
+      "cpu": "fictional-cpu",
+      "platform": "fictional-platform",
+      "kernel": "fictional-kernel"
     },
-    {
-      "key": "execution.benchmark_suite",
-      "label": "execution.benchmark_suite",
-      "value": "fictional-old"
+    "rocjitsu": {
+      "rocjitsu_commit_sha": "0007f1c70007f1c70007f1c70007f1c70007f1c7",
+      "rocjitsu_commit_timestamp": "2026-09-17T04:00:00.000Z",
+      "rocm_sdk_version": "fictional-sdk",
+      "workflow_commit_sha": "0000000000000000000000000000000000000386"
     }
-  ],
+  },
   "configurations": [
     {
       "target": "gfx1250",
       "thread_policy": "single",
-      "results": [
+      "benchmark_results": [
         {
-          "testId": "a",
-          "thread_policy": "single",
+          "id": "a",
           "status": "completed",
           "timing_results_s": [
             18.8
           ],
-          "durationSeconds": 18.8,
           "error": null
         },
         {
-          "testId": "b",
-          "thread_policy": "single",
+          "id": "b",
           "status": "completed",
           "timing_results_s": [
             28.8
           ],
-          "durationSeconds": 28.8,
           "error": null
         },
         {
-          "testId": "c",
-          "thread_policy": "single",
+          "id": "c",
           "status": "completed",
           "timing_results_s": [
             38.8
           ],
-          "durationSeconds": 38.8,
           "error": null
         }
       ]
@@ -75,35 +77,29 @@
     {
       "target": "gfx1250",
       "thread_policy": "default",
-      "results": [
+      "benchmark_results": [
         {
-          "testId": "a",
-          "thread_policy": "default",
+          "id": "a",
           "status": "completed",
           "timing_results_s": [
             23.8
           ],
-          "durationSeconds": 23.8,
           "error": null
         },
         {
-          "testId": "b",
-          "thread_policy": "default",
+          "id": "b",
           "status": "completed",
           "timing_results_s": [
             33.8
           ],
-          "durationSeconds": 33.8,
           "error": null
         },
         {
-          "testId": "c",
-          "thread_policy": "default",
+          "id": "c",
           "status": "completed",
           "timing_results_s": [
             43.8
           ],
-          "durationSeconds": 43.8,
           "error": null
         }
       ]
@@ -111,35 +107,29 @@
     {
       "target": "gfx950",
       "thread_policy": "single",
-      "results": [
+      "benchmark_results": [
         {
-          "testId": "a",
-          "thread_policy": "single",
+          "id": "a",
           "status": "completed",
           "timing_results_s": [
             28.8
           ],
-          "durationSeconds": 28.8,
           "error": null
         },
         {
-          "testId": "b",
-          "thread_policy": "single",
+          "id": "b",
           "status": "completed",
           "timing_results_s": [
             38.8
           ],
-          "durationSeconds": 38.8,
           "error": null
         },
         {
-          "testId": "c",
-          "thread_policy": "single",
+          "id": "c",
           "status": "completed",
           "timing_results_s": [
             48.8
           ],
-          "durationSeconds": 48.8,
           "error": null
         }
       ]
@@ -147,35 +137,29 @@
     {
       "target": "gfx950",
       "thread_policy": "default",
-      "results": [
+      "benchmark_results": [
         {
-          "testId": "a",
-          "thread_policy": "default",
+          "id": "a",
           "status": "completed",
           "timing_results_s": [
             33.8
           ],
-          "durationSeconds": 33.8,
           "error": null
         },
         {
-          "testId": "b",
-          "thread_policy": "default",
+          "id": "b",
           "status": "completed",
           "timing_results_s": [
             43.8
           ],
-          "durationSeconds": 43.8,
           "error": null
         },
         {
-          "testId": "c",
-          "thread_policy": "default",
+          "id": "c",
           "status": "completed",
           "timing_results_s": [
             53.8
           ],
-          "durationSeconds": 53.8,
           "error": null
         }
       ]

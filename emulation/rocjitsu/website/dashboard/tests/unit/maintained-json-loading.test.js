@@ -10,7 +10,7 @@ import { processDashboardDataDirectory } from '../../scripts/process-dashboard-d
 function publicationBodies() {
   const text = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
   const [, index, catalog, run] = [...text.matchAll(/```json\n([\s\S]*?)\n```/g)].map(([, json]) => JSON.parse(json));
-  return { 'index.json': JSON.stringify(index), [run.testCatalog]: JSON.stringify(catalog), [index.runFiles[0]]: JSON.stringify(run) };
+  return { 'index.json': JSON.stringify(index), [run.benchmark_catalog]: JSON.stringify(catalog), [index.runFiles[0]]: JSON.stringify(run) };
 }
 const load = (bodies) => loadDashboardDataFiles({
   indexUrl: 'https://fixture.test/data/index.json',
@@ -35,7 +35,7 @@ test.each(['9007199254740993', '9.007199254740993e15', '1e-400'])('all text load
 
 test('browser text boundary rejects duplicate decoded object keys', async () => {
   const bodies = publicationBodies();
-  bodies['test-catalogs/example.json'] = bodies['test-catalogs/example.json'].replace('"gfx950/single":', '"gfx950\\u002fsingle":["gemm"],"gfx950/single":');
+  bodies['test-catalogs/example.json'] = bodies['test-catalogs/example.json'].replace('"single":', '"si\\u006egle":["gemm"],"single":');
   await expect(load(bodies)).rejects.toThrow(/Duplicate JSON key/);
 });
 

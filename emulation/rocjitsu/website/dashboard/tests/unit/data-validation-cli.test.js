@@ -39,13 +39,13 @@ test('rejects generated data that the website also rejects', async () => {
     const runPath = path.join(temporaryDirectory, index.runFiles[0]);
     const run = JSON.parse(await readFile(runPath, 'utf8'));
     const completedResult = run.configurations
-      .flatMap(({ results }) => results)
+      .flatMap(({ benchmark_results }) => benchmark_results)
       .find(({ status }) => status === 'completed');
     completedResult.error = 'Unexpected diagnostic';
     await writeFile(runPath, `${JSON.stringify(run, null, 2)}\n`);
 
     await expect(validateDashboardDataDirectory(temporaryDirectory)).rejects.toThrow(
-      `Completed result ${completedResult.testId} cannot contain an error`,
+      `Completed result ${completedResult.id} cannot contain an error`,
     );
   } finally {
     await rm(temporaryDirectory, { recursive: true, force: true });
@@ -65,7 +65,7 @@ test.each(['run file', 'run directory', 'catalog file'])(
         ? runPath
         : resource === 'run directory'
           ? path.dirname(runPath)
-          : path.join(temporaryDirectory, run.testCatalog);
+          : path.join(temporaryDirectory, run.benchmark_catalog);
       const target = `${selected}-target`;
       await rename(selected, target);
       await symlink(path.basename(target), selected, resource === 'run directory' ? 'dir' : 'file');

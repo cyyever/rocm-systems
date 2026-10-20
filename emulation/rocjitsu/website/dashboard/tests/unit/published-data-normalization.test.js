@@ -2,7 +2,6 @@ import { fixtureRunPath } from '../fixtures/runPath.js';
 import { expect, test } from 'vitest';
 import { selectAutomaticReference, selectPublishedBranches } from '../../src/data/branchSelectors.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
-import { selectRecentRunSummaries } from '../../src/data/selectors.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 test('normalizes current runs with explicit modes and keeps branch source envelopes', () => {
@@ -33,7 +32,7 @@ test('normalizes current runs with explicit modes and keeps branch source envelo
       expect(configuration).not.toHaveProperty('threadCount');
     }
   }
-  expect(data.runs.find(({ runId }) => runId === 'fictional-develop-14').tests[0].durationSeconds).toBe(source.runs[14].configurations[0].results[0].durationSeconds);
+  expect(data.runs.find(({ runId }) => runId === 'fictional-develop-14').tests[0].durationSeconds).toBe(source.runs[14].configurations[0].benchmark_results[0].timing_results_s[0]);
 });
 
 test.each([123, true, false, ['attempt-1']].map((id) => ({ id })))('rejects non-string attempt ID $id before normalization', ({ id }) => {
@@ -66,7 +65,7 @@ test('configuration targets must be declared strings, not coerced numbers', () =
   const run = source.runs[0];
   run.configurations = [run.configurations[0]];
   run.configurations[0].target = 123;
-  source.catalogs[run.testCatalog].configurations = { '123:single': ['a', 'b', 'c'] };
+  source.catalogs[run.benchmark_catalog].membership = { '123:single': { single: ['a', 'b', 'c'] } };
   source.runs = [run]; source.index.runFiles = [fixtureRunPath(run)];
   expect(() => validatePublishedDashboardData(source)).toThrow(/configuration/);
 });
@@ -83,34 +82,22 @@ test.each([
   expect(() => validatePublishedDashboardData(source)).toThrow(/invalid.*configuration/i);
 });
 
-test('DATA-02 result extensions cannot replace authoritative catalog definitions', () => {
-  const source = createMaintainedPublication();
-  const run = source.runs[0];
-  source.runs = [run]; source.index.runFiles = [fixtureRunPath(run)];
-  const result = run.configurations[0].results[0];
-  const definition = source.catalogs[run.testCatalog].tests.find(({ id }) => id === result.testId);
-  Object.assign(result, { id: 'shadow-id', suite: 'not-a-catalog-suite', name: 'shadow name', problem: { size: 'shadow' } });
-  const { data, sourceData } = validatePublishedDashboardData(source);
-  expect(data.runs[0].tests[0]).toMatchObject(definition);
-  expect(sourceData.runs[0].configurations[0].results[0]).toEqual(result);
-});
-
-test('DATA-02 result suite extensions cannot hide a failed workload from coverage', () => {
-  const source = createMaintainedPublication();
-  const run = source.runs.find(({ id }) => id === 'fictional-develop-08');
-  source.runs = [run]; source.index.runFiles = [fixtureRunPath(run)];
-  run.configurations[0].results.find(({ testId }) => testId === 'd').suite = 'not-a-catalog-suite';
-  const { data } = validatePublishedDashboardData(source);
-  const recent = selectRecentRunSummaries(data.runs, { targets: ['gfx1250'], modes: ['single'], suites: data.suites });
-  expect(recent[0]).toMatchObject({ failed: 1, timeout: 1, completed: 2, total: 4, duration: null });
+test('DATA-02 result extensions cannot override authoritative definitions or hide failure', () => {
+  for (const id of ['fictional-develop-00', 'fictional-develop-08']) {
+    const source = createMaintainedPublication();
+    const run = source.runs.find((run) => run.id === id);
+    source.runs = [run]; source.index.runFiles = [fixtureRunPath(run)];
+    run.configurations[0].benchmark_results[0].suite = 'not-a-catalog-suite';
+    expect(() => validatePublishedDashboardData(source)).toThrow(/unsupported fields/);
+  }
 });
 
 test('rejects array source.commit SHA in published input', () => {
   const source = createMaintainedPublication();
   const run = source.runs.find(({ id }) => id === 'fictional-branch-01');
   source.runs = [run]; source.index.runFiles = [fixtureRunPath(run)];
-  run.source.commit = [run.source.commit];
-  expect(() => validatePublishedDashboardData(source)).toThrow(/Run fictional-branch-01 does not match the maintained schema-1 run contract/);
+  run.provenance.rocjitsu.rocjitsu_commit_sha = [run.provenance.rocjitsu.rocjitsu_commit_sha];
+  expect(() => validatePublishedDashboardData(source)).toThrow(/invalid provenance/);
 });
 
 test('rejects array source.base.commit SHA in published input', () => {
@@ -131,11 +118,12 @@ test.each(['source.commit', 'source.base.commit'].flatMap((field) =>
   const candidate = normalized.allRuns.find(({ runId }) => runId === branch.id);
   expect(selectAutomaticReference(normalized, candidate)).toMatchObject({ reason: 'exact-base', run: { runId: 'fictional-develop-20' } });
   expect(selectAutomaticReference(normalized, { ...candidate, sourceBase: undefined })).toMatchObject({ reason: 'earlier-develop', run: { runId: 'fictional-develop-21' } });
-  const identity = field === 'source.base.commit' ? branch.source.base : branch.source;
-  identity.commit = casing === 'uppercase' ? identity.commit.toUpperCase() : identity.commit.replace(/[a-f]/, (letter) => letter.toUpperCase());
-  const invalidSha = identity.commit;
-  expect(() => validatePublishedDashboardData(source)).toThrow(field === 'source.commit' ? /maintained schema-1 run contract/ : /invalid source base/);
-  expect(identity.commit).toBe(invalidSha);
+  const identity = field === 'source.base.commit' ? branch.source.base : branch.provenance.rocjitsu;
+  const key = field === 'source.base.commit' ? 'commit' : 'rocjitsu_commit_sha';
+  identity[key] = casing === 'uppercase' ? identity[key].toUpperCase() : identity[key].replace(/[a-f]/, (letter) => letter.toUpperCase());
+  const invalidSha = identity[key];
+  expect(() => validatePublishedDashboardData(source)).toThrow(field === 'source.commit' ? /invalid provenance/ : /invalid source base/);
+  expect(identity[key]).toBe(invalidSha);
 });
 
 test('preserves canonical lowercase full SHAs for branch search and exact base', () => {
@@ -143,12 +131,12 @@ test('preserves canonical lowercase full SHAs for branch search and exact base',
   source.runs = source.runs.filter(({ id }) => ['fictional-branch-01', 'fictional-develop-20', 'fictional-develop-21'].includes(id));
   source.index.runFiles = source.runs.map(fixtureRunPath);
   const branch = source.runs.find(({ id }) => id === 'fictional-branch-01');
-  expect(branch.source.commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(branch.provenance.rocjitsu.rocjitsu_commit_sha).toMatch(/^[0-9a-f]{40}$/);
   const { data } = validatePublishedDashboardData(source);
   const candidate = data.allRuns.find(({ runId }) => runId === branch.id);
-  expect(candidate.provenance.rocjitsuCommitSha).toBe(branch.source.commit);
+  expect(candidate.provenance.rocjitsuCommitSha).toBe(branch.provenance.rocjitsu.rocjitsu_commit_sha);
   expect(candidate.sourceBase).toEqual(branch.source.base);
-  expect(selectPublishedBranches(data, { query: branch.source.commit.toLowerCase() }).map(({ latestRun }) => latestRun.runId)).toEqual([branch.id]);
+  expect(selectPublishedBranches(data, { query: branch.provenance.rocjitsu.rocjitsu_commit_sha.toLowerCase() }).map(({ latestRun }) => latestRun.runId)).toEqual([branch.id]);
   expect(selectPublishedBranches(data, { query: 'nonmatching-query' })).toEqual([]);
   expect(selectAutomaticReference(data, candidate)).toMatchObject({ reason: 'exact-base', run: { runId: 'fictional-develop-20' } });
 });

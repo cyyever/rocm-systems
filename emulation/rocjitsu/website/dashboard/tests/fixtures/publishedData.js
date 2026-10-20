@@ -8,7 +8,7 @@ const readJson = (name) => JSON.parse(readFileSync(new URL(name, dataDirectory),
 export const dataIndex = readJson('index.json');
 export const publishedRuns = dataIndex.runFiles.map(readJson);
 export const publishedCatalogs = Object.fromEntries([...new Set(
-  publishedRuns.map((run) => run.testCatalog),
+  publishedRuns.map((run) => run.benchmark_catalog),
 )].map((name) => [name, readJson(name)]));
 export const publishedRunErrors = publishedRuns.map(() => null);
 

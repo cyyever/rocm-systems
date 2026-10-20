@@ -61,7 +61,7 @@ export async function validateDashboardDataDirectory(directory) {
   }));
 
   const catalogPaths = [...new Set(runResults
-    .map((result) => result.run?.testCatalog)
+    .map((result) => result.run?.benchmark_catalog)
     .filter((catalogPath) => (
       typeof catalogPath === 'string' && CATALOG_FILE_PATTERN.test(catalogPath)
     )))];

@@ -18,7 +18,7 @@ vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
 function validatedTarget(target) {
   const publication = createMaintainedPublication();
   for (const catalog of Object.values(publication.catalogs)) {
-    catalog.configurations = Object.fromEntries(Object.entries(catalog.configurations).map(([key, tests]) => [key.replace('gfx1250/', `${target}/`), tests]));
+    catalog.membership = Object.fromEntries(Object.entries(catalog.membership).map(([key, policies]) => [key === 'gfx1250' ? target : key, policies]));
   }
   for (const run of publication.runs) {
     for (const configuration of run.configurations) if (configuration.target === 'gfx1250') configuration.target = target;

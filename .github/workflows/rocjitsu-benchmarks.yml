@@ -122,6 +122,8 @@ jobs:
     outputs:
       machine: ${{ steps.machine.outputs.name }}
       source_commit_message: ${{ steps.source.outputs.commit_message }}
+      workflow_commit_sha: ${{ steps.source.outputs.workflow_commit_sha }}
+      tensile_commit_sha: ${{ steps.tensile.outputs.commit_sha }}
       ran: ${{ steps.benchmark.outcome == 'success' || steps.benchmark.outcome == 'failure' }}
     container:
       image: ghcr.io/rocm/no_rocm_image_ubuntu24_04@sha256:4150afe4759d14822f0e3f8930e1124f26e11f68b5c7b91ec9a02b20b1ebbb98
@@ -176,6 +178,9 @@ jobs:
         working-directory: rocm-systems
         run: |
           COMMIT_MESSAGE="$(git show -s --format=%s HEAD)"
+          WORKFLOW_COMMIT_SHA="$(git rev-parse --verify HEAD^{commit})"
+          [[ "${WORKFLOW_COMMIT_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          printf 'workflow_commit_sha=%s\n' "${WORKFLOW_COMMIT_SHA}" >> "${GITHUB_OUTPUT}"
           printf 'commit_message=%s\n' "${COMMIT_MESSAGE}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout benchmark corpus
@@ -195,6 +200,14 @@ jobs:
           ref: dd77374194a3ea1a7258cd54f87af6747b6362a5
           path: tensile-source
           persist-credentials: false
+
+      - name: Record checked Tensile revision
+        id: tensile
+        timeout-minutes: 1
+        run: |
+          TENSILE_COMMIT_SHA="$(git -C "${TENSILE_SOURCE}" rev-parse --verify HEAD^{commit})"
+          [[ "${TENSILE_COMMIT_SHA}" == dd77374194a3ea1a7258cd54f87af6747b6362a5 ]]
+          printf 'commit_sha=%s\n' "${TENSILE_COMMIT_SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout pinned native nanobind
         timeout-minutes: 2
@@ -304,6 +317,8 @@ jobs:
       BENCHMARK_BRANCH: ${{ github.ref_name }}
       BENCHMARK_SHA: ${{ github.sha }}
       BENCHMARK_COMMIT_MESSAGE: ${{ needs.benchmark.outputs.source_commit_message }}
+      WORKFLOW_COMMIT_SHA: ${{ needs.benchmark.outputs.workflow_commit_sha }}
+      TENSILE_COMMIT_SHA: ${{ needs.benchmark.outputs.tensile_commit_sha }}
       SOURCE_BASE_BRANCH: ${{ needs.source-metadata.outputs.base_branch }}
       SOURCE_BASE_SHA: ${{ needs.source-metadata.outputs.base_sha }}
       SOURCE_PULL_REQUEST_NUMBER: ${{ needs.source-metadata.outputs.pull_request_number }}
@@ -369,12 +384,16 @@ jobs:
 
           BUILD_DIR="${RUNNER_TEMP}/dashboard-built"
           SCRIPTS_DIR="${GITHUB_WORKSPACE}/dashboard/emulation/rocjitsu/website/dashboard/scripts"
+          # Provenance names the actual checked tool source, not a latest branch.
+          [[ "$(git -C "${GITHUB_WORKSPACE}/dashboard" rev-parse --verify HEAD^{commit})" == "${WORKFLOW_COMMIT_SHA}" ]]
           PREPARE_ARGS=(
             --raw-run "${RESULTS_DOWNLOAD_DIR}/run.json"
             --data-dir "${BUILD_DIR}"
             --run-id "${RUN_ID}"
             --expected-sha "${BENCHMARK_SHA}"
             --expected-corpus-sha "${CORPUS_SHA}"
+            --workflow-commit-sha "${WORKFLOW_COMMIT_SHA}"
+            --tensile-commit-sha "${TENSILE_COMMIT_SHA}"
             --corpus-dir "${GITHUB_WORKSPACE}/publication-corpus"
             --manifest benchmarks/suites/performance-v1.toml
             --machine-id "${BENCHMARK_MACHINE}"
@@ -405,6 +424,7 @@ jobs:
             exit 1
           fi
           CATALOG_PATH="test-catalogs/$(basename "${CATALOGS[0]}")"
+          # Publisher checks benchmark_catalog and execution_summary.benchmark_suite.
 
           bash "${SCRIPTS_DIR}/dashboard-data/publish-dashboard-run.sh" \
             "${BUILD_DIR}" "${RUN_PATH}" "${CATALOG_PATH}" "${RESULTS_BRANCH}" \

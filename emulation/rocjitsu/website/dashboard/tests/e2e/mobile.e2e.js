@@ -36,7 +36,7 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   });
   await trend.tap({ position: { x: pixel[0], y: pixel[1] } });
   await trend.dispatchEvent('pointerleave', { pointerType: 'touch' });
-  await expect(page.getByTestId('performance-trend').getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23').source.commit.slice(0, 8));
+  await expect(page.getByTestId('performance-trend').getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23').provenance.rocjitsu.rocjitsu_commit_sha.slice(0, 8));
   await trend.press('Escape');
   await expect(page.getByTestId('performance-trend').getByRole('status')).toHaveCount(0);
 

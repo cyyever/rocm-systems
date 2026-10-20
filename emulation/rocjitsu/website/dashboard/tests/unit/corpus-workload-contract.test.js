@@ -6,7 +6,7 @@ import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 function publication() {
   const source = createMaintainedPublication();
   for (const catalog of Object.values(source.catalogs)) {
-    for (const test of catalog.tests) test.operation = 'Matrix multiplication followed by reduction';
+    for (const test of Object.values(catalog.benchmark_definitions)) test.operation = 'Matrix multiplication followed by reduction';
   }
   return source;
 }
@@ -15,7 +15,7 @@ test('preserves literal workload IDs, operation, ordered samples and sparse targ
   const source = publication();
   const run = source.runs[12];
   for (const configuration of run.configurations) {
-    for (const result of configuration.results) Object.assign(result, { timing_results_s: [0.03, 0.01, 0.02], durationSeconds: 0.02 });
+    for (const result of configuration.benchmark_results) Object.assign(result, { timing_results_s: [0.03, 0.01, 0.02] });
   }
   const before = structuredClone(source);
   const { data, sourceData } = validatePublishedDashboardData(source);
@@ -34,18 +34,18 @@ test('preserves literal workload IDs, operation, ordered samples and sparse targ
 
 test.each(['', ' ', null, 7, {}, []].map((operation) => ({ operation })))('rejects an explicitly invalid operation $operation', ({ operation }) => {
   const source = publication();
-  Object.values(source.catalogs)[0].tests[0].operation = operation;
+  Object.values(Object.values(source.catalogs)[0].benchmark_definitions)[0].operation = operation;
   expect(() => validatePublishedDashboardData(source)).toThrow(/invalid.*definition/);
 });
 
 test('rejects conflicting operations for the same corpus workload ID', () => {
   const source = publication();
-  source.catalogs['test-catalogs/fictional-current.json'].tests[0].operation = 'Different computation';
+  Object.values(source.catalogs['test-catalogs/fictional-current.json'].benchmark_definitions)[0].operation = 'Different computation';
   expect(() => validatePublishedDashboardData(source)).toThrow(/defined differently/);
 });
 
 test('maintained catalogs require operation instead of inventing missing metadata', () => {
   const source = publication();
-  for (const test of source.catalogs['test-catalogs/fictional-old.json'].tests) delete test.operation;
+  for (const test of Object.values(source.catalogs['test-catalogs/fictional-old.json'].benchmark_definitions)) delete test.operation;
   expect(() => validatePublishedDashboardData(source)).toThrow(/invalid.*definition/);
 });

@@ -38,30 +38,19 @@ test('maintained examples use literal policies and matching catalog membership',
   expect(metadata.schemaVersion).toBe(1);
   expect(run.schemaVersion).toBe(1);
   expect(index.runFiles).toEqual([`runs/default-branch/${run.id}.json`]);
-  expect(run.testCatalog).toBe(`test-catalogs/${catalog.id}.json`);
+  expect(run.benchmark_catalog).toBe(`test-catalogs/${catalog.benchmark_suite}.json`);
   expect(run.configurations.map(({ target, thread_policy }) => `${target}/${thread_policy}`).sort())
-    .toEqual(Object.keys(catalog.configurations).sort());
-
+    .toEqual(Object.entries(catalog.membership).flatMap(([target, policies]) => Object.keys(policies).map((policy) => `${target}/${policy}`)).sort());
   for (const group of run.configurations) {
     expect(['single', 'default']).toContain(group.thread_policy);
-    expect(group.results.map(({ testId }) => testId).sort())
-      .toEqual([...catalog.configurations[`${group.target}/${group.thread_policy}`]].sort());
-    for (const result of group.results) {
-      expect(result.thread_policy).toBe(group.thread_policy);
-      if (result.status === 'completed') {
-        const samples = [...result.timing_results_s].sort((left, right) => left - right);
-        const middle = Math.floor(samples.length / 2);
-        const median = samples.length % 2 ? samples[middle] : (samples[middle - 1] + samples[middle]) / 2;
-        expect(result.durationSeconds).toBe(median);
-        expect(result.error).toBeNull();
-      } else {
-        expect(['failed', 'timeout']).toContain(result.status);
-        expect(result.durationSeconds).toBeNull();
-      }
+    expect(group.benchmark_results.map(({ id }) => id).sort()).toEqual([...catalog.membership[group.target][group.thread_policy]].sort());
+    for (const result of group.benchmark_results) {
+      expect(Object.keys(result).sort()).toEqual(['error', 'id', 'status', 'timing_results_s']);
+      if (result.status === 'completed') expect(result.error).toBeNull();
+      else expect(['failed', 'timeout']).toContain(result.status);
     }
   }
-
-  expect(catalog.tests[0].problem.shape).toEqual([16, 16, 16]);
-  expect(catalog.tests[0].problem.options).toEqual({ transpose: false });
-  expect(catalog.tests[0].problem.note).toBeNull();
+  expect(catalog.benchmark_definitions.gemm.problem.shape).toEqual([16, 16, 16]);
+  expect(catalog.benchmark_definitions.gemm.problem.options).toEqual({ transpose: false });
+  expect(catalog.benchmark_definitions.gemm.problem.note).toBeNull();
 });

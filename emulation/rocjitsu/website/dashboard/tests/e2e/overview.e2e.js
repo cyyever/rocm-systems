@@ -111,8 +111,7 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
 test('Largest Changes Shared excludes a larger nonshared delta and catalog switching restores eligible entries', async ({ page }) => {
   const publication = createMaintainedPublication();
   const latest = publication.runs.find(({ id }) => id === 'fictional-develop-23');
-  const added = latest.configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === 'single').results.find(({ testId }) => testId === 'd');
-  added.durationSeconds = 2000;
+  const added = latest.configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === 'single').benchmark_results.find(({ id }) => id === 'd');
   added.timing_results_s = [2000];
   await installPublication(page, { publication });
   await openDashboard(page, '/?targets=gfx1250&modes=single&range=1W');

@@ -59,10 +59,10 @@ test('site settings cannot be overridden by publication extensions and are not i
 
 test('explicit tool site configuration remains separate from unchanged publication provenance', () => {
   const source = publication();
-  source.runs[0].source.repository = 'https://example.test/recorded-source';
+  source.runs[0].provenance.rocjitsu.repository = 'https://example.test/recorded-source';
   const siteConfig = { repository: 'https://example.test/site', isBeta: false, canonicalBranch: 'develop' };
   const { data, sourceData } = validatePublishedDashboardData({ ...source, siteConfig });
   expect(data).toMatchObject(siteConfig);
   expect(sourceData).toEqual(source);
-  expect(sourceData.runs[0].source.repository).toBe('https://example.test/recorded-source');
+  expect(sourceData.runs[0].provenance.rocjitsu.repository).toBe('https://example.test/recorded-source');
 });

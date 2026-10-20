@@ -56,97 +56,126 @@ export function validateDashboardSiteConfig(siteConfig) {
   if (typeof siteConfig.isBeta !== 'boolean' || siteConfig.canonicalBranch !== 'develop') throw new Error('Expected site configuration isBeta boolean and canonicalBranch develop');
 }
 
+function envelope(value, fields, label) {
+  if (!object(value) || Object.keys(value).some((key) => !fields.includes(key))) throw new Error(`${label} contains unsupported fields or old-shaped schema-1 input`);
+}
+
 function validateCatalog(catalog, file) {
-  if (!CATALOG_FILE_PATTERN.test(file) || !object(catalog) || typeof catalog.id !== 'string' || !TOKEN.test(catalog.id) || ['.', '..'].includes(catalog.id) || catalog.id !== file.slice(14, -5)
-    || Object.hasOwn(catalog, 'targets') || !Array.isArray(catalog.tests) || !object(catalog.configurations) || Object.keys(catalog.configurations).length === 0) {
+  envelope(catalog, ['benchmark_suite', 'benchmark_definitions', 'membership'], `Test catalog ${file}`);
+  const id = catalog.benchmark_suite;
+  if (!CATALOG_FILE_PATTERN.test(file) || typeof id !== 'string' || !TOKEN.test(id) || ['.', '..'].includes(id) || id !== file.slice(14, -5)
+    || !object(catalog.benchmark_definitions) || !Object.keys(catalog.benchmark_definitions).length || !object(catalog.membership) || !Object.keys(catalog.membership).length) {
     throw new Error(`Test catalog ${file} does not match the maintained schema-1 catalog contract`);
   }
-  const ids = catalog.tests.map((test) => test?.id);
-  if (new Set(ids).size !== ids.length || catalog.tests.some((test) => !hasText(test?.id) || !hasText(test.suite) || !hasText(test.name)
-    || !hasText(test.operation)
-    || !object(test.problem) || Object.entries(test.problem).some(([key, value]) => !hasText(key) || !isJsonValue(value)))) {
-    throw new Error(`Test catalog ${file} contains an invalid or duplicate test definition`);
+  const tests = Object.entries(catalog.benchmark_definitions).map(([testId, definition]) => {
+    envelope(definition, ['suite', 'name', 'operation', 'problem'], `Test definition ${testId}`);
+    if (!hasText(testId) || !hasText(definition.suite) || !hasText(definition.name) || !hasText(definition.operation)
+      || !object(definition.problem) || Object.entries(definition.problem).some(([key, value]) => !hasText(key) || !isJsonValue(value))) throw new Error(`Test catalog ${file} contains an invalid or duplicate test definition`);
+    return { id: testId, ...definition };
+  });
+  const configurations = {};
+  for (const [target, policies] of Object.entries(catalog.membership)) {
+    if (!TOKEN.test(target) || !object(policies) || !Object.keys(policies).length) throw new Error(`Test catalog ${file} contains an invalid configuration`);
+    for (const [policy, members] of Object.entries(policies)) {
+      const key = configurationKey(target, policy);
+      if (!CONFIGURATION.test(key) || !Array.isArray(members) || !members.length || new Set(members).size !== members.length
+        || members.some((member) => typeof member !== 'string' || !Object.hasOwn(catalog.benchmark_definitions, member))) throw new Error(`Test catalog ${file} contains an invalid configuration ${key}`);
+      Object.defineProperty(configurations, key, { value: members, enumerable: true });
+    }
   }
-  for (const [key, members] of Object.entries(catalog.configurations)) {
-    if (!CONFIGURATION.test(key) || !Array.isArray(members) || members.length === 0 || new Set(members).size !== members.length
-      || members.some((id) => !ids.includes(id))) throw new Error(`Test catalog ${file} contains an invalid configuration ${key}`);
-  }
-  return catalog;
+  return { id, tests, configurations };
 }
 
 export function validatePublishedResult(result) {
-  if (!object(result) || !hasText(result.testId)) throw new Error('Result must contain a testId');
-  const removed = ['exitCode', 'findings'].find((key) => Object.hasOwn(result, key));
-  if (removed) throw new Error(`Result ${result.testId} contains removed field ${removed}`);
-  if (!['completed', 'failed', 'timeout'].includes(result.status)) throw new Error(`Result ${result.testId} has invalid status`);
-  if (!Object.hasOwn(result, 'durationSeconds') || !Object.hasOwn(result, 'error')) throw new Error(`Result ${result.testId} must contain durationSeconds and error`);
-  if (result.status === 'completed') {
-    if (!isTimingNumber(result.durationSeconds)) throw new Error(`Completed result ${result.testId} must contain positive finite durationSeconds within supported numeric timing ceiling`);
-    if (result.error !== null) throw new Error(`Completed result ${result.testId} cannot contain an error`);
-  } else if (result.durationSeconds !== null) throw new Error(`${result.status} result ${result.testId} must have a null durationSeconds`);
-  if (result.error !== null && !hasText(result.error)) throw new Error(`Result ${result.testId} error must be a non-empty string or null`);
-  if (!Object.hasOwn(result, 'timing_results_s')) throw new Error(`Result ${result.testId} must contain timing_results_s`);
-  {
-    const samples = result.timing_results_s;
-    if (!Array.isArray(samples) || samples.some((sample) => !isTimingNumber(sample))
-      || result.status === 'completed' && samples.length === 0) {
-      throw new Error(`Result ${result.testId} timing_results_s must contain positive finite samples within supported numeric timing ceiling, nonempty when completed`);
-    }
-    if (result.status === 'completed') {
-      const sorted = [...samples].sort((a, b) => a - b);
-      const middle = Math.floor(sorted.length / 2);
-      const median = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-      if (result.durationSeconds !== median) throw new Error(`Result ${result.testId} durationSeconds must equal the timing_results_s median`);
-    }
-  }
+  envelope(result, ['id', 'status', 'timing_results_s', 'error'], 'Result');
+  if (!hasText(result.id)) throw new Error('Result must contain an id');
+  if (!['completed', 'failed', 'timeout'].includes(result.status)) throw new Error(`Result ${result.id} has invalid status`);
+  if (!Object.hasOwn(result, 'error') || result.error !== null && !hasText(result.error)) throw new Error(`Result ${result.id} error must be a non-empty string or null`);
+  if (result.status === 'completed' && result.error !== null) throw new Error(`Completed result ${result.id} cannot contain an error`);
+  const samples = result.timing_results_s;
+  if (!Array.isArray(samples) || samples.some((sample) => !isTimingNumber(sample)) || result.status === 'completed' && !samples.length) throw new Error(`Result ${result.id} timing_results_s must contain positive finite samples within supported numeric timing ceiling, nonempty when completed`);
   return result;
 }
 
-function normalizeRun(run, catalog, generatedAt) {
-  const source = run?.source; const execution = run?.execution;
-  const environment = run?.environment;
-  if (typeof run?.id !== 'string' || !TOKEN.test(run.id) || ['.', '..'].includes(run.id)
-    || !hasText(source?.branch) || typeof source.commit !== 'string' || !SHA.test(source.commit ?? '') || !isIsoTimestamp(source.committedAt)
-    || (Object.hasOwn(source, 'message') && !hasText(source.message))
-    || !isIsoTimestamp(execution?.completedAt) || !['auto', 'manual'].includes(execution.trigger) || !hasText(execution.machine)
-    || !Array.isArray(environment) || environment.some((detail) => !hasText(detail?.key) || !hasText(detail?.label) || !scalar(detail?.value))
-    || new Set(environment.map(({ key }) => key)).size !== environment.length || !Array.isArray(run.configurations) || run.configurations.length === 0) {
-    throw new Error(`Run ${run?.id ?? '(unknown)'} does not match the maintained schema-1 run contract`);
-  }
-  if (Date.parse(source.committedAt) > Date.parse(execution.completedAt) || Date.parse(execution.completedAt) > Date.parse(generatedAt)) throw new Error(`Run ${run.id} must be committed before completion and completed by publication`);
-  const suite = environment.find(({ key }) => key === 'execution.benchmark_suite');
-  if (typeof suite?.value !== 'string' || suite.value !== catalog.id) throw new Error(`Run ${run.id} execution.benchmark_suite must equal catalog ID ${catalog.id}`);
-  if (Object.hasOwn(source, 'base') && (!hasText(source.base?.branch) || source.base.branch === source.branch || typeof source.base?.commit !== 'string' || !SHA.test(source.base?.commit ?? ''))) throw new Error(`Run ${run.id} has an invalid source base`);
-  if (Object.hasOwn(source, 'pullRequest') && (!source.base || !Number.isSafeInteger(source.pullRequest?.number) || source.pullRequest.number <= 0
-    || (Object.hasOwn(source.pullRequest, 'url') && (!safeUrl(source.pullRequest.url, true) || !new URL(source.pullRequest.url).pathname.endsWith(`/pull/${source.pullRequest.number}`))))) throw new Error(`Run ${run.id} has an invalid pullRequest`);
+function durationFor(result) {
+  if (result.status !== 'completed') return null;
+  const samples = [...result.timing_results_s].sort((a, b) => a - b);
+  const middle = Math.floor(samples.length / 2);
+  return samples.length % 2 ? samples[middle] : (samples[middle - 1] + samples[middle]) / 2;
+}
 
+function normalizedEnvironment(provenance, summary) {
+  const details = new Map();
+  for (const [section, values] of Object.entries(provenance)) for (const [key, value] of Object.entries(values)) {
+    if (section === 'rocjitsu' && ['rocjitsu_commit_sha', 'rocjitsu_commit_timestamp', 'target_config_sha256', 'workflow_commit_sha'].includes(key)
+      || section === 'auxiliary' && key === 'tensile_commit_sha') continue;
+    const name = `${section}.${key}`;
+    details.set(name, { key: name, label: name, value: scalar(value) ? value : typedJsonIdentity(value) });
+  }
+  // Match the producer's existing scalar projection: protocol overrides open facts.
+  for (const key of ['warmups', 'samples', 'timeout_seconds', 'benchmark_suite']) {
+    const name = `execution.${key}`;
+    details.set(name, { key: name, label: name, value: summary[key] });
+  }
+  return [...details.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function normalizeRun(run, catalog, generatedAt) {
+  envelope(run, ['schemaVersion', 'id', 'benchmark_catalog', 'source', 'execution', 'execution_summary', 'provenance', 'configurations'], 'Run');
+  const { source, execution, execution_summary: summary, provenance } = run;
+  envelope(source, ['branch', 'message', 'base', 'pullRequest'], `Run ${run.id} source`);
+  envelope(execution, ['trigger', 'machine_label'], `Run ${run.id} execution`);
+  envelope(summary, ['benchmark_suite', 'timestamp', 'finished_at', 'wall_time_s', 'warmups', 'samples', 'timeout_seconds'], `Run ${run.id} execution_summary`);
+  if (!hasText(source.branch) || Object.hasOwn(source, 'message') && !hasText(source.message) || !['auto', 'manual'].includes(execution.trigger) || !hasText(execution.machine_label)
+    || !object(provenance) || ['auxiliary', 'corpus', 'machine', 'rocjitsu'].some((key) => !object(provenance[key]))
+    || Object.values(provenance).some((values) => !object(values) || Object.entries(values).some(([key, value]) => !hasText(key) || !isJsonValue(value)))
+    || !Array.isArray(run.configurations) || !run.configurations.length) throw new Error(`Run ${run.id} does not match the maintained schema-1 run contract`);
+  const native = provenance.rocjitsu; const corpus = provenance.corpus;
+  if (![native.rocjitsu_commit_sha, native.workflow_commit_sha, corpus.corpus_commit_sha, provenance.auxiliary.tensile_commit_sha].every((sha) => typeof sha === 'string' && SHA.test(sha))
+    || !Object.hasOwn(native, 'rocm_sdk_version') || native.rocm_sdk_version !== null && !hasText(native.rocm_sdk_version)
+    || ['hostname', 'platform', 'kernel', 'cpu'].some((key) => !hasText(provenance.machine[key]))) throw new Error(`Run ${run.id} has invalid provenance commit or machine facts`);
+  if (![native.rocjitsu_commit_timestamp, corpus.corpus_commit_timestamp, summary.timestamp, summary.finished_at].every(isIsoTimestamp)
+    || !Number.isInteger(summary.warmups) || !isSupportedNumber(summary.warmups) || summary.warmups < 0
+    || !Number.isInteger(summary.samples) || !isSupportedNumber(summary.samples) || summary.samples < 1
+    || !isSupportedNumber(summary.timeout_seconds) || summary.timeout_seconds <= 0 || !isSupportedNumber(summary.wall_time_s) || summary.wall_time_s < 0) throw new Error(`Run ${run.id} has invalid execution summary`);
+  if (Date.parse(native.rocjitsu_commit_timestamp) > Date.parse(summary.timestamp) || Date.parse(corpus.corpus_commit_timestamp) > Date.parse(summary.timestamp)
+    || Date.parse(summary.timestamp) > Date.parse(summary.finished_at) || Date.parse(summary.finished_at) > Date.parse(generatedAt)) throw new Error(`Run ${run.id} must be committed before execution start, completed after start and completed by publication`);
+  if (summary.benchmark_suite !== catalog.id) throw new Error(`Run ${run.id} execution_summary.benchmark_suite must equal catalog ID ${catalog.id}`);
+  if (Object.hasOwn(source, 'base')) {
+    envelope(source.base, ['branch', 'commit'], 'Source base');
+    if (!hasText(source.base.branch) || source.base.branch === source.branch || typeof source.base.commit !== 'string' || !SHA.test(source.base.commit)) throw new Error(`Run ${run.id} has an invalid source base`);
+  }
+  if (Object.hasOwn(source, 'pullRequest')) {
+    envelope(source.pullRequest, ['number', 'url'], 'Pull request');
+    if (!source.base || !Number.isSafeInteger(source.pullRequest.number) || source.pullRequest.number <= 0
+      || Object.hasOwn(source.pullRequest, 'url') && (!safeUrl(source.pullRequest.url, true) || !new URL(source.pullRequest.url).pathname.endsWith(`/pull/${source.pullRequest.number}`))) throw new Error(`Run ${run.id} has an invalid pullRequest`);
+  }
   const definitions = new Map(catalog.tests.map((test) => [test.id, test]));
   const seen = new Set();
   const tests = run.configurations.flatMap((configuration) => {
-    const { target, thread_policy, results } = configuration;
-    if (!THREAD_POLICIES.includes(thread_policy) || Object.hasOwn(configuration, 'threadingMode')) throw new Error(`Run ${run.id} has an invalid configuration thread_policy`);
+    envelope(configuration, ['target', 'thread_policy', 'benchmark_results'], 'Configuration');
+    const { target, thread_policy, benchmark_results: results } = configuration;
     const key = configurationKey(target, thread_policy);
-    if (!hasText(target) || !CONFIGURATION.test(key) || !Object.hasOwn(catalog.configurations, key) || seen.has(key) || !Array.isArray(results)) throw new Error(`Run ${run.id} has an invalid or duplicate configuration ${key}`);
-
+    if (!THREAD_POLICIES.includes(thread_policy) || !hasText(target) || !CONFIGURATION.test(key) || !Object.hasOwn(catalog.configurations, key) || seen.has(key) || !Array.isArray(results)) throw new Error(`Run ${run.id} has an invalid or duplicate configuration ${key}`);
     seen.add(key);
-    results.forEach((result) => {
-      validatePublishedResult(result);
-      if (result.thread_policy !== thread_policy) throw new Error(`Run ${run.id} result ${result.testId} has mismatched thread_policy`);
-    });
-    const ids = results.map(({ testId }) => testId);
+    results.forEach(validatePublishedResult);
+    const ids = results.map(({ id }) => id);
     if (new Set(ids).size !== ids.length || !sameSet(ids, catalog.configurations[key])) throw new Error(`Run ${run.id} must contain exactly one result per ${key} catalog workload`);
-    return results.map(({ testId, status, durationSeconds, error, timing_results_s }) => ({ ...definitions.get(testId), status, durationSeconds, error,
-      ...(timing_results_s !== undefined ? { timing_results_s: [...timing_results_s] } : {}),
-      testId: `${key}:${testId}`, logicalTestId: testId, target, thread_policy, mode: thread_policy }));
+    return results.map((result) => ({ ...definitions.get(result.id), status: result.status, durationSeconds: durationFor(result), error: result.error, timing_results_s: [...result.timing_results_s], testId: `${key}:${result.id}`, logicalTestId: result.id, target, thread_policy, mode: thread_policy }));
   });
   if (!sameSet([...seen], Object.keys(catalog.configurations))) throw new Error(`Run ${run.id} must contain exactly the catalog configuration keys`);
+  const environment = normalizedEnvironment(provenance, summary);
+  const sourceDetails = [
+    { key: 'rocjitsu.workflow_commit_sha', label: 'Workflow commit', value: native.workflow_commit_sha },
+    { key: 'auxiliary.tensile_commit_sha', label: 'Tensile commit', value: provenance.auxiliary.tensile_commit_sha },
+  ];
   return {
-    runId: run.id, testCatalog: run.testCatalog, catalogId: catalog.id,
-    timestamp: execution.completedAt, commitTimestamp: source.committedAt, trigger: execution.trigger, machineId: execution.machine,
+    runId: run.id, testCatalog: run.benchmark_catalog, catalogId: catalog.id,
+    timestamp: summary.finished_at, commitTimestamp: native.rocjitsu_commit_timestamp, trigger: execution.trigger, machineId: execution.machine_label,
     targets: [...new Set(run.configurations.map(({ target }) => target))], modes: THREAD_POLICIES.filter((mode) => run.configurations.some((c) => c.thread_policy === mode)),
     branch: source.branch, ...(source.base ? { sourceBase: { ...source.base } } : {}), ...(source.pullRequest ? { pullRequest: { ...source.pullRequest } } : {}),
     environmentId: environmentIdentity(environment),
-    provenance: { rocjitsuCommitSha: source.commit, ...(source.message ? { commitMessage: source.message } : {}), details: environment },
+    provenance: { rocjitsuCommitSha: native.rocjitsu_commit_sha, ...(source.message ? { commitMessage: source.message } : {}), details: [...environment, ...sourceDetails] },
     configurations: run.configurations.map(({ target, thread_policy }) => ({ target, thread_policy })), tests,
   };
 }
@@ -179,7 +208,7 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
       if (sourceIds.has(sourceRun.id)) throw new Error(`Duplicate run ID ${sourceRun.id}`);
       sourceIds.add(sourceRun.id);
       if (file.split('/').at(-1) !== `${sourceRun.id}.json`) throw new Error(`Run ${sourceRun.id} filename must match its ID`);
-      const catalogFile = sourceRun.testCatalog;
+      const catalogFile = sourceRun.benchmark_catalog;
       if (typeof catalogFile === 'string' && CATALOG_FILE_PATTERN.test(catalogFile) && Object.hasOwn(catalogs, catalogFile)) {
         sourceCatalogs.set(catalogFile, catalogs[catalogFile]);
       }

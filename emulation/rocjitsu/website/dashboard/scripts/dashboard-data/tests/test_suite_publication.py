@@ -40,6 +40,7 @@ def bind(raw, root):
 def invoke(root, raw_inputs, repo, sha, output=None, run_id='attempt', extra=()):
     output = output or root / 'output'
     args = [sys.executable, str(SCRIPT), '--data-dir', str(output), '--run-id', run_id,
+            '--workflow-commit-sha', 'c' * 40, '--tensile-commit-sha', 'd' * 40,
             '--expected-sha', SHA, '--expected-corpus-sha', sha, '--corpus-dir', str(repo),
             '--manifest', 'suite.toml', '--machine-id', 'fixture', '--branch', 'develop',
             '--trigger', 'manual', '--commit-message', 'Fictional source-boundary test']
@@ -90,9 +91,10 @@ def test_full_failure_membership_idempotence_and_actual_consumer(tmp_path):
     assert (tmp_path / 'output/test-catalogs/Suite.v1.json').read_bytes() == original['test-catalogs/Suite.v1.json']
     parsed = index_and_process(tmp_path / 'output', ['attempt', 'failure', 'timing'])
     assert len(parsed['sourceData']['runs']) == 3
-    assert parsed['sourceData']['catalogs']['test-catalogs/Suite.v1.json']['id'] == 'Suite.v1'
-    assert all(row['durationSeconds'] is None for row in parsed['sourceData']['runs'][1]['configurations'][0]['results'])
-    assert parsed['sourceData']['catalogs']['test-catalogs/Suite.v1.json']['tests'][0]['problem']['shape'] == [1, 2]
+    assert parsed['sourceData']['catalogs']['test-catalogs/Suite.v1.json']['benchmark_suite'] == 'Suite.v1'
+    assert all(row['status'] == 'failed' and row['timing_results_s'] == [] for row in parsed['sourceData']['runs'][1]['configurations'][0]['benchmark_results'])
+    assert all(row['durationSeconds'] is None for row in next(run for run in parsed['data']['runs'] if run['runId'] == 'failure')['tests'])
+    assert parsed['sourceData']['catalogs']['test-catalogs/Suite.v1.json']['benchmark_definitions']['a']['problem']['shape'] == [1, 2]
 
 
 @pytest.mark.parametrize('change', ['filtered', 'deleted', 'extra', 'duplicate', 'complementary', 'definition', 'unfinished'])

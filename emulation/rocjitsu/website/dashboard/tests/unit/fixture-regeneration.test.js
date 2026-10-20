@@ -74,15 +74,15 @@ test('contract fixture preserves typed definitions and exact target/policy membe
   await withOverviewFixture(({ data, sourceData }) => {
     expect(data.runs).toHaveLength(7);
     expect(data.modes).toEqual(['single', 'default']);
-    const definitions = sourceData.catalogs['test-catalogs/fictional-contract-current.json'].tests;
-    expect(definitions.find(({ id }) => id === 'a').problem).toEqual({ shape: [16, 32], tuning: { enabled: true, tile: null } });
-    expect(definitions.find(({ id }) => id === 'c').problem).toEqual({ shape: '[16,32]' });
+    const definitions = sourceData.catalogs['test-catalogs/fictional-contract-current.json'].benchmark_definitions;
+    expect(definitions.a.problem).toEqual({ shape: [16, 32], tuning: { enabled: true, tile: null } });
+    expect(definitions.c.problem).toEqual({ shape: '[16,32]' });
     expect(sourceData.runs.every((run) => run.source.message.startsWith('FICTIONAL'))).toBe(true);
     for (const run of sourceData.runs) {
-      const catalog = sourceData.catalogs[run.testCatalog];
-      expect(run.environment.find(({ key }) => key === 'execution.benchmark_suite').value).toBe(catalog.id);
-      expect(run.configurations.map(({ target, thread_policy }) => `${target}/${thread_policy}`).sort()).toEqual(Object.keys(catalog.configurations).sort());
-      for (const config of run.configurations) expect(config.results.map(({ testId }) => testId).sort()).toEqual([...catalog.configurations[`${config.target}/${config.thread_policy}`]].sort());
+      const catalog = sourceData.catalogs[run.benchmark_catalog];
+      expect(run.execution_summary.benchmark_suite).toBe(catalog.benchmark_suite);
+      expect(run.configurations.map(({ target, thread_policy }) => `${target}/${thread_policy}`).sort()).toEqual(Object.entries(catalog.membership).flatMap(([target, policies]) => Object.keys(policies).map((policy) => `${target}/${policy}`)).sort());
+      for (const config of run.configurations) expect(config.benchmark_results.map(({ id }) => id).sort()).toEqual([...catalog.membership[config.target][config.thread_policy]].sort());
     }
   });
 });

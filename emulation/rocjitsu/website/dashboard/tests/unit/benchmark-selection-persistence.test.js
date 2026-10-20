@@ -34,6 +34,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   loader.requests = [];
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 // Real App, Dashboard and Benchmarks hooks/callbacks; capture their React trees
@@ -87,6 +88,15 @@ function mountApp(storage = new Map(), blockedStorage = false) {
   };
 }
 
+it.each([
+  ['fixtures', true],
+  ['production', false],
+])('App selects mutable-data caching only in %s mode', (mode, mutableData) => {
+  vi.stubEnv('MODE', mode);
+  mountApp();
+  expect(loader.requests.findLast(({ options }) => !options.signal.aborted).options.mutableData).toBe(mutableData);
+});
+
 it('typed workload definitions survive fresh App persistence restoration', () => {
   const selected = [{ id: 'typed', name: 'Typed workload', suite: 'Triton', operation: 'GEMM', problem: { shape: [1, 2], options: { nested: [false, null] }, note: null } }];
   const probe = mountApp(new Map([['rocjitsu-dashboard-benchmarks', JSON.stringify(selected)]]));
@@ -129,7 +139,7 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
     probe.apply([retained]);
     expected = [retained.id];
     const publication = createMaintainedPublication();
-    publication.runs = publication.runs.filter((run) => run.testCatalog !== 'test-catalogs/fictional-old.json');
+    publication.runs = publication.runs.filter((run) => run.benchmark_catalog !== 'test-catalogs/fictional-old.json');
     publication.index.runFiles = publication.runs.map(fixtureRunPath);
     nextData = validatePublishedDashboardData(publication).data;
     expect(nextData.testCatalog.some((test) => test.id === retained.id)).toBe(false);

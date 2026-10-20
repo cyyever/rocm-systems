@@ -19,7 +19,7 @@ test('published branch search and PR filters preserve exact selection through em
   await expect(branchRows).toHaveCount(branches.length);
   await expect(branchRows.first()).toContainText(branches[0].branch);
   const search = page.getByRole('searchbox', { name: 'Search branch, PR or SHA' });
-  for (const query of ['optimization-01', '#1000', createMaintainedPublication().runs.find((run) => run.id === 'fictional-branch-01').source.commit]) {
+  for (const query of ['optimization-01', '#1000', createMaintainedPublication().runs.find((run) => run.id === 'fictional-branch-01').provenance.rocjitsu.rocjitsu_commit_sha]) {
     await search.fill(query);
     await expect(branchRows).toHaveCount(1);
     await expect(branchButton(page, '01')).toBeVisible();

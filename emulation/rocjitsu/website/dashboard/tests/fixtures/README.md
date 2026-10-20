@@ -7,12 +7,22 @@ Production builds do not import the generators or copy fixture JSON.
 ## Deterministic publication
 
 `maintainedDataset.js` generates 24 develop attempts and 20 fictional side branches.
-Each run declares `schemaVersion: 1`, literal `thread_policy: single/default`,
-ordered timing samples and positive completed median duration. Failed/timeout
-records have null duration. Definitions require operation metadata. Catalog
-configuration keys are `target/policy` and agree exactly with their run groups.
-Sparse attempts have separate equally sparse catalogs, rather than omitting a
-run group against a fully declared catalog. Indexes/catalogs have no version field.
+Each run declares `schemaVersion: 1`, a `benchmark_catalog` reference, caller
+`source`/`execution`, original-named `execution_summary` and four structured
+`provenance` sections. Source/corpus/workflow/Tensile fixture hashes are explicitly
+fictional valid full40hex values. Configuration groups own the literal
+`thread_policy: single/default`; their `benchmark_results` contain only raw `id`,
+status, ordered `timing_results_s` and error. Wire records contain no derived
+`durationSeconds` or repeated policy/definitions. The consumer derives completed
+medians internally and uses internal null duration for failed/timeout records,
+even when partial samples are present.
+
+Catalogs use `benchmark_suite`, exact ID-keyed `benchmark_definitions` retaining
+suite/name/operation/typed problem, and nested `membership[target][thread_policy]`
+that agrees exactly with run groups/results. Sparse attempts have separate
+equally sparse catalogs, rather than omitting a run group against a fully declared
+catalog. Indexes/catalogs have no version field. No legacy wire aliases or
+migration adapters are provided.
 
 The base old/current catalogs exercise deleted/added workloads; dedicated variants
 exercise configuration absence. Tests retain chronology, late execution/backfill,
@@ -42,7 +52,13 @@ positive test changes configuration scope; production validation never repairs
 malformed membership this way.
 
 `syntheticDataset.js` separately generates the 500-attempt queue/concurrency case
-in memory. It is not copied into browser fixtures. Loader tests retain cache
+in memory. It is not copied into browser fixtures. In `fixtures` mode, the App
+loads run/catalog bodies with `no-store` because local fixture files change at
+stable URLs. This bypasses retained old-schema HTTP bodies without clearing
+browser storage. A normal page reload picks up updated fixture-mode code/data;
+production publications keep immutable `force-cache` behavior. Explicit Reload
+all data still refreshes bodies and uses its existing cache-generation token.
+Loader tests retain cache
 policy/generation, progress, retry/Retry-After, timeout/cancellation and resource
 failure coverage. A strict shared text boundary rejects duplicate decoded JSON
 keys; every consumer rejects legacy/unversioned/schema-2 shapes rather than

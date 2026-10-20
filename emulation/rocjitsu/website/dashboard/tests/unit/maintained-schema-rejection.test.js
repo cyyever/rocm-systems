@@ -19,7 +19,7 @@ function legacyPublication(plugin = 'vanilla', version = 1) {
   run.comparisonId = 'legacy-comparison';
   run.targets = run.configurations.map(({ target, results }) => ({ id: target, results }));
   delete run.configurations;
-  const catalog = source.catalogs[run.testCatalog];
+  const catalog = source.catalogs[run.benchmark_catalog];
   catalog.targets = { gfx950: ['a'] };
   delete catalog.configurations;
   return source;

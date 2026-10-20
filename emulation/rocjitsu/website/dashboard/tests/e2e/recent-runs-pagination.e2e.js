@@ -14,7 +14,7 @@ for (const width of [1440, 390]) {
     const older = card.getByRole('button', { name: 'Go to next page', exact: true });
     const newer = card.getByRole('button', { name: 'Go to previous page', exact: true });
     const expected = publication.runs.filter((run) => run.source.branch === 'develop')
-      .sort((a, b) => b.execution.completedAt.localeCompare(a.execution.completedAt) || b.id.localeCompare(a.id)).map((run) => run.id);
+      .sort((a, b) => b.execution_summary.finished_at.localeCompare(a.execution_summary.finished_at) || b.id.localeCompare(a.id)).map((run) => run.id);
     const first = card.getByRole('button', { name: 'Go to first page', exact: true });
     const last = card.getByRole('button', { name: 'Go to last page', exact: true });
     await expect(newer).toBeDisabled();

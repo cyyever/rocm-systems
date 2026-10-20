@@ -108,6 +108,27 @@ test('revalidates mutable documents and reuses cached immutable files', async ()
   expect(state.options.get(`https://dashboard.test/data/${dataset.catalogPath}`).cache).toBe('force-cache');
 });
 
+test('mutable fixture loads bypass retained run/catalog HTTP cache without changing URLs', async () => {
+  dataset = createSyntheticDataset(2);
+  const { fetchImpl, state } = createFetchDouble();
+  await loadSynthetic(fetchImpl, { mutableData: true });
+  expect(state.urls.every((url) => !new URL(url).search)).toBe(true);
+  expect([...state.options.values()].every(({ cache }) => cache === 'no-store')).toBe(true);
+});
+
+test('mutable fixture mode preserves explicit reload and saved-generation semantics', async () => {
+  dataset = createSyntheticDataset(2);
+  const fresh = createFetchDouble();
+  const { cacheGeneration } = await loadSynthetic(fresh.fetchImpl, { mutableData: true, reloadAll: true });
+  expect(cacheGeneration).toBeTruthy();
+  expect([...fresh.state.options].every(([url, options]) => options.cache === (url.includes('/index.json') ? 'no-store' : 'reload'))).toBe(true);
+  expect(fresh.state.urls.every((url) => new URL(url).searchParams.get('reload') === cacheGeneration)).toBe(true);
+  const next = createFetchDouble();
+  await loadSynthetic(next.fetchImpl, { mutableData: true, cacheGeneration });
+  expect([...next.state.options.values()].every(({ cache }) => cache === 'no-store')).toBe(true);
+  expect(next.state.urls.filter((url) => !url.includes('/index.json')).every((url) => new URL(url).searchParams.get('reload') === cacheGeneration)).toBe(true);
+});
+
 test('reloads a fresh index before every file it names and saves a new cache generation', async () => {
   const freshRunFiles = dataset.runFiles.slice(-2);
   const { fetchImpl, state } = createFetchDouble({

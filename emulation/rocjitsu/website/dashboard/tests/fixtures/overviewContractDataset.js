@@ -1,3 +1,4 @@
+import { fixtureCatalog, fixtureProvenance, fixtureSummary } from './inputFormat.js';
 import { fixtureRunPath } from './runPath.js';
 import { CONFIGURATION_KEYS } from './maintainedDataset.js';
 
@@ -26,8 +27,7 @@ export function createOverviewContractPublication() {
   const catalogs = Object.fromEntries(Object.entries(memberships).map(([period, configurations]) => {
     const id = `fictional-contract-${period}`;
     const members = new Set(Object.values(configurations).flat());
-    return [`test-catalogs/${id}.json`, { id, configurations,
-      tests: definitions.filter((test) => members.has(test.id)) }];
+    return [`test-catalogs/${id}.json`, fixtureCatalog(id, definitions.filter((test) => members.has(test.id)), configurations)];
   }));
   const attempts = [
     ['old-1', 'old', 1, 6, 10], ['old-2', 'old', 2, 6, 9],
@@ -40,17 +40,18 @@ export function createOverviewContractPublication() {
     const testCatalog = `test-catalogs/fictional-contract-${period}.json`;
     const stamp = (time) => `2026-10-${String(day).padStart(2, '0')}T${String(time).padStart(2, '0')}:00:00.000Z`;
     return {
-      schemaVersion: 1, id, testCatalog,
-      source: { branch: 'develop', commit: String(day).repeat(40), committedAt: stamp(4), message: `FICTIONAL contract commit ${day}` },
-      execution: { completedAt: stamp(hour), trigger: 'manual', machine: 'fictional-contract-node' },
-      environment: [{ key: 'execution.benchmark_suite', label: 'execution.benchmark_suite', value: catalogs[testCatalog].id }],
-      configurations: Object.entries(catalogs[testCatalog].configurations).map(([key, members]) => {
+      schemaVersion: 1, id, benchmark_catalog: testCatalog,
+      source: { branch: 'develop', message: `FICTIONAL contract commit ${day}` },
+      execution: { trigger: 'manual', machine_label: 'fictional-contract-node' },
+      execution_summary: fixtureSummary(catalogs[testCatalog].benchmark_suite, stamp(5), stamp(hour)),
+      provenance: fixtureProvenance(String(day).repeat(40), stamp(4)),
+      configurations: Object.entries(memberships[period]).map(([key, members]) => {
         const [target, thread_policy] = key.split('/');
-        return { target, thread_policy, results: members.map((testId) => {
+        return { target, thread_policy, benchmark_results: members.map((testId) => {
           const failed = attempt === 'current-failed' && key === 'gfx1250/single' && testId === 'b';
           const durationSeconds = failed ? null : testId === 'a' ? seconds : { b: 100, c: 200, d: 300 }[testId];
-          return { testId, thread_policy, status: failed ? 'failed' : 'completed',
-            timing_results_s: failed ? [] : [durationSeconds], durationSeconds,
+          return { id: testId, status: failed ? 'failed' : 'completed',
+            timing_results_s: failed ? [] : [durationSeconds],
             error: failed ? 'Fictional required decode failed' : null };
         }) };
       }),

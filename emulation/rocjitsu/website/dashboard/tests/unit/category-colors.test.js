@@ -13,7 +13,7 @@ const inheritedNames = ['constructor', 'toString', '__proto__', 'hasOwnProperty'
 function validatedSuite(suite) {
   const publication = createMaintainedPublication();
   for (const catalog of Object.values(publication.catalogs)) {
-    for (const test of catalog.tests) if (test.suite === 'Triton') test.suite = suite;
+    for (const test of Object.values(catalog.benchmark_definitions)) if (test.suite === 'Triton') test.suite = suite;
   }
   const { data } = validatePublishedDashboardData(publication);
   const label = data.testCatalog.find(({ id }) => id === 'a').suite;

@@ -77,6 +77,7 @@ class RecoveryTests(unittest.TestCase):
             sys.executable, str(HERE.parent / 'prepare-dashboard-data.py'),
             '--raw-run', str(raw_path), '--data-dir', str(self.built),
             '--run-id', 'attempt-1', '--expected-sha', SHA,
+            '--workflow-commit-sha', 'c' * 40, '--tensile-commit-sha', 'd' * 40,
             '--expected-corpus-sha', corpus_sha, '--corpus-dir', str(corpus),
             '--manifest', 'suite.toml', '--machine-id', 'fixture',
             '--trigger', 'auto', '--branch', 'develop', '--commit-message', 'Fictional fixture',
@@ -133,7 +134,7 @@ sys.exit(subprocess.call([os.environ['REAL_GIT'], *args]))
         run = self.json.loads((self.built / self.run_path).read_text())
         run['id'] = identity
         if conflict:
-            run['source']['commitMessage'] = 'Conflicting immutable content'
+            run['source']['message'] = 'Conflicting immutable content'
         peer_path = f'runs/default-branch/{identity}.json'
         (self.data / peer_path).parent.mkdir(parents=True, exist_ok=True)
         (self.data / peer_path).write_text(self.json.dumps(run) + '\n')
@@ -211,6 +212,17 @@ sys.exit(subprocess.call([os.environ['REAL_GIT'], *args]))
         self.assertEqual(len(self.commands('push')), 0)
         self.assertEqual(len(self.commands('commit')), 0)
         self.assertTrue((self.root / 'diagnostics/validation-1.log').exists())
+
+    def test_prepared_catalog_reference_must_match_publication_argument(self):
+        run = self.json.loads((self.built / self.run_path).read_text())
+        run['benchmark_catalog'] = 'test-catalogs/other.json'
+        (self.built / self.run_path).write_text(self.json.dumps(run))
+        result = self.publish([])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Prepared benchmark_catalog must match publication path', result.stdout)
+        self.assertFalse((self.data / self.run_path).exists())
+        self.assertEqual(len(self.commands('commit')), 0)
+        self.assertEqual(len(self.commands('push')), 0)
 
     def test_recovery_validates_entire_index(self):
         remote = self.peer()

@@ -8,14 +8,14 @@ workflow copies the candidate files into the results branch and updates the
 index separately. Metadata is bundled website configuration.
 
 Accepted timing_results_s samples are preserved in their original order.
-Completed results use the median of these samples. Failed
-and timed-out results always have null duration, even with partial samples:
-partial work is not a completed-workload measurement. No completion is invented.
+Consumers derive completed durations from these samples. Failed/timeout samples
+are partial work, never completed-workload measurements. No completion is invented.
 Workload IDs are preserved directly from the corpus across targets and policies.
 Full wire-schema validation is a separate workflow step before publication.
 """
 
 import argparse
+import copy
 from datetime import datetime, timezone
 from decimal import Decimal
 import json
@@ -23,7 +23,6 @@ import math
 import os
 from pathlib import Path
 import re
-import statistics
 import subprocess
 import tempfile
 import tomllib
@@ -48,41 +47,6 @@ def unique_object(pairs):
 def read_json(path):
     return json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=unique_object,
                       parse_float=numeric_token)
-
-
-def scalar(value):
-    """Preserve native scalars; encode null/containers without lossy flattening."""
-    return (
-        canonical(value) if value is None or isinstance(value, (list, dict)) else value
-    )
-
-
-def environment(inputs):
-    details = {}
-    for raw in inputs:
-        for section, values in raw['provenance'].items():
-            for key, value in values.items():
-                # Source revision/time already live in source, not environment
-                # identity: comparing different rocjitsu commits is the purpose.
-                if section == 'rocjitsu' and key in (
-                    'rocjitsu_commit_sha',
-                    'rocjitsu_commit_timestamp',
-                ):
-                    continue
-                if section == 'rocjitsu' and key == 'target_config_sha256':
-                    continue
-                details[f'{section}.{key}'] = scalar(value)
-        for key in (
-            'warmups',
-            'samples',
-            'timeout_seconds',
-            'benchmark_suite',
-        ):
-            details[f'execution.{key}'] = raw['execution_summary'][key]
-    return [
-        {'key': key, 'label': key, 'value': value}
-        for key, value in sorted(details.items())
-    ]
 
 
 def require(condition, message):
@@ -233,6 +197,10 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
             isinstance(provenance[section], dict),
             f'provenance.{section} must be an object',
         )
+    require(all(text(section) and isinstance(values, dict)
+                and all(text(key) for key in values)
+                for section, values in provenance.items()),
+            'provenance sections must be named objects with nonempty fact keys')
     for key in ('hostname', 'platform', 'kernel', 'cpu'):
         require(
             text(provenance['machine'][key]), f'machine.{key} must be nonempty text'
@@ -313,7 +281,9 @@ def validate_raw(raw, *, expected_sha, expected_corpus_sha):
 def validate_consistency(inputs):
     reference = inputs[0]
     for raw in inputs[1:]:
-        for section in ('machine', 'corpus', 'auxiliary', 'rocjitsu'):
+        require(set(reference['provenance']) == set(raw['provenance']),
+                'Inconsistent provenance section keys across raw runs')
+        for section in reference['provenance']:
             left, right = reference['provenance'][section], raw['provenance'][section]
             if section == 'rocjitsu':
                 left = {k: v for k, v in left.items() if k != 'target_config_sha256'}
@@ -337,86 +307,76 @@ def normalize_runs(
     commit_message,
     machine_id,
     trigger,
+    workflow_commit_sha,
+    tensile_commit_sha,
     source_base=None,
     pull_request=None,
 ):
-    """Build one run and its catalog, independent of file I/O or CLI parsing."""
-    tests = {}
-    definitions = {}
-    groups = {}
+    """Build the maintained schema-1 run/catalog without file I/O."""
+    definitions, groups = {}, {}
     for raw in raw_runs:
         validate_numeric_values(raw)
         for result in raw['benchmark_results']:
-            policy = result['thread_policy']
-            # Corpus owns workload identity. Preserve it through future schema
-            # changes; never hash definitions or strip policy/target suffixes.
+            # Corpus owns identity; target and policy identify a measurement cell.
             test_id = result['id']
-            definition = {
-                key: result[key] for key in ('suite', 'name', 'operation', 'problem')
-            }
+            definition = {key: result[key] for key in ('suite', 'name', 'operation', 'problem')}
             encoded = canonical(definition)
-            require(
-                test_id not in definitions or definitions[test_id] == encoded,
-                f'Conflicting workload definition: {test_id}',
-            )
+            require(test_id not in definitions or definitions[test_id] == encoded,
+                    f'Conflicting workload definition: {test_id}')
             definitions[test_id] = encoded
-            tests[test_id] = {'id': test_id, **definition}
-            results = groups.setdefault((result['target'], policy), {})
-            require(
-                test_id not in results,
-                f'Duplicate result identity: ({test_id}, {result["target"]}, {result["thread_policy"]})',
-            )
+            results = groups.setdefault((result['target'], result['thread_policy']), {})
+            require(test_id not in results,
+                    f'Duplicate result identity: ({test_id}, {result["target"]}, {result["thread_policy"]})')
             results[test_id] = {
-                'testId': test_id,
-                'thread_policy': policy,
+                'id': test_id,
                 'status': result['status'],
                 'timing_results_s': list(result['timing_results_s']),
-                'durationSeconds': (
-                    statistics.median(result['timing_results_s'])
-                    if result['status'] == 'completed'
-                    else None
-                ),
                 'error': result['error'],
             }
 
+    # Every supplied raw input must already cover the full pinned matrix. Do not
+    # invent a common start/wall clock for complementary partial executions.
+    require(len(raw_runs) == 1, 'Expected one consolidated raw execution')
     ordered_groups = sorted(groups.items())
+    membership = {}
+    for (target, policy), results in ordered_groups:
+        membership.setdefault(target, {})[policy] = sorted(results)
     catalog = {
-        'tests': [tests[key] for key in sorted(tests)],
-        'configurations': {
-            f'{target}/{policy}': sorted(results)
-            for (target, policy), results in ordered_groups
-        },
+        'benchmark_suite': raw_runs[0]['execution_summary']['benchmark_suite'],
+        'benchmark_definitions': {key: json.loads(definitions[key]) for key in sorted(definitions)},
+        'membership': membership,
     }
-    catalog['id'] = raw_runs[0]['execution_summary']['benchmark_suite']
-    source = raw_runs[0]['provenance']['rocjitsu']
-    completed_at = max(
-        (raw['execution_summary']['finished_at'] for raw in raw_runs),
-        key=lambda value: (instant(value), value),
-    )
+    provenance = copy.deepcopy(raw_runs[0]['provenance'])
+    for section, key, value in (
+        ('rocjitsu', 'workflow_commit_sha', workflow_commit_sha),
+        ('auxiliary', 'tensile_commit_sha', tensile_commit_sha),
+    ):
+        require(isinstance(value, str) and bool(re.fullmatch(r'[a-fA-F0-9]{40}', value)),
+                f'{key} must be a full 40-hex SHA')
+        supplied = provenance[section].get(key, value)
+        require(isinstance(supplied, str) and supplied.lower() == value.lower(),
+                f'Conflicting raw {key}')
+        provenance[section][key] = value.lower()
     run = {
         'schemaVersion': 1,
         'id': run_id,
-        'testCatalog': f"test-catalogs/{catalog['id']}.json",
+        'benchmark_catalog': f"test-catalogs/{catalog['benchmark_suite']}.json",
         'source': {
-            'commit': source['rocjitsu_commit_sha'],
-            'committedAt': source['rocjitsu_commit_timestamp'],
             'branch': branch,
             'message': commit_message,
             **({'base': source_base} if source_base else {}),
             **({'pullRequest': pull_request} if pull_request else {}),
         },
-        'execution': {
-            'completedAt': completed_at,
-            'machine': machine_id,
-            'trigger': trigger,
+        'execution': {'machine_label': machine_id, 'trigger': trigger},
+        'execution_summary': {
+            key: raw_runs[0]['execution_summary'][key]
+            for key in ('benchmark_suite', 'timestamp', 'finished_at', 'wall_time_s',
+                        'warmups', 'samples', 'timeout_seconds')
         },
-        'environment': environment(raw_runs),
+        'provenance': provenance,
         'configurations': [
-            {
-                'target': target,
-                'thread_policy': policy,
-                'results': [results[key] for key in sorted(results)],
-            }
+            {'target': target, 'thread_policy': policy,
+             'benchmark_results': [results[key] for key in sorted(results)]}
             for (target, policy), results in ordered_groups
         ],
     }
@@ -472,7 +432,7 @@ def write_built_run(root, run, catalog):
     validate_output_path(root)
     canonical([run, catalog])  # Reject non-finite output before any writes.
     resources = {
-        run['testCatalog']: catalog,
+        run['benchmark_catalog']: catalog,
         run_filename(run): run,
     }
     for name, value in resources.items():
@@ -498,6 +458,8 @@ def prepare(
     branch,
     commit_message,
     trigger,
+    workflow_commit_sha,
+    tensile_commit_sha,
     base_branch=None,
     base_sha=None,
     pull_request_number=None,
@@ -584,6 +546,8 @@ def prepare(
         commit_message=commit_message,
         machine_id=machine_id,
         trigger=trigger,
+        workflow_commit_sha=workflow_commit_sha,
+        tensile_commit_sha=tensile_commit_sha,
         source_base=source_base,
         pull_request=pull_request,
     )
@@ -599,6 +563,8 @@ def main():
         'run-id',
         'expected-sha',
         'expected-corpus-sha',
+        'workflow-commit-sha',
+        'tensile-commit-sha',
         'corpus-dir',
         'manifest',
         'machine-id',

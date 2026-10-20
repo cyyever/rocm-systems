@@ -231,6 +231,8 @@ export default function App() {
     const controller = new AbortController();
     loadDashboardDataFiles({
       indexUrl: dataIndexUrl,
+      // Fixture files change in place during local editing; never reuse old wire bodies.
+      mutableData: import.meta.env.MODE === 'fixtures',
       signal: controller.signal,
       reloadAll: loadRequest.reloadAll,
       cacheGeneration: loadRequest.cacheGeneration,

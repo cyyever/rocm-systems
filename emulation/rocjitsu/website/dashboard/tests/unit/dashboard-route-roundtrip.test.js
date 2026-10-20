@@ -28,10 +28,10 @@ it.each(['targets', 'suites'])('round-trips validated long %s through URL serial
   const longSuite = `Suite ${'workload '.repeat(30)}& details + / test`;
   for (const catalog of Object.values(source.catalogs)) {
     if (key === 'suites') {
-      for (const test of catalog.tests) if (test.suite === 'Triton') test.suite = longSuite;
+      for (const test of Object.values(catalog.benchmark_definitions)) if (test.suite === 'Triton') test.suite = longSuite;
     } else {
-      catalog.configurations = Object.fromEntries(Object.entries(catalog.configurations)
-        .map(([name, ids]) => [name.replace('gfx1250/', `${longTarget}/`), ids]));
+      catalog.membership = Object.fromEntries(Object.entries(catalog.membership)
+        .map(([target, policies]) => [target === 'gfx1250' ? longTarget : target, policies]));
     }
   }
   if (key === 'targets') {

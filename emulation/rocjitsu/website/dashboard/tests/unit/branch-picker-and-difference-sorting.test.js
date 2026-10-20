@@ -56,11 +56,11 @@ test('exact requested fictional branch is schema-valid and preserves all origina
   const branch = 'users/RattataKing/test-branch';
   const wire = fixtures.publishedRuns.find((run) => run.source.branch === branch);
   expect(wire).toBeDefined();
-  expect(typeof wire.source.commit).toBe('string');
-  expect(wire.source.commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(typeof wire.provenance.rocjitsu.rocjitsu_commit_sha).toBe('string');
+  expect(wire.provenance.rocjitsu.rocjitsu_commit_sha).toMatch(/^[0-9a-f]{40}$/);
   expect(wire.source.base.branch).toBe('develop');
   expect(wire.source.base.commit).toMatch(/^[0-9a-f]{40}$/);
-  expect(fixtures.publishedCatalogs[wire.testCatalog]).toBeDefined();
+  expect(fixtures.publishedCatalogs[wire.benchmark_catalog]).toBeDefined();
   expect(selectPublishedBranches(fixtures.benchmarkData)).toHaveLength(21);
   for (let index = 1; index <= 20; index++) expect(fixtures.publishedRuns.some((run) => run.source.branch === `fictional/optimization-${String(index).padStart(2, '0')}`)).toBe(true);
   const generated = fixtures.createFeedbackPublication();

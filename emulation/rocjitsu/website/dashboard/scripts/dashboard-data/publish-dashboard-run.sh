@@ -35,6 +35,27 @@ for ATTEMPT in 1 2 3; do
       exit 1
     fi
   done
+  python - "${BUILD_DIR}" "${RUN_PATH}" "${CATALOG_PATH}" "${SCRIPTS_DIR}" <<'PY' \
+    2>&1 | tee "${DIAGNOSTICS_DIR}/validation-${ATTEMPT}.log"
+from pathlib import Path
+import runpy
+import sys
+
+root, run_path, catalog_path, scripts = sys.argv[1:]
+producer = runpy.run_path(str(Path(scripts) / 'dashboard-data/prepare-dashboard-data.py'))
+try:
+    run = producer['read_json'](Path(root) / run_path)
+    catalog = producer['read_json'](Path(root) / catalog_path)
+    producer['require'](run['benchmark_catalog'] == catalog_path,
+                        'Prepared benchmark_catalog must match publication path')
+    suite = catalog['benchmark_suite']
+    producer['require'](producer['safe_suite_name'](suite)
+                        and catalog_path == f'test-catalogs/{suite}.json'
+                        and run['execution_summary']['benchmark_suite'] == suite,
+                        'Prepared benchmark_suite must match catalog and path')
+except (ValueError, KeyError, TypeError, OSError) as error:
+    sys.exit(f'error: {error}')
+PY
   mkdir -p "$(dirname "${DATA_DIR}/${RUN_PATH}")" "${DATA_DIR}/test-catalogs"
   # Explicit existence checks avoid platform-dependent cp -n exit statuses.
   for INPUT_PATH in "${RUN_PATH}" "${CATALOG_PATH}"; do

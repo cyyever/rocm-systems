@@ -17,7 +17,7 @@ export function runSchemaVersion(run) {
   if (run.schemaVersion !== 1) {
     throw new Error(`Run ${run.id ?? '(unknown)'} has unsupported schema version ${run.schemaVersion ?? '(missing)'}; expected maintained schema 1`);
   }
-  if (['targets', 'plugin', 'comparisonId'].some((key) => Object.hasOwn(run, key))) {
+  if (['targets', 'plugin', 'comparisonId', 'testCatalog', 'environment'].some((key) => Object.hasOwn(run, key))) {
     throw new Error(`Run ${run.id ?? '(unknown)'} has legacy fields; expected maintained schema-1 run/catalog contract`);
   }
   return run.schemaVersion;

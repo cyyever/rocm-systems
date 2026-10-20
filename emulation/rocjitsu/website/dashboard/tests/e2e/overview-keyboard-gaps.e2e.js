@@ -10,18 +10,20 @@ function keyboardPublication() {
   const runs = dates.map((day, index) => {
     const run = structuredClone(latest);
     run.id = `qa-keyboard-${index}`;
-    run.source = { ...run.source, commit: String(index + 1).repeat(40), committedAt: `${day}T10:00:00Z` };
-    run.execution.completedAt = `${day}T12:00:00Z`;
+    run.provenance.rocjitsu.rocjitsu_commit_sha = String(index + 1).repeat(40);
+    run.provenance.rocjitsu.rocjitsu_commit_timestamp = `${day}T10:00:00Z`;
+    run.execution_summary.timestamp = `${day}T11:00:00Z`;
+    run.execution_summary.finished_at = `${day}T12:00:00Z`;
     if (index === 1 || index === 2) {
       for (const configuration of run.configurations) {
         if (index === 2 && configuration.target !== 'gfx1250') continue;
-        for (const result of configuration.results) Object.assign(result, { status: 'timeout', durationSeconds: null, timing_results_s: [], error: 'QA-only keyboard timeout' });
+        for (const result of configuration.benchmark_results) Object.assign(result, { status: 'timeout', timing_results_s: [], error: 'QA-only keyboard timeout' });
       }
     }
     return run;
   });
   return { index: { ...original.index, runFiles: runs.map((run) => `runs/default-branch/${run.id}.json`) },
-    catalogs: { [latest.testCatalog]: original.catalogs[latest.testCatalog] }, runs };
+    catalogs: { [latest.benchmark_catalog]: original.catalogs[latest.benchmark_catalog] }, runs };
 }
 
 for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and preserve comparisons at ${width}px`, async ({ page }, testInfo) => {
@@ -96,11 +98,12 @@ for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and p
   await expect(status).toBeEmpty();
   await expect(trend.getByTestId('point-hover-guide')).not.toBeVisible();
 
-  for (const run of publication.runs.slice(1)) for (const configuration of run.configurations) for (const result of configuration.results) {
-    Object.assign(result, { status: 'failed', durationSeconds: null, timing_results_s: [], error: 'QA-only all-gap comparison' });
+  for (const run of publication.runs.slice(1)) for (const configuration of run.configurations) for (const result of configuration.benchmark_results) {
+    Object.assign(result, { status: 'failed', timing_results_s: [], error: 'QA-only all-gap comparison' });
   }
-  publication.runs[0].source.committedAt = '2026-09-10T10:00:00Z';
-  publication.runs[0].execution.completedAt = '2026-09-10T12:00:00Z';
+  publication.runs[0].provenance.rocjitsu.rocjitsu_commit_timestamp = '2026-09-10T10:00:00Z';
+  publication.runs[0].execution_summary.finished_at = '2026-09-10T12:00:00Z';
+  publication.runs[0].execution_summary.timestamp = '2026-09-10T11:00:00Z';
   await page.reload(); await ready(page);
   await readChart(trend.getByRole('img'), (instance) => instance.getOption().series.length);
   await group.focus(); await page.keyboard.press('End');

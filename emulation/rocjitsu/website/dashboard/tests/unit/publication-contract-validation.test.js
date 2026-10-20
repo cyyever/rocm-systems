@@ -11,29 +11,29 @@ const invalidCases = [
   ['duplicate file', (s) => { s.index.runFiles[1] = s.index.runFiles[0]; }, /Duplicate/],
   ['filename identity mismatch', (s) => { s.runs[0].id = 'different'; }, /filename/],
   ['duplicate run identity across directories', (s) => { s.runs[24].id = s.runs[0].id; s.index.runFiles[24] = `runs/side-branches/${s.runs[0].id}.json`; }, /Duplicate run ID/],
-  ['absent catalogs', (s) => { delete s.catalogs; }, /catalog contract/],
-  ['empty catalogs', (s) => { s.catalogs = {}; }, /catalog contract/],
-  ['missing referenced catalog', (s) => { delete s.catalogs[s.runs[0].testCatalog]; }, /catalog contract/],
-  ['missing catalog with omitted workload', (s) => { delete s.catalogs[s.runs[0].testCatalog]; s.runs[0].configurations[0].results.pop(); }, /catalog contract/],
-  ['unsafe catalog path', (s) => { s.runs[0].testCatalog = '../escape.json'; }, /catalog/],
-  ['catalog identity mismatch', (s) => { s.catalogs[s.runs[0].testCatalog].id = 'different'; }, /catalog contract/],
-  ['invalid configuration key', (s) => { s.catalogs[s.runs[0].testCatalog].configurations['gfx1250:unknown'] = ['a']; }, /invalid configuration/],
-  ['duplicate workload definition', (s) => { const c = s.catalogs[s.runs[0].testCatalog]; c.tests.push(c.tests[0]); }, /duplicate test definition/],
-  ['omitted workload', (s) => { s.runs[0].configurations[0].results.pop(); }, /exactly one result/],
-  ['duplicate result', (s) => { const r = s.runs[0].configurations[0].results; r.push(r[0]); }, /exactly one result/],
-  ['unknown workload', (s) => { s.runs[0].configurations[0].results[0].testId = 'unknown'; }, /exactly one result/],
+  ['absent catalogs', (s) => { delete s.catalogs; }, /catalog/],
+  ['empty catalogs', (s) => { s.catalogs = {}; }, /catalog/],
+  ['missing referenced catalog', (s) => { delete s.catalogs[s.runs[0].benchmark_catalog]; }, /catalog/],
+  ['missing catalog with omitted workload', (s) => { delete s.catalogs[s.runs[0].benchmark_catalog]; s.runs[0].configurations[0].benchmark_results.pop(); }, /catalog/],
+  ['unsafe catalog path', (s) => { s.runs[0].benchmark_catalog = '../escape.json'; }, /catalog/],
+  ['catalog identity mismatch', (s) => { s.catalogs[s.runs[0].benchmark_catalog].benchmark_suite = 'different'; }, /catalog/],
+  ['invalid configuration key', (s) => { s.catalogs[s.runs[0].benchmark_catalog].membership.gfx1250.unknown = ['a']; }, /invalid configuration/],
+  ['invalid workload definition', (s) => { s.catalogs[s.runs[0].benchmark_catalog].benchmark_definitions.a.problem = null; }, /invalid or duplicate test definition/],
+  ['omitted workload', (s) => { s.runs[0].configurations[0].benchmark_results.pop(); }, /exactly one result/],
+  ['duplicate result', (s) => { const r = s.runs[0].configurations[0].benchmark_results; r.push(r[0]); }, /exactly one result/],
+  ['unknown workload', (s) => { s.runs[0].configurations[0].benchmark_results[0].id = 'unknown'; }, /exactly one result/],
   ['duplicate configuration', (s) => { s.runs[0].configurations.push(s.runs[0].configurations[0]); }, /duplicate configuration/],
   ['missing explicit mode', (s) => { delete s.runs[0].configurations[0].thread_policy; }, /configuration/],
-  ['negative duration', (s) => { s.runs[0].configurations[0].results[0].durationSeconds = -1; }, /positive/],
-  ['completed error', (s) => { s.runs[0].configurations[0].results[0].error = 'invalid'; }, /cannot contain an error/],
-  ['failure duration', (s) => { s.runs[0].configurations[0].results[0].status = 'failed'; }, /null durationSeconds/],
-  ['future execution', (s) => { s.runs[0].execution.completedAt = '2026-10-06T00:00:00Z'; }, /publication/],
-  ['commit after completion', (s) => { s.runs[0].source.committedAt = '2026-10-06T00:00:00Z'; }, /committed/],
+  ['negative duration', (s) => { s.runs[0].configurations[0].benchmark_results[0].timing_results_s = [-1]; }, /positive/],
+  ['completed error', (s) => { s.runs[0].configurations[0].benchmark_results[0].error = 'invalid'; }, /cannot contain an error/],
+  ['forbidden derived duration', (s) => { s.runs[0].configurations[0].benchmark_results[0].durationSeconds = null; }, /unsupported fields/],
+  ['future execution', (s) => { s.runs[0].execution_summary.finished_at = '2026-10-06T00:00:00Z'; }, /publication/],
+  ['commit after completion', (s) => { s.runs[0].provenance.rocjitsu.rocjitsu_commit_timestamp = '2026-10-06T00:00:00Z'; }, /committed/],
   ['invalid base SHA', (s) => { s.runs[0].source.base = { branch: 'develop', commit: 'abcd' }; }, /source base/],
   ['unsafe PR URL', (s) => { s.runs[0].source.pullRequest = { number: 1, url: 'https://evil.test/pull/1' }; }, /pullRequest/],
-  ['duplicate environment key', (s) => { s.runs[0].environment.push(s.runs[0].environment[0]); }, /run contract/],
-  ['changed reused workload', (s) => { s.catalogs['test-catalogs/fictional-current.json'].tests[0].problem.m = 999; }, /defined differently/],
-  ['conflicting commit time', (s) => { s.runs[1].source.commit = s.runs[0].source.commit; }, /conflicting committedAt/],
+  ['old environment wrappers', (s) => { s.runs[0].environment = []; }, /legacy fields/],
+  ['changed reused workload', (s) => { s.catalogs['test-catalogs/fictional-current.json'].benchmark_definitions.a.problem.m = 999; }, /defined differently/],
+  ['conflicting commit time', (s) => { s.runs[1].provenance.rocjitsu.rocjitsu_commit_sha = s.runs[0].provenance.rocjitsu.rocjitsu_commit_sha; }, /conflicting committedAt/],
 ];
 
 test.each(invalidCases)('maintained schema 1 rejects %s', (_, mutate, expected) => {
@@ -41,19 +41,19 @@ test.each(invalidCases)('maintained schema 1 rejects %s', (_, mutate, expected) 
   expect(() => validatePublishedDashboardData(source)).toThrow(expected);
 });
 
-test('independent branch machines and scalar environments remain disclosed', () => {
-  const source = createMaintainedPublication(); source.runs[0].environment = source.runs[0].environment.filter(({ key }) => key === 'execution.benchmark_suite');
+test('independent branch machines and scalar environment projection remain disclosed', () => {
+  const source = createMaintainedPublication();
   const { data } = validatePublishedDashboardData(source);
   expect(data.allRuns.at(-1).machineId).toBe('fictional-branch-node');
-  expect(data.allRuns.at(-1).provenance.details).toEqual(source.runs[43].environment);
+  expect(data.allRuns.at(-1).provenance.details).toContainEqual({ key: 'auxiliary.sdk', label: 'auxiliary.sdk', value: 'test-branch' });
   expect(data.runs.some((run) => data.backfillRunIds.has(run.runId))).toBe(true);
   expect(data.allRuns).toHaveLength(44);
 });
 
 test('result status/error distinction rejects zero and preserves failure/timeout diagnostics', () => {
-  expect(() => validatePublishedResult({ testId: 'zero', status: 'completed', durationSeconds: 0, timing_results_s: [0], error: null })).toThrow(/positive/);
-  for (const status of ['failed', 'timeout']) expect(validatePublishedResult({ testId: status, status, durationSeconds: null, timing_results_s: [], error: 'diagnostic' }).status).toBe(status);
-  expect(() => validatePublishedResult({ testId: 'missing', status: 'completed', error: null })).toThrow(/durationSeconds/);
-  expect(() => validatePublishedResult({ testId: 'bad', status: 'failed', durationSeconds: null, error: '' })).toThrow(/non-empty/);
-  expect(() => validatePublishedResult({ testId: 'bad', status: 'completed', durationSeconds: Infinity, error: null })).toThrow(/finite/);
+  expect(() => validatePublishedResult({ id: 'zero', status: 'completed', timing_results_s: [0], error: null })).toThrow(/positive/);
+  for (const status of ['failed', 'timeout']) expect(validatePublishedResult({ id: status, status, timing_results_s: [], error: 'diagnostic' }).status).toBe(status);
+  expect(() => validatePublishedResult({ id: 'missing', status: 'completed', error: null })).toThrow(/timing_results_s/);
+  expect(() => validatePublishedResult({ id: 'bad', status: 'failed', timing_results_s: [], error: '' })).toThrow(/non-empty/);
+  expect(() => validatePublishedResult({ id: 'bad', status: 'completed', timing_results_s: [Infinity], error: null })).toThrow(/finite/);
 });

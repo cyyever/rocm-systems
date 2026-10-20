@@ -1,8 +1,7 @@
 {
-  "id": "fictional-current-fictional-develop-12",
-  "tests": [
-    {
-      "id": "a",
+  "benchmark_suite": "fictional-current-fictional-develop-12",
+  "benchmark_definitions": {
+    "a": {
       "suite": "Triton",
       "name": "Fictional GEMM",
       "operation": "GEMM",
@@ -11,8 +10,7 @@
         "m": 1024
       }
     },
-    {
-      "id": "b",
+    "b": {
       "suite": "Llama",
       "name": "Fictional decode",
       "operation": "Fictional computation",
@@ -20,8 +18,7 @@
         "tokens": 128
       }
     },
-    {
-      "id": "d",
+    "d": {
       "suite": "Triton",
       "name": "Fictional added workload D",
       "operation": "Fictional computation",
@@ -29,8 +26,7 @@
         "size": 256
       }
     },
-    {
-      "id": "e",
+    "e": {
       "suite": "Llama",
       "name": "Fictional added workload E",
       "operation": "Fictional computation",
@@ -38,25 +34,29 @@
         "size": 512
       }
     }
-  ],
-  "configurations": {
-    "gfx1250/single": [
-      "a",
-      "b",
-      "d",
-      "e"
-    ],
-    "gfx1250/default": [
-      "a",
-      "b",
-      "d",
-      "e"
-    ],
-    "gfx950/single": [
-      "a",
-      "b",
-      "d",
-      "e"
-    ]
+  },
+  "membership": {
+    "gfx1250": {
+      "single": [
+        "a",
+        "b",
+        "d",
+        "e"
+      ],
+      "default": [
+        "a",
+        "b",
+        "d",
+        "e"
+      ]
+    },
+    "gfx950": {
+      "single": [
+        "a",
+        "b",
+        "d",
+        "e"
+      ]
+    }
   }
 }

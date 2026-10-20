@@ -101,7 +101,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw ma
 
 test('one invalid indexed run fails the entire publication instead of exposing partial measurements', async ({ page }) => {
   const publication = createMaintainedPublication();
-  publication.runs.find((run) => run.id === 'fictional-develop-23').configurations[0].results[0].durationSeconds = -1;
+  publication.runs.find((run) => run.id === 'fictional-develop-23').configurations[0].benchmark_results[0].timing_results_s = [-1];
   await installPublication(page, { publication });
   await page.goto('/');
   await expect(page.getByTestId('dashboard-data-error')).toContainText('fictional-develop-23');

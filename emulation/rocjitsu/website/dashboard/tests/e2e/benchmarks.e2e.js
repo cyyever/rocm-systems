@@ -14,12 +14,12 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
   const run = publication.runs.find((entry) => entry.id === 'fictional-develop-23');
   publication.runs = [run];
   publication.index.runFiles = [fixtureRunPath(run)];
-  const catalog = publication.catalogs[run.testCatalog];
+  const catalog = publication.catalogs[run.benchmark_catalog];
   const extras = Array.from({ length: 55 }, (_, index) => ({ id: `picker-${index}`, name: `Fictional picker ${String(index).padStart(2, '0')}`, suite: 'Triton', operation: 'Fictional computation', problem: { size: index, ...(index === 54 ? { dataType: 64 } : {}) } }));
-  catalog.tests.push(...extras);
-  catalog.configurations['gfx1250/single'].push(...extras.map((entry) => entry.id));
+  for (const { id, ...definition } of extras) catalog.benchmark_definitions[id] = definition;
+  catalog.membership.gfx1250.single.push(...extras.map((entry) => entry.id));
   run.configurations.find((config) => config.target === 'gfx1250' && config.thread_policy === 'single')
-    .results.push(...extras.map((entry) => ({ testId: entry.id, thread_policy: 'single', status: 'failed', timing_results_s: [], durationSeconds: null, error: 'Fictional picker-only diagnostic' })));
+    .benchmark_results.push(...extras.map((entry) => ({ id: entry.id, status: 'failed', timing_results_s: [], error: 'Fictional picker-only diagnostic' })));
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=benchmarks');
   const headings = page.getByTestId('benchmark-grid-card').getByRole('heading');
@@ -163,9 +163,9 @@ test('keyboard result details distinguish positive completion, failed, timeout a
     await expect(dialog.getByText(runId, { exact: true })).toBeVisible();
     await expect(dialog.getByText('Run Provenance', { exact: true })).toBeVisible();
     await expect(dialog.getByText('Environment', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('Fictional SDK', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('auxiliary.sdk', { exact: true })).toBeVisible();
     await expect(dialog.getByText('Thread policy', { exact: true }).locator('..')).toContainText(mode);
-    await expect(dialog.getByText('Duration', { exact: true }).locator('..')).toContainText(status === 'Completed' ? formatDuration(createMaintainedPublication().runs.find(({ id }) => id === runId).configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === mode).results.find(({ testId }) => testId === 'a').durationSeconds) : '—');
+    await expect(dialog.getByText('Duration', { exact: true }).locator('..')).toContainText(status === 'Completed' ? formatDuration(createMaintainedPublication().runs.find(({ id }) => id === runId).configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === mode).benchmark_results.find(({ id }) => id === 'a').timing_results_s[0]) : '—');
     if (status !== 'Completed') await expect(dialog.getByText('Fictional diagnostic', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close details', exact: true }).click();
     await expect(dialog).toHaveCount(0);

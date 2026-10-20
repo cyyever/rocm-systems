@@ -130,13 +130,9 @@ test('branch-only publications keep comparison filters usable and long linked id
 test('zero baselines remain measured, arbitrary metadata stays aligned and chart text is escaped', async ({ page }) => {
   const publication = createMaintainedPublication();
   const injected = '<img src=x onerror="window.__tooltipInjection=true">';
-  for (const catalog of Object.values(publication.catalogs)) catalog.tests.find((test) => test.id === 'b').name = injected;
+  for (const catalog of Object.values(publication.catalogs)) catalog.benchmark_definitions.b.name = injected;
   for (const [id, side] of [['fictional-develop-14', 'baseline'], ['fictional-branch-01', 'candidate']]) {
-    publication.runs.find((run) => run.id === id).environment.push(
-      { key: 'custom', label: 'Custom setting', value: side },
-      { key: 'same', label: 'Unchanged setting', value: false },
-      { key: `${side}Only`, label: `${side} only`, value: 0 },
-    );
+    Object.assign(publication.runs.find((run) => run.id === id).provenance.auxiliary, { custom: side, same: false, [`${side}Only`]: 0 });
   }
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=compare&compareCandidate=fictional-branch-01&compareBaseline=fictional-develop-14&targets=gfx1250&modes=single');
@@ -147,14 +143,14 @@ test('zero baselines remain measured, arbitrary metadata stays aligned and chart
   await expect(zero.getByRole('cell').nth(1)).toHaveText(formatDuration(0));
   await expect(zero).toContainText('percentage unavailable');
   expect((await bars(page)).map((point) => point.id)).not.toContain('gfx1250/single:a');
-  const metadata = page.getByTestId('metadata-row-custom');
+  const metadata = page.getByTestId('metadata-row-auxiliary.custom');
   await expect(metadata.getByRole('cell').nth(0)).toHaveText('baseline');
   await expect(metadata.getByRole('cell').nth(1)).toHaveText('candidate');
   await expect(metadata).toHaveAttribute('data-different', 'true');
   await expect(metadata).not.toContainText('Changed');
-  await expect(page.getByTestId('metadata-row-same')).toHaveAttribute('data-different', 'false');
-  await expect(page.getByTestId('metadata-row-baselineOnly').getByRole('cell').nth(1)).toHaveText('Not provided');
-  await expect(page.getByTestId('metadata-row-candidateOnly').getByRole('cell').nth(0)).toHaveText('Not provided');
+  await expect(page.getByTestId('metadata-row-auxiliary.same')).toHaveAttribute('data-different', 'false');
+  await expect(page.getByTestId('metadata-row-auxiliary.baselineOnly').getByRole('cell').nth(1)).toHaveText('Not provided');
+  await expect(page.getByTestId('metadata-row-auxiliary.candidateOnly').getByRole('cell').nth(0)).toHaveText('Not provided');
   const html = await readChart(chartFor(page), (instance) => {
     const option = instance.getOption();
     const dataIndex = option.series[0].data.findIndex((point) => point.comparison.candidateTest.logicalTestId === 'b');

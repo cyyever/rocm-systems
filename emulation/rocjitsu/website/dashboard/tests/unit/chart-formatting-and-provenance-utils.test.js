@@ -24,11 +24,11 @@ test('omits optional provenance fields that a run does not publish', () => {
   const source = createMaintainedPublication();
   source.runs.forEach((run) => {
     delete run.source.message;
-    run.environment = run.environment.filter(({ key }) => key === 'execution.benchmark_suite');
+    run.provenance.auxiliary = { tensile_commit_sha: run.provenance.auxiliary.tensile_commit_sha };
   });
   const { data } = validatePublishedDashboardData(source);
 
-  expect(data.runs.every((run) => provenanceDetails(run.provenance).length === 1 && provenanceDetails(run.provenance)[0].key === 'execution.benchmark_suite')).toBe(true);
+  expect(data.runs.every((run) => !provenanceDetails(run.provenance).some(({ key }) => key === 'auxiliary.sdk'))).toBe(true);
   expect(data.runs.every((run) => !Object.hasOwn(run.provenance, 'commitMessage'))).toBe(true);
   expect(data.runs.every((run) => Boolean(run.provenance.rocjitsuCommitSha))).toBe(true);
 });
