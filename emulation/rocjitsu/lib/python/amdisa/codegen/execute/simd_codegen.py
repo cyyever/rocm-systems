@@ -265,31 +265,36 @@ SIMD_VOP2_BINARY: dict[str, tuple[str, str]] = {
         ' auto hi = util::f32_to_f16_rtz_simd(std::bit_cast<util::native<float>>(b));'
         ' return lo | (hi << 16); }',
     ),
-    # --- f16 binary (low 16 bits f16, result zero-extended). These native-F32
-    # functors are emitted only behind the guest/host rounding-and-denormal gate;
-    # scalar lowering may evaluate through a wider intermediate. ---
+    # --- f16 binary (low 16 bits f16, result zero-extended). These reuse the
+    # MODE-aware binary_f16_simd that the VOP3 forms use, so source flushing,
+    # FP16_OVFL narrowing and NaN selection have one implementation. The
+    # surrounding gate still restricts VOP2 to a host-matching environment. ---
     'v_add_f16_vop2': (
         'uint32_t',
-        '[](auto a, auto b) {'
-        ' return util::f32_to_f16_simd(util::f16_to_f32_simd(a) + util::f16_to_f32_simd(b)); }',
+        '[&wf](auto a, auto b) {'
+        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
+        'a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
     ),
     # SUB and SUBREV add the negated subtrahend in source order, as F32 does.
     # Negate the half's bits: the compiler may fold a float negation into a
     # host subtraction, which keeps a NaN subtrahend's sign.
     'v_sub_f16_vop2': (
         'uint32_t',
-        '[](auto a, auto b) {'
-        ' return util::f32_to_f16_simd(util::f16_to_f32_simd(a) + util::f16_to_f32_simd(b ^ 0x8000u)); }',
+        '[&wf](auto a, auto b) {'
+        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
+        'a, b ^ 0x8000u, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
     ),
     'v_subrev_f16_vop2': (
         'uint32_t',
-        '[](auto a, auto b) {'
-        ' return util::f32_to_f16_simd(util::f16_to_f32_simd(a ^ 0x8000u) + util::f16_to_f32_simd(b)); }',
+        '[&wf](auto a, auto b) {'
+        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
+        'a ^ 0x8000u, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
     ),
     'v_mul_f16_vop2': (
         'uint32_t',
-        '[](auto a, auto b) {'
-        ' return util::f32_to_f16_simd(util::f16_to_f32_simd(a) * util::f16_to_f32_simd(b)); }',
+        '[&wf](auto a, auto b) {'
+        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::MUL>('
+        'a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
     ),
     # F16 LDEXP uses this fast path only for RNE with preserved denormals and
     # a matching host environment; other MODE settings use the scalar helper.
