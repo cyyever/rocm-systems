@@ -8778,6 +8778,179 @@ amd_dbgapi_get_architecture (uint32_t elf_amdgpu_machine,
   TRACE_END (make_ref (param_out (architecture_id)));
 }
 
+namespace
+{
+
+/* Extract target ID from full architecture name.  Full name format is
+   "amdgcn-amd-amdhsa--<target-id>", e.g. "amdgcn-amd-amdhsa--gfx942".
+   Returns just the target ID part (e.g. "gfx942").  */
+std::string
+extract_target_id (const std::string &arch_name)
+{
+  constexpr const char *prefix = "amdgcn-amd-amdhsa--";
+  constexpr size_t prefix_len = 19;  /* Length of prefix.  */
+
+  if (arch_name.compare (0, prefix_len, prefix) == 0)
+    return arch_name.substr (prefix_len);
+
+  /* Name doesn't have expected prefix - return as-is.  */
+  return arch_name;
+}
+
+/* Strip feature strings (xnack/sramecc) from architecture name.  */
+std::string
+strip_features (const std::string &arch_name)
+{
+  size_t colon_pos = arch_name.find (':');
+  if (colon_pos == std::string::npos)
+    return arch_name;
+  return arch_name.substr (0, colon_pos);
+}
+
+/* Architecture compatibility mapping table.  Maps specific architecture
+   names to their compatible generic architecture names.  This table mirrors
+   the ISAREG_ENTRY_GEN table in ROCr runtime (rocr-runtime/runtime/
+   hsa-runtime/core/runtime/isa.cpp) to ensure consistent compatibility
+   rules between runtime code object loading and debugger validation.  */
+struct arch_compat_entry_t
+{
+  const char *specific_arch;
+  const char *generic_arch;
+};
+
+static const arch_compat_entry_t arch_compat_table[] = {
+  /* gfx9 family → gfx9-generic  */
+  { "gfx900", "gfx9-generic" },
+  { "gfx902", "gfx9-generic" },
+  { "gfx904", "gfx9-generic" },
+  { "gfx906", "gfx9-generic" },
+  { "gfx909", "gfx9-generic" },
+  { "gfx90c", "gfx9-generic" },
+
+  /* gfx9.4 family → gfx9-4-generic  */
+  { "gfx942", "gfx9-4-generic" },
+  { "gfx950", "gfx9-4-generic" },
+
+  /* gfx10.1 family → gfx10-1-generic  */
+  { "gfx1010", "gfx10-1-generic" },
+  { "gfx1011", "gfx10-1-generic" },
+  { "gfx1012", "gfx10-1-generic" },
+  { "gfx1013", "gfx10-1-generic" },
+
+  /* gfx10.3 family → gfx10-3-generic  */
+  { "gfx1030", "gfx10-3-generic" },
+  { "gfx1031", "gfx10-3-generic" },
+  { "gfx1032", "gfx10-3-generic" },
+  { "gfx1033", "gfx10-3-generic" },
+  { "gfx1034", "gfx10-3-generic" },
+  { "gfx1035", "gfx10-3-generic" },
+  { "gfx1036", "gfx10-3-generic" },
+
+  /* gfx11 family → gfx11-generic  */
+  { "gfx1100", "gfx11-generic" },
+  { "gfx1101", "gfx11-generic" },
+  { "gfx1102", "gfx11-generic" },
+  { "gfx1103", "gfx11-generic" },
+  { "gfx1150", "gfx11-generic" },
+  { "gfx1151", "gfx11-generic" },
+  { "gfx1152", "gfx11-generic" },
+  { "gfx1153", "gfx11-generic" },
+
+  /* gfx11.7 family → gfx11-7-generic  */
+  { "gfx1170", "gfx11-7-generic" },
+  { "gfx1171", "gfx11-7-generic" },
+};
+
+/* Get generic architecture name for a specific architecture.  Returns
+   empty string if architecture has no generic equivalent.  */
+std::string
+get_generic_arch (const std::string &specific_arch)
+{
+  std::string stripped = strip_features (specific_arch);
+
+  for (const auto &entry : arch_compat_table)
+    {
+      if (stripped == entry.specific_arch)
+        return entry.generic_arch;
+    }
+
+  return "";
+}
+
+/* Check if code object architecture is a generic architecture.  */
+bool
+is_generic_arch (const std::string &arch_name)
+{
+  std::string stripped = strip_features (arch_name);
+  return stripped.find ("-generic") != std::string::npos;
+}
+
+} /* namespace  */
+
+amd_dbgapi_status_t AMD_DBGAPI
+amd_dbgapi_architecture_is_compatible (
+    amd_dbgapi_architecture_id_t code_object_architecture_id,
+    amd_dbgapi_architecture_id_t agent_architecture_id,
+    amd_dbgapi_architecture_compatibility_state_t *compatibility_state)
+{
+  TRACE_BEGIN (param_in (code_object_architecture_id),
+               param_in (agent_architecture_id),
+               param_in (compatibility_state));
+  TRY
+  {
+    if (!detail::is_initialized)
+      THROW (AMD_DBGAPI_STATUS_ERROR_NOT_INITIALIZED);
+
+    if (compatibility_state == nullptr)
+      THROW (AMD_DBGAPI_STATUS_ERROR_INVALID_ARGUMENT);
+
+    const architecture_t *code_object_arch
+      = architecture_t::find (code_object_architecture_id);
+    const architecture_t *agent_arch
+      = architecture_t::find (agent_architecture_id);
+
+    if (code_object_arch == nullptr || agent_arch == nullptr)
+      THROW (AMD_DBGAPI_STATUS_ERROR_INVALID_ARCHITECTURE_ID);
+
+    /* Extract target IDs from full architecture names.  */
+    std::string code_obj_name
+      = extract_target_id (code_object_arch->target_triple ());
+    std::string agent_name = extract_target_id (agent_arch->target_triple ());
+
+    /* Default to not compatible.  */
+    *compatibility_state = AMD_DBGAPI_ARCHITECTURE_INCOMPATIBLE;
+
+    /* Check if code object is for generic architecture.  */
+    if (is_generic_arch (code_obj_name))
+      {
+        /* Generic code object: verify agent's generic matches code object.
+           Example: code_obj="gfx9-4-generic:xnack-",
+                    agent="gfx942" → agent_generic="gfx9-4-generic"
+                    strip_features both sides and compare.  */
+        std::string agent_generic = get_generic_arch (agent_name);
+        if (!agent_generic.empty ()
+            && strip_features (agent_generic) == strip_features (code_obj_name))
+          {
+            *compatibility_state = AMD_DBGAPI_ARCHITECTURE_COMPATIBLE;
+          }
+      }
+    else
+      {
+        /* Non-generic code object: require exact architecture match after
+           stripping features.  Example: code_obj="gfx942:xnack-",
+           agent="gfx942" → match.  */
+        if (strip_features (code_obj_name) == strip_features (agent_name))
+          {
+            *compatibility_state = AMD_DBGAPI_ARCHITECTURE_COMPATIBLE;
+          }
+      }
+  }
+  CATCH (AMD_DBGAPI_STATUS_ERROR_NOT_INITIALIZED,
+         AMD_DBGAPI_STATUS_ERROR_INVALID_ARCHITECTURE_ID,
+         AMD_DBGAPI_STATUS_ERROR_INVALID_ARGUMENT);
+  TRACE_END (make_ref (param_out (compatibility_state)));
+}
+
 amd_dbgapi_status_t AMD_DBGAPI
 amd_dbgapi_architecture_get_info (amd_dbgapi_architecture_id_t architecture_id,
                                   amd_dbgapi_architecture_info_t query,
