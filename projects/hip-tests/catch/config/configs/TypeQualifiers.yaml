@@ -5,7 +5,9 @@ TypeQualifiers:
     <<: *level_default
     # SWDEV-396615 mGPUs not considered correctly
     disabled: [amd_windows, amd_wsl]
-<<<<<<< HEAD
+  # Intentionally enabled on Windows: it is the only coverage of the managed
+  # device-slot write on PAL, where every capability-gated test skips.
+  Unit_hipManagedKeyword_KernelReadsManagedSymbol: *level_default
   Unit_hipManagedKeyword_hipMemcpy: *level_default
   Unit_hipManagedKeyword_hipMemcpyHtoD: *level_default
   Unit_hipManagedKeyword_hipMemcpyDtoH: *level_default
@@ -14,19 +16,6 @@ TypeQualifiers:
   Unit_hipManagedKeyword_hipMemset: *level_default
   Unit_hipManagedKeyword_hipMemcpy_MultipleSymbols: *level_default
   Unit_hipManagedKeyword_hipMemcpy3D: *level_default
-=======
-  # Intentionally enabled on Windows: it is the only coverage of the managed
-  # device-slot write on PAL, where every capability-gated test skips.
-  Unit_hipManagedKeyword_KernelReadsManagedSymbol: *level_2
-  Unit_hipManagedKeyword_hipMemcpy: *level_2
-  Unit_hipManagedKeyword_hipMemcpyHtoD: *level_2
-  Unit_hipManagedKeyword_hipMemcpyDtoH: *level_2
-  Unit_hipManagedKeyword_hipMemcpyDtoD: *level_2
-  Unit_hipManagedKeyword_hipMemcpyWithStream: *level_2
-  Unit_hipManagedKeyword_hipMemset: *level_2
-  Unit_hipManagedKeyword_hipMemcpy_MultipleSymbols: *level_2
-  Unit_hipManagedKeyword_hipMemcpy3D: *level_2
->>>>>>> c1e5c1b0651 (Add windows sanity check)
   Unit_hipManagedKeyword_hipMemcpy3D_SyncBehavior:
     <<: *level_default
     disabled: [amd_wsl]
