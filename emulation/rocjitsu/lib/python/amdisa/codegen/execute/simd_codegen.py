@@ -15,6 +15,8 @@ min/max functors remain separate, with their documented NaN/signed-zero limits.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from amdisa.codegen.execute import float_compare, float_minmax, input_policy
 from amdisa.codegen.execute.floating_policy import (
     F16_FLUSHED_SOURCE_OPS,
@@ -36,18 +38,53 @@ _BINARY_F32_FORMS = {
 }
 
 
-def _uses_unscoped_f32_core(cpp_op: str) -> bool:
-    """Whether a functor leaves the guest FP environment to its probe.
+@dataclass(frozen=True)
+class ArithmeticCore:
+    """How a shared arithmetic core must be driven by whatever probe emits it.
 
-    Only these take the instruction-wide scope. Host-float functors such as the
-    DX9 and legacy multiplies, MAD, min/max and DIV_FIXUP keep the plain probe:
-    scoping them buys nothing and perturbs the host NaN selection they rely on.
+    ``environment`` is the rounding the probe installs for the whole instruction;
+    ``guest_gate`` is the separate MODE predicate the route needs, or None for any
+    MODE. Keeping them apart matters for F16, which needs a nearest-even
+    environment *and* rejects directed guest rounding.
     """
-    return (
-        'amdgpu::fma_f32_simd_unscoped(' in cpp_op
-        or 'amdgpu::binary_f32_simd_unscoped<' in cpp_op
-        or 'amdgpu::fma_dx9_zero_f32_simd<false>(' in cpp_op
-    )
+
+    environment: str
+    guest_gate: str | None
+
+
+_NATIVE_F32_GATE = (
+    'amdgpu::fp_mode::native_arithmetic_matches('
+    'wf.fp_round_mode_f32(), wf.fp_denorm_mode_f32())'
+)
+
+# The single source of truth for environment ownership: a functor naming one of
+# these cores leaves its guest FP environment to the probe, so every emission
+# consults this table and no route can adopt a core without also taking its
+# environment. Host-float functors (the DX9 and legacy multiplies, MAD, min/max,
+# DIV_FIXUP) are absent on purpose: scoping them buys nothing and perturbs the
+# host NaN selection they rely on.
+_ARITHMETIC_CORES: dict[str, ArithmeticCore] = {
+    'amdgpu::binary_f32_simd_unscoped<': ArithmeticCore('wf.fp_round_mode_f32()', None),
+    'amdgpu::fma_f32_simd_unscoped(': ArithmeticCore('wf.fp_round_mode_f32()', None),
+    # DX9 keeps the host-matching gate: its zero-product rule is unvalidated
+    # outside the default environment.
+    'amdgpu::fma_dx9_zero_f32_simd<false>(': ArithmeticCore(
+        'wf.fp_round_mode_f32()', _NATIVE_F32_GATE
+    ),
+    # binary_f16_simd always rounds nearest-even, so directed guest rounding
+    # falls back to scalar while every denormal mode stays eligible.
+    'amdgpu::binary_f16_simd_unscoped<': ArithmeticCore(
+        '0', 'wf.fp_round_mode_f16_f64() == 0'
+    ),
+}
+
+
+def arithmetic_core(cpp_op: str) -> ArithmeticCore | None:
+    """The environment recipe a functor requires, or None if it needs no scope."""
+    for core, recipe in _ARITHMETIC_CORES.items():
+        if core in cpp_op:
+            return recipe
+    return None
 
 
 def _binary_f32_op(name: str, *, modifiers: bool = False) -> str:
@@ -85,26 +122,6 @@ def _binary_f16_op(name: str) -> str:
         f'amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::{operation}>('
         f'{operands}, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }}'
     )
-
-
-# VOP2 probes taking one guest FP environment around the chunk loop, mapped to
-# the rounding it installs. The F16 helper always rounds nearest-even; the F32
-# cores round by MODE, as their per-chunk scopes did.
-SIMD_VOP2_SCOPED = {f'v_{name}_f16_vop2': '0' for name in _BINARY_F16_FORMS} | {
-    f'v_{name}_f32_vop2': 'wf.fp_round_mode_f32()' for name in _BINARY_F32_FORMS
-}
-
-# VOP2 ternary probes taking the same per-instruction environment, accumulate
-# and inline-literal forms alike.
-SIMD_VOP2_TERNARY_SCOPED = frozenset(
-    {
-        'v_fmac_f32_vop2',
-        'v_mac_f32_vop2',
-        'v_fmac_dx9_zero_f32_vop2',
-        'v_fmaak_f32_vop2',
-        'v_fmamk_f32_vop2',
-    }
-)
 
 
 # F16 VOP3 arithmetic with explicit MODE flushing and post-rounding modifiers:
@@ -2698,15 +2715,14 @@ def _guard_mode_arithmetic_probe(template_name: str, probe: str | None) -> str |
     dtype = next((field for field in fields if field in ('f16', 'f32', 'f64')), None)
     if dtype is None or (fields[1] == 'ldexp' and dtype != 'f16'):
         return probe
-    if dtype == 'f32' and 'dx9' not in fields and _uses_unscoped_f32_core(probe):
-        # The probe scopes the guest environment to the chunk loop and output
-        # scaling is raw-bit, so callbacks keep the caller's FP state in every MODE.
-        return probe
-    if 'amdgpu::binary_f16_simd_unscoped<' in probe:
-        # The helper flushes by MODE and the probe installs nearest-even rounding
-        # with host flushing cleared, so only the guest rounding mode restricts
-        # this route, as in the VOP3 forms sharing the helper.
-        return f'  if (wf.fp_round_mode_f16_f64() == 0) {{\n{probe}\n  }}'
+    recipe = arithmetic_core(probe)
+    if recipe is not None:
+        # The probe owns the guest environment and output scaling is raw-bit, so
+        # callbacks keep the caller's FP state. Only the core's own guest gate,
+        # if any, narrows the route.
+        if recipe.guest_gate is None:
+            return probe
+        return f'  if ({recipe.guest_gate}) {{\n{probe}\n  }}'
     if dtype in ('f16', 'f64') and fields[1] in ('fma', 'fmac', 'fmaak', 'fmamk'):
         return probe
     mode = 'f32' if dtype == 'f32' else 'f16_f64'
@@ -2746,9 +2762,12 @@ def _simd_probe_line(
     spec2 = SIMD_VOP2_BINARY.get(template_name)
     if spec2 is not None:
         cpp_t, cpp_op = spec2
-        round_mode = SIMD_VOP2_SCOPED.get(template_name)
-        if round_mode is not None:
-            probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED({cpp_t}, {cpp_op}, {round_mode});'
+        recipe = arithmetic_core(cpp_op)
+        if recipe is not None:
+            probe = (
+                f'  ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED('
+                f'{cpp_t}, {cpp_op}, {recipe.environment});'
+            )
         else:
             probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {cpp_op});'
         if _probe_uses_fp16_ovfl_f16_result_narrow(cpp_op):
@@ -2780,13 +2799,14 @@ def _simd_probe_line(
     if spect is not None:
         cpp_t, k_expr, cpp_op = spect
         accumulate = template_name in SIMD_VOP2_TERNARY_ACCUMULATE
-        if template_name in SIMD_VOP2_TERNARY_SCOPED:
+        recipe = arithmetic_core(cpp_op)
+        if recipe is not None:
             scoped = (
                 'ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC_SCOPED'
                 if accumulate
                 else 'ROCJITSU_TRY_SIMD_VOP2_TERNARY_SCOPED'
             )
-            return f'  {scoped}({cpp_t}, {k_expr}, {cpp_op}, wf.fp_round_mode_f32());'
+            return f'  {scoped}({cpp_t}, {k_expr}, {cpp_op}, {recipe.environment});'
         macro = (
             'ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC'
             if accumulate
@@ -2927,7 +2947,7 @@ def _simd_probe_line(
         )
         ternary_macro = (
             'ROCJITSU_TRY_SIMD_VOP3_TERNARY_FP32_SCOPED'
-            if _uses_unscoped_f32_core(spec3tf32)
+            if arithmetic_core(spec3tf32) is not None
             else 'ROCJITSU_TRY_SIMD_VOP3_TERNARY_FP32'
         )
         return f'  {ternary_macro}({spec3tf32}{policy});'
@@ -3015,7 +3035,7 @@ def _simd_probe_line(
         )
         fmac_macro = (
             'ROCJITSU_TRY_SIMD_FMAC_VOP3_FP32_SCOPED'
-            if _uses_unscoped_f32_core(specfmacf32)
+            if arithmetic_core(specfmacf32) is not None
             else 'ROCJITSU_TRY_SIMD_FMAC_VOP3_FP32'
         )
         return f'  {fmac_macro}({specfmacf32}{policy});'
@@ -3121,7 +3141,7 @@ def _simd_probe_line(
                     cpp_op = _binary_f32_op(base.split('_')[1], modifiers=True)
                 binary_macro = (
                     'ROCJITSU_TRY_SIMD_VOP3_BINARY_FP_SCOPED'
-                    if _uses_unscoped_f32_core(cpp_op)
+                    if arithmetic_core(cpp_op) is not None
                     else 'ROCJITSU_TRY_SIMD_VOP3_BINARY_FP'
                 )
                 return f'  {binary_macro}({cpp_t}, {cpp_op});'
@@ -3348,12 +3368,13 @@ def _local_coverage_probe(
     def call(arity: int, half_dst: bool, half_inputs: int, functor: str) -> str:
         functor = functor.replace('float32_t', 'float')
         args = f'{arity}, {str(e32).lower()}, {str(half_dst).lower()}, {half_inputs}'
-        # Callbacks on the unscoped F16 core need the probe to install nearest-even
-        # rounding once for the instruction, as the shared VOP2 probe does.
-        if 'amdgpu::binary_f16_simd_unscoped<' in functor:
+        # Callbacks on a shared core need the probe to install its environment
+        # once for the instruction, as the shared probes do.
+        recipe = arithmetic_core(functor)
+        if recipe is not None:
             return (
                 f'  if (amdgpu::try_execute_words_simd<{args}, true>('
-                f'inst, wf, {functor}, 0)) return;'
+                f'inst, wf, {functor}, {recipe.environment})) return;'
             )
         return f'  if (amdgpu::try_execute_words_simd<{args}>(inst, wf, {functor})) return;'
 
