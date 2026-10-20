@@ -1172,7 +1172,7 @@ template <bool Scoped, typename View, typename Body>
 /// satisfied, so callers can write the probe without an `if constexpr`
 /// guard.
 /// `Scoped` takes one guest FP environment for the whole instruction through
-/// take_instruction_environment, for functors that use the unscoped arithmetic
+/// run_instruction_chunks, for functors that use the unscoped arithmetic
 /// cores instead of scoping each chunk.
 template <typename T, bool Scoped = false, typename Inst, typename BinOp>
   requires(util::has_stdx_simd)
@@ -1460,7 +1460,7 @@ template <bool ReadCarry, typename Inst, typename CarryOp, typename WriteResult>
 ///
 /// F32 operations use fma_f32_simd to preserve architectural NaN payloads.
 /// `Scoped` takes one guest FP environment for the instruction through
-/// take_instruction_environment, for functors using the unscoped arithmetic cores.
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
 template <typename T, bool Scoped = false, typename Inst, typename FmaOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_ternary_vop2_simd(Inst &inst, Wavefront &wf,
@@ -1502,7 +1502,7 @@ template <typename T, bool Scoped = false, typename Inst, typename FmaOp>
 /// view so read observation and write resolution use the same write-role VGPR
 /// mapping.
 /// `Scoped` takes one guest FP environment for the instruction through
-/// take_instruction_environment, for functors using the unscoped arithmetic cores.
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
 template <typename T, bool Scoped = false, typename Inst, typename FmaOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_ternary_vop2_acc_simd(Inst &inst, Wavefront &wf,
@@ -2373,7 +2373,7 @@ template <fp_mode::Arithmetic operation, bool True16,
 /// omod->clamp on the result). The modifier helpers are bit-exact, so unlike the
 /// VOP2 path this fast path stays correct even when modifiers are set; no bail.
 /// `Scoped` takes one guest FP environment for the instruction through
-/// take_instruction_environment, for functors using the unscoped arithmetic cores.
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
 template <typename T, bool Scoped = false, typename Inst, typename BinOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_binary_vop3_fp_simd(Inst &inst, Wavefront &wf, BinOp bin_op) {
@@ -2399,8 +2399,7 @@ template <typename T, bool Scoped = false, typename Inst, typename BinOp>
       const auto a = apply_vop3_src_mod_f32<0>(src0.template load_native<T>(base), abs, neg);
       const auto b = apply_vop3_src_mod_f32<1>(src1.template load_native<T>(base), abs, neg);
       const auto r = apply_vop3_dst_mod_f32(bin_op(a, b), omod, clamp,
-                                            floating_clamp_nan_to_zero(wf),
-                                            wf.fp_round_mode_f32());
+                                            floating_clamp_nan_to_zero(wf), wf.fp_round_mode_f32());
       dst.template store_native<T>(base, r, chunk);
     }
   });
@@ -2877,7 +2876,7 @@ template <typename T, typename Inst, typename TernOp>
 /// inside its operation using guest rounding. FMA uses the shared hardware
 /// NaN selection policy in both scalar and SIMD execution.
 /// `Scoped` takes one guest FP environment for the instruction through
-/// take_instruction_environment, for functors using the unscoped arithmetic cores.
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
 template <bool Scoped = false, typename Inst, typename FmaOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_ternary_vop3_fp_simd(Inst &inst, Wavefront &wf, FmaOp tern_op,
@@ -2909,8 +2908,7 @@ template <bool Scoped = false, typename Inst, typename FmaOp>
       const auto b = apply_vop3_src_mod_f32<1>(src1.template load_native<T>(base), abs, neg);
       const auto c = apply_vop3_src_mod_f32<2>(src2.template load_native<T>(base), abs, neg);
       const auto r = apply_vop3_dst_mod_f32(tern_op(a, b, c), omod, clamp,
-                                            floating_clamp_nan_to_zero(wf),
-                                            wf.fp_round_mode_f32());
+                                            floating_clamp_nan_to_zero(wf), wf.fp_round_mode_f32());
       dst.template store_native<T>(base, r, chunk);
     }
   });
@@ -3183,7 +3181,7 @@ template <typename Inst, typename FmaOp>
 /// third operand, apply abs/neg to src0/src1 only, run `tern_op`, apply
 /// result omod/clamp, masked-store back to inst.vdst (overwriting accumulator).
 /// `Scoped` takes one guest FP environment for the instruction through
-/// take_instruction_environment, for functors using the unscoped arithmetic cores.
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
 template <bool Scoped = false, typename Inst, typename FmaOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_fmac_vop3_fp_simd(Inst &inst, Wavefront &wf, FmaOp tern_op,
@@ -3212,8 +3210,7 @@ template <bool Scoped = false, typename Inst, typename FmaOp>
       const auto b = apply_vop3_src_mod_f32<1>(src1.template load_native<T>(base), abs, neg);
       const auto c = acc.template load_native<T>(base); // accumulator, NO modifier
       const auto r = apply_vop3_dst_mod_f32(tern_op(a, b, c), omod, clamp,
-                                            floating_clamp_nan_to_zero(wf),
-                                            wf.fp_round_mode_f32());
+                                            floating_clamp_nan_to_zero(wf), wf.fp_round_mode_f32());
       acc.template store_native<T>(base, r, chunk);
     }
   });
@@ -4877,7 +4874,8 @@ template <bool Vop3, typename Inst>
   return
 
 /// VOP2 binary counterpart taking one guest FP environment for the instruction,
-/// for functors that evaluate on the host and need only flag containment.
+/// for functors built on the unscoped arithmetic cores. The trailing argument is
+/// its rounding: MODE.FP_ROUND for F32, nearest-even for the F16 helper.
 #define ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(T, ...)                                               \
   if (::rocjitsu::amdgpu::try_execute_binary_vop2_simd<T, true>(inst, wf, __VA_ARGS__))            \
   return
@@ -4911,13 +4909,13 @@ template <bool Vop3, typename Inst>
 
 /// Counterpart taking one guest FP environment for the instruction, for functors
 /// built on the unscoped arithmetic cores. The trailing argument is its rounding.
-/// Counterpart taking one guest FP environment for the instruction, for functors
-/// built on the unscoped arithmetic cores. The trailing argument is its rounding.
 #define ROCJITSU_TRY_SIMD_VOP2_TERNARY_SCOPED(T, KEXPR, ...)                                       \
   if (::rocjitsu::amdgpu::try_execute_ternary_vop2_simd<T, true>(                                  \
           inst, wf, ::util::broadcast<T>(KEXPR), __VA_ARGS__))                                     \
   return
 
+/// Accumulate counterpart of ROCJITSU_TRY_SIMD_VOP2_TERNARY_SCOPED, with the
+/// same unscoped-functor contract and trailing rounding argument.
 #define ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC_SCOPED(T, KEXPR, ...)                                   \
   if (::rocjitsu::amdgpu::try_execute_ternary_vop2_acc_simd<T, true>(                              \
           inst, wf, ::util::broadcast<T>(KEXPR), __VA_ARGS__))                                     \
