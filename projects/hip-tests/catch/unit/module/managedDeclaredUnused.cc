@@ -36,12 +36,12 @@
  *    - HIP_VERSION >= 6.2
  */
 HIP_TEST_CASE(Unit_StatCO_ManagedVarDeclaredUnused_InChildProcess) {
-  SECTION("trivial HIP API call promotes the unused variables") {
+  SECTION("trivial HIP API call maps the unused variables") {
     hip::SpawnProc proc("managedDeclaredUnused_exe", true);
     REQUIRE(proc.run("trivial-api") == 0);
   }
 
-  SECTION("no HIP API call leaves them unpromoted until teardown") {
+  SECTION("no HIP API call leaves them unmapped until teardown") {
     hip::SpawnProc proc("managedDeclaredUnused_exe", true);
     REQUIRE(proc.run("no-api") == 0);
   }

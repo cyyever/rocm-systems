@@ -293,11 +293,11 @@ void __hipRegisterManagedVar(
                                    size, align, reinterpret_cast<hip::FatBinaryInfo**>(hipModule));
 
   // Host storage must be reserved and initialized before the Var is published.
-  // RegisterManagedVar can promote and hand the pointer to concurrent HIP APIs the
-  // moment it returns, and a dlopen on another thread reaches it immediately.
+  // RegisterManagedVar can map the storage and hand the pointer to concurrent HIP APIs
+  // the moment it returns, and a dlopen on another thread reaches it immediately.
   if (enable_deferred_loading) {
     // This range is the variable's final storage, not a staging copy:
-    // EnsureManagedStorageMapped registers it as a fine-grain SVM buffer in place.
+    // EnsureManagedVarIsMapped registers it as a fine-grain SVM buffer in place.
     *pointer = amd::Os::reserveMemory(0, size, align, amd::Os::MEM_PROT_RW);
     guarantee(*pointer != nullptr, "Cannot reserve host memory for Static Managed Var");
     ::memcpy(*pointer, init_value, size);
@@ -1031,10 +1031,8 @@ hipError_t PlatformState::Init() {
   }
   initialized_ = true;
   statCO_.ResizeForDevices(g_devices.size());
-  // Back every managed variable registered before this point with a tracked
-  // allocation, so the memory APIs resolve its host pointer through MemObjMap
-  // without needing a deferred-pointer lookup.
-  IHIP_RETURN_ONFAIL(statCO_.PromoteManagedVars());
+
+  IHIP_RETURN_ONFAIL(statCO_.EnsureAllManagedVarsAreMapped());
   amd::RuntimeTearDown::RegisterTearDownCallback("PlatformState static fatbin cleanup", [this]() {
     statCO_.RemoveAllFatBinaries();
   });

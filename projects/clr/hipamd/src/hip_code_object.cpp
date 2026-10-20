@@ -622,11 +622,11 @@ hipError_t StatCO::GetGlobalVar(const void* hostVar, int deviceId, hipDeviceptr_
   return hipSuccess;
 }
 
-hipError_t StatCO::PromoteManagedVars() {
+hipError_t StatCO::EnsureAllManagedVarsAreMapped() {
   std::scoped_lock lock(sclock_);
   for (const auto& it : managedVars_) {
     for (const auto& var : it.second) {
-      IHIP_RETURN_ONFAIL(var->EnsureManagedStorageMapped());
+      IHIP_RETURN_ONFAIL(var->EnsureManagedVarIsMapped());
     }
   }
   return hipSuccess;
@@ -635,18 +635,15 @@ hipError_t StatCO::PromoteManagedVars() {
 hipError_t StatCO::RegisterManagedVar(Var* var) {
   std::scoped_lock lock(sclock_);
 
-  // Devices are sized once, at platform init. If that already happened the runtime
-  // is up and the init-time promotion sweep has run without seeing this variable,
-  // so a late registration has to promote its own storage.
-  if (managedVarsDevicePtrInitializedSize_ > 0) {
-    IHIP_RETURN_ONFAIL(var->EnsureManagedStorageMapped());
+  // If this condition is true, it means that this managed variable is being loaded
+  // after runtime has been initialized (e.g. through dlopen).
+  if (!allManagedDevPtrsWritten_.empty()) {
+    IHIP_RETURN_ONFAIL(var->EnsureManagedVarIsMapped());
   }
 
-  // A new variable's pointer slot is unwritten on every device. Clear the
-  // aggregate flags before publishing, otherwise a launch can take the lock-free
-  // fast path against a stale "true" and leave this slot null.
-  for (size_t i = 0; i < managedVarsDevicePtrInitializedSize_; ++i) {
-    managedVarsDevicePtrInitialized_[i].store(false, std::memory_order_release);
+  // Adding a variable invalidates every device's "all pointers written" claim.
+  for (auto& written : allManagedDevPtrsWritten_) {
+    written.store(false, std::memory_order_release);
   }
 
   managedVars_[var->ModuleInfo()].push_back(var);
@@ -656,13 +653,14 @@ hipError_t StatCO::RegisterManagedVar(Var* var) {
 // ================================================================================================
 void StatCO::ResizeForDevices(size_t device_count) {
   std::scoped_lock lock(sclock_);
-  managedVarsDevicePtrInitialized_ = std::make_unique<std::atomic<bool>[]>(device_count);
-  // Explicitly initialize each per-device flag to false before it can be read by
-  // the lock-free fast path in InitManagedVarDevicePtr.
-  for (size_t i = 0; i < device_count; ++i) {
-    managedVarsDevicePtrInitialized_[i].store(false, std::memory_order_relaxed);
+  // Replaced wholesale rather than resized: std::atomic is not movable.
+  allManagedDevPtrsWritten_ = std::vector<std::atomic<bool>>(device_count);
+  // std::atomic's default constructor leaves the value indeterminate before C++20,
+  // so set each flag before the lock-free fast path in InitManagedVarDevicePtr can
+  // read it.
+  for (auto& written : allManagedDevPtrsWritten_) {
+    written.store(false, std::memory_order_relaxed);
   }
-  managedVarsDevicePtrInitializedSize_ = device_count;
   for (const auto& it : vars_) {
     it.second->ResizeDVar(device_count);
   }
@@ -676,48 +674,25 @@ void StatCO::ResizeForDevices(size_t device_count) {
   }
 }
 
-// ================================================================================================
-// Fills one managed variable's device-side pointer slot. The slot is an
-// externally-initialized pointer in the loaded code object's global segment, so it
-// only exists once the executable is on the device and the runtime has to write it.
-hipError_t StatCO::WriteManagedVarDevicePtr(Var* var, amd::Memory* mem, int deviceId) {
-  amd::Device& device = *g_devices.at(deviceId)->devices()[0];
-
-  switch (device.writeDeviceGlobal(*mem, 0, mem->getSize(), var->GetManagedVarPtr())) {
-    case amd::Device::GlobalWriteResult::kSuccess:
-      return hipSuccess;
-    case amd::Device::GlobalWriteResult::kFailure:
-      return hipErrorRuntimeMemory;
-    case amd::Device::GlobalWriteResult::kUnsupported:
-      break;
-  }
-
-  // Deliberately fails instead of falling back to a queued copy on the null stream: that
-  // copy is host-synchronous, so a launch onto a stream the application has blocked waits
-  // for work that cannot run until the launch returns.
-  LogPrintfError("Device %d cannot write managed var %s outside a command queue", deviceId,
-                 var->GetName().c_str());
-  return hipErrorNotSupported;
-}
-
 hipError_t StatCO::InitManagedVarDevicePtr(int deviceId) {
   // Fast lock free path
-  if (deviceId >= 0 && static_cast<size_t>(deviceId) < managedVarsDevicePtrInitializedSize_ &&
-      managedVarsDevicePtrInitialized_[deviceId].load(std::memory_order_acquire)) {
+  if (deviceId >= 0 && static_cast<size_t>(deviceId) < allManagedDevPtrsWritten_.size() &&
+      allManagedDevPtrsWritten_[deviceId].load(std::memory_order_acquire)) {
     return hipSuccess;
   }
 
   std::scoped_lock lock(sclock_);
   // Re-check under the lock in case another thread initialized this device while we waited.
-  if (managedVarsDevicePtrInitialized_[deviceId].load(std::memory_order_relaxed)) {
+  if (allManagedDevPtrsWritten_[deviceId].load(std::memory_order_relaxed)) {
     return hipSuccess;
   }
 
+  amd::Device& device = *g_devices.at(deviceId)->devices()[0];
   for (auto& vecIter : managedVars_) {
     for (auto& var : vecIter.second) {
       // Per-variable state, so a variable registered by a later dlopen is written
-      // without rewriting the slots that are already correct.
-      if (var->IsManagedSlotWritten(deviceId)) {
+      // without rewriting the pointers that are already correct.
+      if (var->IsManagedDevPtrWritten(deviceId)) {
         continue;
       }
 
@@ -726,7 +701,7 @@ hipError_t StatCO::InitManagedVarDevicePtr(int deviceId) {
       if (*(module) == nullptr) {
         IHIP_RETURN_ONFAIL(DigestFatBinary(module_to_hostModule_[module], *module));
       }
-      IHIP_RETURN_ONFAIL(var->EnsureManagedStorageMapped());
+      IHIP_RETURN_ONFAIL(var->EnsureManagedVarIsMapped());
 
       amd::Memory* mem = nullptr;
       IHIP_RETURN_ONFAIL(var->GetStatDeviceVar(&mem, deviceId));
@@ -736,14 +711,20 @@ hipError_t StatCO::InitManagedVarDevicePtr(int deviceId) {
         return hipErrorInvalidSymbol;
       }
 
-      // Returning here leaves both this variable and the aggregate flag false, so a
-      // later call retries instead of reporting a device that was never initialized.
-      IHIP_RETURN_ONFAIL(WriteManagedVarDevicePtr(var, mem, deviceId));
-      var->SetManagedSlotWritten(deviceId);
+      // No fallback to a queued copy on the null stream: that copy is host-synchronous,
+      // so a launch onto a stream the application has blocked would wait for work that
+      // cannot run until the launch returns. Returning leaves this variable and the
+      // aggregate flag unwritten, so a later call retries.
+      if (!device.writeDeviceGlobal(*mem, 0, mem->getSize(), var->GetManagedVarPtr())) {
+        LogPrintfError("Failed to write the device pointer of managed var %s on device %d",
+                       var->GetName().c_str(), deviceId);
+        return hipErrorRuntimeMemory;
+      }
+      var->SetManagedDevPtrWritten(deviceId);
     }
   }
 
-  managedVarsDevicePtrInitialized_[deviceId].store(true, std::memory_order_release);
+  allManagedDevPtrsWritten_[deviceId].store(true, std::memory_order_release);
   return hipSuccess;
 }
 

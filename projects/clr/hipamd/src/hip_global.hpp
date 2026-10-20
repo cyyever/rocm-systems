@@ -70,22 +70,22 @@ class Var {
   hipError_t GetStatDeviceVar(amd::Memory** mem, int deviceId);
   hipError_t GetDeviceVarPtr(amd::Memory** mem, int deviceId);
 
-  hipError_t EnsureManagedStorageMapped();
+  hipError_t EnsureManagedVarIsMapped();
 
   void ResizeDVar(size_t size) {
     dMem_.resize(size);
-    managedSlotWritten_.resize(size, 0);
+    managedDevPtrWritten_.resize(size, 0);
   }
 
-  //! Whether this managed variable's device-side pointer slot has been filled on
+  //! Whether this managed variable's device-side pointer has been written on
   //! deviceId. Guarded by StatCO::sclock_.
-  bool IsManagedSlotWritten(int deviceId) const {
-    return static_cast<size_t>(deviceId) < managedSlotWritten_.size() &&
-        managedSlotWritten_[deviceId] != 0;
+  bool IsManagedDevPtrWritten(int deviceId) const {
+    return static_cast<size_t>(deviceId) < managedDevPtrWritten_.size() &&
+        managedDevPtrWritten_[deviceId] != 0;
   }
-  void SetManagedSlotWritten(int deviceId) {
-    if (static_cast<size_t>(deviceId) < managedSlotWritten_.size()) {
-      managedSlotWritten_[deviceId] = 1;
+  void SetManagedDevPtrWritten(int deviceId) {
+    if (static_cast<size_t>(deviceId) < managedDevPtrWritten_.size()) {
+      managedDevPtrWritten_[deviceId] = 1;
     }
   }
 
@@ -113,15 +113,15 @@ class Var {
 
  private:
   std::vector<amd::Memory*> dMem_;  //!< Per-device memory objects; index matches g_devices
-  //! Per-device "pointer slot written" state (DVK_Managed); index matches g_devices
-  std::vector<uint8_t> managedSlotWritten_;
+  //! Per-device "device pointer written" state (DVK_Managed); index matches g_devices
+  std::vector<uint8_t> managedDevPtrWritten_;
   std::string name_;                //!< Symbol name for code-object lookup (not a unique key)
   DeviceVarKind dVarKind_;          //!< Classification: regular, surface, texture, or managed
   size_t size_;                     //!< Size of the variable in bytes
   int type_;                        //!< Channel type (textures/surfaces only)
   int norm_;                        //!< Normalisation flag (textures/surfaces only)
   FatBinaryInfo** modules_;         //!< Owning fat binary; nullptr for dynamic COs
-  void* managedVarPtr_;             //!< Managed storage, or its host shadow slot (DVK_Managed)
+  void* managedVarPtr_;             //!< Managed storage, or its host shadow ptr (DVK_Managed)
   size_t align_;                    //!< Alignment of the managed allocation in bytes
   //! For Set once ihipMallocManaged has registered this storage with the SVM allocator.
   bool svmRegistered_;

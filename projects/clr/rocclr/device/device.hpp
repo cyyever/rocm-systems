@@ -2196,13 +2196,6 @@ class Device : public RuntimeObject {
     return nullptr;
   }
 
-  //! Outcome of a stream-less write into a loaded code object's global segment.
-  enum class GlobalWriteResult {
-    kUnsupported,  //!< Backend cannot write this global without a command queue
-    kSuccess,
-    kFailure
-  };
-
   /**
    * Write host data into a global variable of a loaded code object, without
    * enqueuing on any command queue.
@@ -2215,10 +2208,12 @@ class Device : public RuntimeObject {
    * @param offset Byte offset within the global
    * @param size Number of bytes to write
    * @param src Host source buffer
+   * @return false if the write failed, or if this backend has no queue-less path to
+   *         the global, which the default implementation reports for every write
    */
-  virtual GlobalWriteResult writeDeviceGlobal(amd::Memory& dst, size_t offset, size_t size,
-                                              const void* src) const {
-    return GlobalWriteResult::kUnsupported;
+  virtual bool writeDeviceGlobal(amd::Memory& dst, size_t offset, size_t size,
+                                 const void* src) const {
+    return false;
   }
 
   /**

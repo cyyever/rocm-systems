@@ -1464,26 +1464,25 @@ Memory* Device::getGpuMemory(amd::Memory* mem) const {
 const device::BlitManager& Device::xferMgr() const { return xferQueue_->blitMgr(); }
 
 // ================================================================================================
-amd::Device::GlobalWriteResult Device::writeDeviceGlobal(amd::Memory& dst, size_t offset,
-                                                         size_t size, const void* src) const {
+bool Device::writeDeviceGlobal(amd::Memory& dst, size_t offset, size_t size,
+                               const void* src) const {
   if (src == nullptr) {
-    return GlobalWriteResult::kFailure;
+    return false;
   }
   // The write lands as a CP CmdUpdateMemory packet, which transfers whole DWORDs to a
-  // DWORD-aligned destination. Anything else goes back to the caller's queued copy.
+  // DWORD-aligned destination.
   constexpr size_t kDwordMask = sizeof(uint32_t) - 1;
   if (((offset | size) & kDwordMask) != 0) {
-    return GlobalWriteResult::kUnsupported;
+    return false;
   }
   pal::Memory* devMem = getGpuMemory(&dst);
   if (devMem == nullptr) {
-    return GlobalWriteResult::kFailure;
+    return false;
   }
-  // Same mechanism pal::Kernel uses for a kernel's runtime-handle global: a packet on the
-  // transfer queue, which no application stream feeds. That queue is created with
-  // enableSyncedBlit(), so the write has retired when writeRawData returns.
+  // A packet on the transfer queue, which no application stream feeds. That queue is
+  // created with enableSyncedBlit(), so the write has retired when writeRawData returns.
   static_cast<const KernelBlitManager&>(xferMgr()).writeRawData(*devMem, offset, size, src);
-  return GlobalWriteResult::kSuccess;
+  return true;
 }
 
 Pal::ChNumFormat Device::getPalFormat(const amd::Image::Format& format,

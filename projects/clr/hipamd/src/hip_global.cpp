@@ -268,7 +268,7 @@ hipError_t Var::GetStatDeviceVar(amd::Memory** mem, int deviceId) {
 // ================================================================================================
 // Makes this managed variable's storage exist and be reachable from the device. Idempotent:
 // the eager path (Windows, or HIP_ENABLE_DEFERRED_LOADING=0) already did it at registration.
-hipError_t Var::EnsureManagedStorageMapped() {
+hipError_t Var::EnsureManagedVarIsMapped() {
   void** pointer = static_cast<void**>(managedVarPtr_);
   if (!svmRegistered_) {
     // `use_host_ptr` registers the host range that `__hipRegisterManagedVar` already

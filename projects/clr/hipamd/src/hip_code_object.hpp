@@ -197,8 +197,7 @@ class StatCO : public CodeObject {
 
   // Back every registered managed variable with a tracked allocation, so its host
   // pointer is resolvable through MemObjMap before any HIP API can observe it.
-  // Called once from PlatformState::Init after devices are sized.
-  hipError_t PromoteManagedVars();
+  hipError_t EnsureAllManagedVarsAreMapped();
 
   // Iterate all registered fat binary data pointers — for HRR capture post-registration sweep.
   void ForEachFatBinaryBlob(void (*cb)(const void*)) const;
@@ -210,9 +209,6 @@ class StatCO : public CodeObject {
   void ForEachGlobalVar(void (*cb)(const void*, const char*, size_t, const void*));
 
  private:
-  // Precondition: caller holds sclock_.
-  hipError_t WriteManagedVarDevicePtr(Var* var, amd::Memory* mem, int deviceId);
-
   mutable std::recursive_mutex sclock_;    //!< Guards Static Code object
   const PlatformState& owner_;             //!< Reference to owning PlatformState
   //! Populated during __hipRegisterFatBinary
@@ -228,10 +224,9 @@ class StatCO : public CodeObject {
   std::unordered_map<FatBinaryInfo**, std::vector<const void*> > module_to_hostFunctions_;
   //! Reverse mapping of vars
   std::unordered_map<FatBinaryInfo**, std::vector<const void*> > module_to_hostVars_;
-  //! Tracks managed var initialization per device
-  std::unique_ptr<std::atomic<bool>[]> managedVarsDevicePtrInitialized_;
-  //! Number of entries in managedVarsDevicePtrInitialized_
-  size_t managedVarsDevicePtrInitializedSize_ = 0;
+  //! Set once every variable in managedVars_ has had its device-side pointer written on that
+  //! device.
+  std::vector<std::atomic<bool>> allManagedDevPtrsWritten_;
 };
 
 };  // namespace hip
