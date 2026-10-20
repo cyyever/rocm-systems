@@ -19,8 +19,9 @@ exercise configuration absence. Tests retain chronology, late execution/backfill
 independent machines/environments, failure/timeout, per-policy scope and exact
 branch/base/PR provenance. Explicit zero-baseline arithmetic remains isolated
 normalized test input; zero is not a valid maintained completed publication.
-Overview's legacy anchor algorithm remains tested until its separate replacement
-stage; schema compatibility is not acceptance of that comparison algorithm.
+Overview uses configuration-specific range-wide cohorts, not legacy anchors.
+The checked-in default is a broad browser baseline; focused contract scenarios
+also exercise the maintained publication boundary rather than only normalized data.
 
 `createFeedbackPublication()` adds `users/RattataKing/test-branch` without renaming
 other branches. The complete static publication has 24 develop attempts and 21
@@ -48,6 +49,27 @@ keys; every consumer rejects legacy/unversioned/schema-2 shapes rather than
 migrating or silently skipping instrumented inputs. Parsed `sourceData` preserves
 published fields and values independently of selection/filtering.
 
+## Focused Overview contract publication
+
+Generate a separate fictional publication into an explicit disposable directory:
+
+```bash
+node tests/fixtures/regenerate-fixtures.js /path/to/disposable-data --overview-contract
+```
+
+This does not replace the default 45-run browser baseline. The seven develop
+attempts use three catalog periods, nested JSON-typed definitions, both targets
+and policies, an absent configuration and a missing day. Three attempts share
+one commit: two complete attempts remain separately eligible in 1W; a later
+failed required member is excluded only when its lane/family participates.
+Daily views keep that failure rather than falling back. A disjoint per-policy
+intersection stays unavailable, not zero. Regeneration tests validate actual
+wire files, export/source preservation, cohorts and empty/filter outcomes.
+
+The writer clears its destination. Never use published data or a directory owned
+by a running server; use the default generator without this option for the
+checked-in broad baseline.
+
 ## Local consumer tools
 
 ```bash
@@ -60,5 +82,5 @@ an existing output file, and emits `{data,sourceData}`. Only `backfillRunIds`
 changes representation to a JSON array. Normalized `data` is inspection output,
 not a supported dashboard re-import format. Without `--output`, processing prints
 JSON to stdout. These tools do not publish or fabricate benchmark measurements.
-See the [maintained contract](../../docs/schema-1.md), including its unresolved
-numeric precision gate; fictional fixture success is not real-runner acceptance.
+See the [maintained contract](../../docs/schema-1.md), including its explicit
+supported numeric domain; fictional fixture success is not real-runner acceptance.

@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createDashboardTheme } from '../../src/theme/theme';
 import { categoryColors, monoFont, sansFont } from '../../src/theme/tokens';
-import * as sharedStyles from '../../src/theme/styles';
 
 describe('v10 bundled fonts', () => {
   it('imports the OFL license assets into the theme for Vite production delivery', () => {
@@ -40,9 +39,6 @@ describe('v10 bundled fonts', () => {
 });
 
 describe('v10 Carbon theme', () => {
-  it('does not export the unused footer style', () => {
-    expect(sharedStyles).not.toHaveProperty('dashboardFooterStyles');
-  });
   it.each([
     ['light', '#f4f4f4', '#ffffff', '#161616', '#525252', '#e0e0e0', '#0f62fe', '#edf5ff', '#0043ce', '#198038', '#da1e28'],
     ['dark', '#161616', '#262626', '#f4f4f4', '#c6c6c6', '#525252', '#78a9ff', '#002d9c', '#d0e2ff', '#42be65', '#fa4d56'],

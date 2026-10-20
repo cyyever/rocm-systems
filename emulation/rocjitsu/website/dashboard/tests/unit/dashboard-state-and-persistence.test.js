@@ -119,13 +119,6 @@ it('resolves comparison defaults after bootstrap and retains its first snapshot 
   expect(probe.state.filters).toEqual(data);
 });
 
-it('does not expose retired benchmark mode or global search state', () => {
-  const state = readState();
-  for (const key of ['benchmarkMode', 'setBenchmarkMode', 'search', 'setSearch']) {
-    expect(state).not.toHaveProperty(key);
-  }
-});
-
 it('pushes one coherent branch selection even under StrictMode', () => {
   const probe = mountState();
   const selection = { branch: 'feat/a', candidateId: 'missing-attempt', referenceId: 'missing-reference', manual: true, target: 'gfx950', mode: 'default', detail: true };

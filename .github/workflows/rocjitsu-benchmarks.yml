@@ -27,7 +27,7 @@ defaults:
     shell: bash
 
 env:
-  CORPUS_SHA: 6186d5c8bcd5e9bc93f7406e7cb50ed2a7698621
+  CORPUS_SHA: e191fc247b8c04f984f41cf2b2a83ff89d6a0854
   ROCJITSU_SOURCE_DIR: ${{ github.workspace }}/rocm-systems/emulation/rocjitsu
   CORPUS_SOURCE_DIR: ${{ github.workspace }}/rocjitsu-test-corpus
   TENSILE_SOURCE: ${{ github.workspace }}/tensile-source

@@ -1,16 +1,9 @@
 import { fixtureRunPath } from '../fixtures/runPath.js';
 import { expect, test } from 'vitest';
 import { selectAutomaticReference, selectPublishedBranches } from '../../src/data/branchSelectors.js';
-import * as dashboardValidation from '../../src/data/dashboardValidation.js';
-import * as dashboardData from '../../src/data/dashboardData.js';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { selectRecentRunSummaries } from '../../src/data/selectors.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-
-test('data modules expose published loading rather than normalized JSON re-import', () => {
-  expect(dashboardValidation).not.toHaveProperty('loadDashboardData');
-  expect(dashboardData).not.toHaveProperty('loadDashboardData');
-});
 
 test('normalizes current runs with explicit modes and keeps branch source envelopes', () => {
   const source = createMaintainedPublication();

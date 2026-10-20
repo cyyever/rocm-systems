@@ -9,9 +9,9 @@ WORKFLOW = (
 )
 
 
-def test_benchmark_pairs_unfiltered_caller_with_compatible_temporary_pin():
+def test_benchmark_pairs_unfiltered_caller_with_compatible_pin():
     text = WORKFLOW.read_text(encoding='utf-8')
-    assert '  CORPUS_SHA: 6186d5c8bcd5e9bc93f7406e7cb50ed2a7698621\n' in text
+    assert '  CORPUS_SHA: e191fc247b8c04f984f41cf2b2a83ff89d6a0854\n' in text
     assert '          ref: ${{ env.CORPUS_SHA }}\n' in text
 
 
