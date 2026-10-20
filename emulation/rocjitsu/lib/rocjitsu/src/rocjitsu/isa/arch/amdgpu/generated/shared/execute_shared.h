@@ -2910,8 +2910,8 @@ template <typename Inst>
 inline void execute_v_add_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
   if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
                                                  wf.fp_denorm_mode_f16_f64())) {
-    ROCJITSU_TRY_SIMD_VOP2_BINARY(uint32_t, [&wf](auto a, auto b) {
-      return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
+    ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(uint32_t, [&wf](auto a, auto b) {
+      return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
           a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
     });
   }
@@ -15648,8 +15648,8 @@ template <typename Inst>
 inline void execute_v_mul_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
   if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
                                                  wf.fp_denorm_mode_f16_f64())) {
-    ROCJITSU_TRY_SIMD_VOP2_BINARY(uint32_t, [&wf](auto a, auto b) {
-      return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::MUL>(
+    ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(uint32_t, [&wf](auto a, auto b) {
+      return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::MUL>(
           a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
     });
   }
@@ -18322,9 +18322,9 @@ template <typename Inst>
 inline void execute_v_sub_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
   if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
                                                  wf.fp_denorm_mode_f16_f64())) {
-    ROCJITSU_TRY_SIMD_VOP2_BINARY(uint32_t, [&wf](auto a, auto b) {
-      return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-          a, b ^ 0x8000u, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+    ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(uint32_t, [&wf](auto a, auto b) {
+      return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+          a, b ^ amdgpu::fp_format::F16::kSign, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
     });
   }
   uint64_t exec = dpp::execution_lane_mask(inst, wf);
@@ -18812,9 +18812,9 @@ template <typename Inst>
 inline void execute_v_subrev_f16_vop2([[maybe_unused]] Inst &inst, [[maybe_unused]] Wavefront &wf) {
   if (amdgpu::fp_mode::native_arithmetic_matches(wf.fp_round_mode_f16_f64(),
                                                  wf.fp_denorm_mode_f16_f64())) {
-    ROCJITSU_TRY_SIMD_VOP2_BINARY(uint32_t, [&wf](auto a, auto b) {
-      return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-          a ^ 0x8000u, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+    ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(uint32_t, [&wf](auto a, auto b) {
+      return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+          a ^ amdgpu::fp_format::F16::kSign, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
     });
   }
   uint64_t exec = dpp::execution_lane_mask(inst, wf);

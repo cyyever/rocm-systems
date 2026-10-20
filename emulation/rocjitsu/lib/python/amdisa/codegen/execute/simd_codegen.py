@@ -46,6 +46,38 @@ def _binary_f32_op(name: str, *, modifiers: bool = False) -> str:
     )
 
 
+# VOP2 F16 counterpart of _BINARY_F32_FORMS. SUB and SUBREV flip the subtrahend's
+# raw half, as the VOP3 NegatedSource cases do: a float negation can fold into a
+# host subtraction, which keeps a NaN subtrahend's sign.
+_SIGN_F16 = 'amdgpu::fp_format::F16::kSign'
+_BINARY_F16_FORMS = {
+    'add': ('ADD', 'a, b'),
+    'sub': ('ADD', f'a, b ^ {_SIGN_F16}'),
+    'subrev': ('ADD', f'a ^ {_SIGN_F16}, b'),
+    'mul': ('MUL', 'a, b'),
+}
+
+
+def _binary_f16_op(name: str) -> str:
+    """Emit a VOP2 F16 functor sharing the VOP3 forms' arithmetic helper.
+
+    The probe scopes the guest environment once per instruction, so this uses the
+    unscoped core rather than paying a save and restore per SIMD chunk.
+    """
+    operation, operands = _BINARY_F16_FORMS[name]
+    return (
+        f'[&wf](auto a, auto b) {{ return '
+        f'amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::{operation}>('
+        f'{operands}, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }}'
+    )
+
+
+# VOP2 probes needing one guest FP environment around the chunk loop.
+SIMD_VOP2_SCOPED = frozenset(
+    f'v_{name}_f16_vop2' for name in _BINARY_F16_FORMS
+)
+
+
 # F16 VOP3 arithmetic with explicit MODE flushing and post-rounding modifiers:
 # template_name -> (operation, amdgpu::NegatedSource). SUB and SUBREV add the
 # negated subtrahend in operand order, as in scalar lowering.
@@ -265,37 +297,14 @@ SIMD_VOP2_BINARY: dict[str, tuple[str, str]] = {
         ' auto hi = util::f32_to_f16_rtz_simd(std::bit_cast<util::native<float>>(b));'
         ' return lo | (hi << 16); }',
     ),
-    # --- f16 binary (low 16 bits f16, result zero-extended). These reuse the
-    # MODE-aware binary_f16_simd that the VOP3 forms use, so source flushing,
+    # --- f16 binary (low 16 bits f16, result zero-extended). These share the
+    # MODE-aware arithmetic helper the VOP3 forms use, so source flushing,
     # FP16_OVFL narrowing and NaN selection have one implementation. The
     # surrounding gate still restricts VOP2 to a host-matching environment. ---
-    'v_add_f16_vop2': (
-        'uint32_t',
-        '[&wf](auto a, auto b) {'
-        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
-        'a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
-    ),
-    # SUB and SUBREV add the negated subtrahend in source order, as F32 does.
-    # Negate the half's bits: the compiler may fold a float negation into a
-    # host subtraction, which keeps a NaN subtrahend's sign.
-    'v_sub_f16_vop2': (
-        'uint32_t',
-        '[&wf](auto a, auto b) {'
-        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
-        'a, b ^ 0x8000u, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
-    ),
-    'v_subrev_f16_vop2': (
-        'uint32_t',
-        '[&wf](auto a, auto b) {'
-        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>('
-        'a ^ 0x8000u, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
-    ),
-    'v_mul_f16_vop2': (
-        'uint32_t',
-        '[&wf](auto a, auto b) {'
-        ' return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::MUL>('
-        'a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl()); }',
-    ),
+    'v_add_f16_vop2': ('uint32_t', _binary_f16_op('add')),
+    'v_sub_f16_vop2': ('uint32_t', _binary_f16_op('sub')),
+    'v_subrev_f16_vop2': ('uint32_t', _binary_f16_op('subrev')),
+    'v_mul_f16_vop2': ('uint32_t', _binary_f16_op('mul')),
     # F16 LDEXP uses this fast path only for RNE with preserved denormals and
     # a matching host environment; other MODE settings use the scalar helper.
     'v_ldexp_f16_vop2': (
@@ -2712,7 +2721,12 @@ def _simd_probe_line(
     spec2 = SIMD_VOP2_BINARY.get(template_name)
     if spec2 is not None:
         cpp_t, cpp_op = spec2
-        probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {cpp_op});'
+        macro = (
+            'ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED'
+            if template_name in SIMD_VOP2_SCOPED
+            else 'ROCJITSU_TRY_SIMD_VOP2_BINARY'
+        )
+        probe = f'  {macro}({cpp_t}, {cpp_op});'
         if _probe_uses_fp16_ovfl_f16_result_narrow(cpp_op):
             ovfl_probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {_fp16_ovfl_cpp_op(cpp_op)});'
             return _mode_aware_f16_result_simd_probe(probe, ovfl_probe)

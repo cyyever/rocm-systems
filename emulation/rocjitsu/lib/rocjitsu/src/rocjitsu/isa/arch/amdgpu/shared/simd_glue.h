@@ -955,16 +955,15 @@ inline util::native<float> binary_f32_simd(util::native<float> a, util::native<f
 /// @details Flush source halves -> widen -> evaluate -> round F16 -> flush output.
 /// The caller supplies source modifiers and applies OMOD/CLAMP to the returned bits.
 /// Finite half products fit exactly in F32; ADD retains enough precision for F16 RNE.
-/// Save and restore host flags/masks as well as rounding: even a finite ADD can
-/// be inexact in F32, and exceptional lanes can trap before result repair.
+/// The caller owns the host environment: nearest-even rounding, and containing the
+/// flags an inexact F32 sum or an exceptional lane raises before result repair.
 template <fp_mode::Arithmetic operation>
-inline util::native<uint32_t> binary_f16_simd(util::native<uint32_t> a, util::native<uint32_t> b,
-                                              uint32_t denorm_mode, bool fp16_ovfl) {
+inline util::native<uint32_t> binary_f16_simd_unscoped(util::native<uint32_t> a,
+                                                       util::native<uint32_t> b,
+                                                       uint32_t denorm_mode, bool fp16_ovfl) {
   static_assert(operation == fp_mode::Arithmetic::ADD || operation == fp_mode::Arithmetic::MUL);
   using Fmt = fp_format::F16;
   using U = util::native<uint32_t>;
-  // Keep the scope inside the operation so register callbacks see caller state.
-  fp_mode::ScopedEnvironment environment(0);
   const auto input = input_denormal::Policy::make(denorm_mode);
   a = input_denormal::prepare<Fmt>(a, input);
   b = input_denormal::prepare<Fmt>(b, input);
@@ -986,6 +985,17 @@ inline util::native<uint32_t> binary_f16_simd(util::native<uint32_t> a, util::na
         rounded[i] = fp_mode::finish_arithmetic_f16(
             fp_mode::arithmetic_f16<operation>(lhs[i], rhs[i], 0.0f, 0), 0, denorm_mode, fp16_ovfl);
   return output_denormal::flush_output<Fmt>(rounded, output_denormal::Policy::make(denorm_mode));
+}
+
+/// @brief binary_f16_simd_unscoped under its own guest FP environment.
+/// @details For callers that evaluate one chunk at a time. Keeping the scope
+/// inside the operation leaves register callbacks in the caller's state. Callers
+/// that own a whole instruction should scope it once and use the unscoped form.
+template <fp_mode::Arithmetic operation>
+inline util::native<uint32_t> binary_f16_simd(util::native<uint32_t> a, util::native<uint32_t> b,
+                                              uint32_t denorm_mode, bool fp16_ovfl) {
+  fp_mode::ScopedEnvironment environment(0);
+  return binary_f16_simd_unscoped<operation>(a, b, denorm_mode, fp16_ovfl);
 }
 
 /// DX9 accumulator and three-source forms share the scalar flushing, zero-product,
@@ -1117,7 +1127,12 @@ inline util::native<float> pkf32_neg(util::native<float> v, bool do_neg) {
 /// below returns false unconditionally when the constraint cannot be
 /// satisfied, so callers can write the probe without an `if constexpr`
 /// guard.
-template <typename T, typename Inst, typename BinOp>
+/// `Scoped` takes one guest FP environment for the whole instruction, after the
+/// views are created, for host-float functors whose caller-side gate already
+/// matches the guest rounding and denormal mode and so needs only flag
+/// containment. A destination without VGPR storage stores through a notifying
+/// path, which must not run inside that scope, so it falls back to scalar.
+template <typename T, bool Scoped = false, typename Inst, typename BinOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_binary_vop2_simd(Inst &inst, Wavefront &wf, BinOp bin_op) {
   if (simd_force_scalar() || !sdwa::supports_direct_simd_store(inst) || !inst.src0.simd_capable() ||
@@ -1134,6 +1149,12 @@ template <typename T, typename Inst, typename BinOp>
   auto src0 = regs.read_operand(inst.src0, exec);
   auto src1 = regs.read_operand(inst.vsrc1, exec);
   auto dst = regs.write_operand(inst.vdst, exec);
+  std::optional<fp_mode::ScopedEnvironment> environment;
+  if constexpr (Scoped) {
+    if (!dst.has_storage())
+      return false;
+    environment.emplace(0);
+  }
   for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
     const uint64_t chunk = (exec >> base) & chunk_full;
     if (chunk == 0)
@@ -1149,7 +1170,7 @@ template <typename T, typename Inst, typename BinOp>
 /// Unconstrained fallback selected when `util::has_stdx_simd` is false.
 /// Trivially inlined to `return false;` so the generated probe at the
 /// call site costs nothing on toolchains without `<experimental/simd>`.
-template <typename T, typename Inst, typename BinOp>
+template <typename T, bool Scoped = false, typename Inst, typename BinOp>
 [[nodiscard]] bool try_execute_binary_vop2_simd(Inst &, Wavefront &, BinOp) {
   return false;
 }
@@ -4790,6 +4811,12 @@ template <bool Vop3, typename Inst>
 /// and `wf` parameters being in scope.
 #define ROCJITSU_TRY_SIMD_VOP2_BINARY(T, ...)                                                      \
   if (::rocjitsu::amdgpu::try_execute_binary_vop2_simd<T>(inst, wf, __VA_ARGS__))                  \
+  return
+
+/// VOP2 binary counterpart taking one guest FP environment for the instruction,
+/// for functors that evaluate on the host and need only flag containment.
+#define ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED(T, ...)                                               \
+  if (::rocjitsu::amdgpu::try_execute_binary_vop2_simd<T, true>(inst, wf, __VA_ARGS__))            \
   return
 
 /// VOP1 unary counterpart of ROCJITSU_TRY_SIMD_VOP2_BINARY. Variadic in the

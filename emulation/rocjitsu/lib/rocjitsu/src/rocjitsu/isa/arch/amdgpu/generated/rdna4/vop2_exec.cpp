@@ -1142,7 +1142,7 @@ void VAddF16Vop2::execute_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
                 a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
@@ -1194,7 +1194,7 @@ RJ_NOINLINE void VAddF16Vop2::execute_modifier_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
                 a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
@@ -1232,8 +1232,8 @@ void VSubF16Vop2::execute_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-                a, b ^ 0x8000u, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+                a, b ^ amdgpu::fp_format::F16::kSign, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
       return;
@@ -1284,8 +1284,8 @@ RJ_NOINLINE void VSubF16Vop2::execute_modifier_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-                a, b ^ 0x8000u, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+                a, b ^ amdgpu::fp_format::F16::kSign, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
       return;
@@ -1322,8 +1322,8 @@ void VSubrevF16Vop2::execute_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-                a ^ 0x8000u, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+                a ^ amdgpu::fp_format::F16::kSign, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
       return;
@@ -1374,8 +1374,8 @@ RJ_NOINLINE void VSubrevF16Vop2::execute_modifier_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::ADD>(
-                a ^ 0x8000u, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::ADD>(
+                a ^ amdgpu::fp_format::F16::kSign, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
       return;
@@ -1412,7 +1412,7 @@ void VMulF16Vop2::execute_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::MUL>(
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::MUL>(
                 a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
@@ -1464,7 +1464,7 @@ RJ_NOINLINE void VMulF16Vop2::execute_modifier_impl(amdgpu::Wavefront &wf) {
                                                  wf.fp_denorm_mode_f16_f64())) {
     if (amdgpu::try_execute_words_simd<2, true, true, 3>(inst, wf, [&](auto a, auto b) {
           return std::bit_cast<util::native<uint32_t>>(([&wf](auto a, auto b) {
-            return amdgpu::binary_f16_simd<amdgpu::fp_mode::Arithmetic::MUL>(
+            return amdgpu::binary_f16_simd_unscoped<amdgpu::fp_mode::Arithmetic::MUL>(
                 a, b, wf.fp_denorm_mode_f16_f64(), wf.fp16_ovfl());
           })(std::bit_cast<util::native<uint32_t>>(a), std::bit_cast<util::native<uint32_t>>(b)));
         }))
