@@ -615,21 +615,21 @@ void VDot2F32F16Vop3p::execute_impl(amdgpu::Wavefront &wf) {
     bool sel1_lo = (inst_.opsel >> 1) & 1;
     bool sel0_hi = (inst_.opsel_hi >> 0) & 1;
     bool sel1_hi = (inst_.opsel_hi >> 1) & 1;
-    uint16_t a0 = static_cast<uint16_t>(sel0_lo ? (raw0 >> 16) : raw0);
-    uint16_t a1 = static_cast<uint16_t>(sel0_hi ? (raw0 >> 16) : raw0);
-    uint16_t b0 = static_cast<uint16_t>(sel1_lo ? (raw1 >> 16) : raw1);
-    uint16_t b1 = static_cast<uint16_t>(sel1_hi ? (raw1 >> 16) : raw1);
+    uint16_t src0_lo = static_cast<uint16_t>(sel0_lo ? (raw0 >> 16) : raw0);
+    uint16_t src0_hi = static_cast<uint16_t>(sel0_hi ? (raw0 >> 16) : raw0);
+    uint16_t src1_lo = static_cast<uint16_t>(sel1_lo ? (raw1 >> 16) : raw1);
+    uint16_t src1_hi = static_cast<uint16_t>(sel1_hi ? (raw1 >> 16) : raw1);
     if (inst_.neg & 1)
-      a0 ^= 0x8000u;
+      src0_lo ^= 0x8000u;
     if (inst_.neg & 2)
-      b0 ^= 0x8000u;
+      src1_lo ^= 0x8000u;
     if (inst_.neg_hi & 1)
-      a1 ^= 0x8000u;
+      src0_hi ^= 0x8000u;
     if (inst_.neg_hi & 2)
-      b1 ^= 0x8000u;
+      src1_hi ^= 0x8000u;
     uint32_t acc = amdgpu::RegisterAccess(wf).read_lane(src2, lane);
     acc = amdgpu::source_modifier::apply<amdgpu::fp_format::F32>(acc, 2, inst_.neg_hi, inst_.neg);
-    uint32_t result = amdgpu::gfx12_dot2_f32<false>(a0, b0, a1, b1, acc);
+    uint32_t result = amdgpu::gfx12_dot2_f32<false>(src0_lo, src1_lo, src0_hi, src1_hi, acc);
     amdgpu::sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(*this, wf, vdst, lane, result);
   }
 }
@@ -775,21 +775,21 @@ void VDot2F32Bf16Vop3p::execute_impl(amdgpu::Wavefront &wf) {
                   ? (amdgpu::RegisterAccess(wf).read_lane(src1, lane) >> 16)
                   : (amdgpu::RegisterAccess(wf).read_lane(src1, lane) & 0xffffu)) *
              0x10001u;
-    uint16_t a0 = static_cast<uint16_t>(sel0_lo ? (raw0 >> 16) : raw0);
-    uint16_t a1 = static_cast<uint16_t>(sel0_hi ? (raw0 >> 16) : raw0);
-    uint16_t b0 = static_cast<uint16_t>(sel1_lo ? (raw1 >> 16) : raw1);
-    uint16_t b1 = static_cast<uint16_t>(sel1_hi ? (raw1 >> 16) : raw1);
+    uint16_t src0_lo = static_cast<uint16_t>(sel0_lo ? (raw0 >> 16) : raw0);
+    uint16_t src0_hi = static_cast<uint16_t>(sel0_hi ? (raw0 >> 16) : raw0);
+    uint16_t src1_lo = static_cast<uint16_t>(sel1_lo ? (raw1 >> 16) : raw1);
+    uint16_t src1_hi = static_cast<uint16_t>(sel1_hi ? (raw1 >> 16) : raw1);
     if (inst_.neg & 1)
-      a0 ^= 0x8000u;
+      src0_lo ^= 0x8000u;
     if (inst_.neg & 2)
-      b0 ^= 0x8000u;
+      src1_lo ^= 0x8000u;
     if (inst_.neg_hi & 1)
-      a1 ^= 0x8000u;
+      src0_hi ^= 0x8000u;
     if (inst_.neg_hi & 2)
-      b1 ^= 0x8000u;
+      src1_hi ^= 0x8000u;
     uint32_t acc = amdgpu::RegisterAccess(wf).read_lane(src2, lane);
     acc = amdgpu::source_modifier::apply<amdgpu::fp_format::F32>(acc, 2, inst_.neg_hi, inst_.neg);
-    uint32_t result = amdgpu::gfx12_dot2_f32<true>(a0, b0, a1, b1, acc);
+    uint32_t result = amdgpu::gfx12_dot2_f32<true>(src0_lo, src1_lo, src0_hi, src1_hi, acc);
     amdgpu::sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(*this, wf, vdst, lane, result);
   }
 }
