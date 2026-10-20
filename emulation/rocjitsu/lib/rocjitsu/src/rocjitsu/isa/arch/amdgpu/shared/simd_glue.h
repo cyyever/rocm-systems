@@ -1151,6 +1151,11 @@ inline util::native<float> pkf32_neg(util::native<float> v, bool do_neg) {
 /// Amortizes one save/set/restore over every chunk instead of one per chunk.
 /// `Scoped` false constructs nothing, leaving host-float functors' code generation
 /// and their host NaN selection untouched.
+///
+/// Routes still scoping per chunk: VOPD F32 in simd_coverage.h, whose slots are
+/// separate computation regions, and the VOP3P FMA MIX path, whose outer scope
+/// also spans destination-view acquisition. Both need their own correctness
+/// review before moving, so they keep the per-chunk form here.
 template <bool Scoped, typename View, typename Body>
 [[nodiscard]] inline bool run_instruction_chunks(const View &dst, uint32_t round_mode, Body body) {
   if constexpr (Scoped) {
@@ -2266,11 +2271,14 @@ template <typename T, typename Inst, typename BinOp>
 /// ABS/NEG/OMOD/CLAMP, so both forms fall back to scalar when a modifier is
 /// present. Raw F16 operations use WithModifiers to supply those stages and
 /// stay on the SIMD path. This helper still selects source and destination halves.
-template <bool True16, typename T, typename Inst, typename BinOp>
+/// `Scoped` takes one guest FP environment for the instruction through
+/// run_instruction_chunks, for functors using the unscoped arithmetic cores.
+template <bool True16, typename T, bool Scoped = false, typename Inst, typename BinOp>
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool
 try_execute_binary_vop3_f16_simd(Inst &inst, Wavefront &wf, BinOp bin_op,
-                                 SimdFastPath fast_path = SimdFastPath::VOP3_BINARY_FP16) {
+                                 SimdFastPath fast_path = SimdFastPath::VOP3_BINARY_FP16,
+                                 uint32_t round_mode = 0) {
   static_assert(std::is_same_v<T, uint32_t>);
   if (!floating_operation::applies_modifiers_v<BinOp> &&
       (inst.inst_.abs != 0u || inst.inst_.neg != 0u || inst.inst_.omod != 0u ||
@@ -2290,42 +2298,50 @@ try_execute_binary_vop3_f16_simd(Inst &inst, Wavefront &wf, BinOp bin_op,
     auto dst = regs.readwrite_operand(inst.vdst, exec);
     if (!dst.has_storage())
       return false;
-    for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
-      const uint64_t chunk = (exec >> base) & chunk_full;
-      if (chunk == 0)
-        continue;
-      auto a = src0.template load_native<T>(base);
-      auto b = src1.template load_native<T>(base);
-      a = select_vop3_true16_src(a, opsel, 0);
-      b = select_vop3_true16_src(b, opsel, 1);
-      const auto r = bin_op(a, b);
-      const auto out_half = r & util::broadcast<T>(0xffffu);
-      auto prev = dst.template load_native<T>(base);
-      auto out = (opsel & 0x8u) ? ((prev & util::broadcast<T>(0x0000ffffu)) | (out_half << 16))
-                                : ((prev & util::broadcast<T>(0xffff0000u)) | out_half);
-      if (!(opsel & 0x8u) && cdna_vop3_low_dst_zeroes_high(wf))
-        out = out_half;
-      dst.template store_native<T>(base, out, chunk);
-    }
+    if (!run_instruction_chunks<Scoped>(dst, round_mode, [&] {
+          for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
+            const uint64_t chunk = (exec >> base) & chunk_full;
+            if (chunk == 0)
+              continue;
+            auto a = src0.template load_native<T>(base);
+            auto b = src1.template load_native<T>(base);
+            a = select_vop3_true16_src(a, opsel, 0);
+            b = select_vop3_true16_src(b, opsel, 1);
+            const auto r = bin_op(a, b);
+            const auto out_half = r & util::broadcast<T>(0xffffu);
+            auto prev = dst.template load_native<T>(base);
+            auto out = (opsel & 0x8u)
+                           ? ((prev & util::broadcast<T>(0x0000ffffu)) | (out_half << 16))
+                           : ((prev & util::broadcast<T>(0xffff0000u)) | out_half);
+            if (!(opsel & 0x8u) && cdna_vop3_low_dst_zeroes_high(wf))
+              out = out_half;
+            dst.template store_native<T>(base, out, chunk);
+          }
+        }))
+      return false;
   } else {
     auto dst = regs.write_operand(inst.vdst, exec);
-    for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
-      const uint64_t chunk = (exec >> base) & chunk_full;
-      if (chunk == 0)
-        continue;
-      const auto a = src0.template load_native<T>(base);
-      const auto b = src1.template load_native<T>(base);
-      const auto r = bin_op(a, b);
-      dst.template store_native<T>(base, r, chunk);
-    }
+    if (!run_instruction_chunks<Scoped>(dst, round_mode, [&] {
+          for (uint32_t base = 0; base < wf.wf_size(); base += static_cast<uint32_t>(W)) {
+            const uint64_t chunk = (exec >> base) & chunk_full;
+            if (chunk == 0)
+              continue;
+            const auto a = src0.template load_native<T>(base);
+            const auto b = src1.template load_native<T>(base);
+            const auto r = bin_op(a, b);
+            dst.template store_native<T>(base, r, chunk);
+          }
+        }))
+      return false;
   }
   detail::record_simd_fast_path(fast_path);
   return true;
 }
 
-template <bool True16, typename T, typename Inst, typename BinOp>
+template <bool True16, typename T, bool Scoped = false, typename Inst, typename BinOp>
 [[nodiscard]] bool try_execute_binary_vop3_f16_simd(Inst &, Wavefront &, BinOp,
-                                                    SimdFastPath = SimdFastPath::VOP3_BINARY_FP16) {
+                                                    SimdFastPath = SimdFastPath::VOP3_BINARY_FP16,
+                                                    uint32_t = 0) {
   return false;
 }
 
@@ -2344,8 +2360,8 @@ template <fp_mode::Arithmetic operation, bool True16,
   requires(util::has_stdx_simd)
 [[nodiscard]] inline bool try_execute_binary_vop3_f16_arithmetic_simd(Inst &inst, Wavefront &wf) {
   static_assert(negated_source == NegatedSource::NONE || operation == fp_mode::Arithmetic::ADD);
-  // binary_f16_simd establishes nearest-even host rounding and restores the
-  // caller's environment. Only the guest rounding mode restricts this route.
+  // The probe installs nearest-even host rounding for the instruction, so only
+  // the guest rounding mode restricts this route.
   if (wf.fp_round_mode_f16_f64() != 0)
     return false;
   const auto raw_operation = [denorm = wf.fp_denorm_mode_f16_f64(), ovfl = wf.fp16_ovfl()](auto a,
@@ -2354,11 +2370,11 @@ template <fp_mode::Arithmetic operation, bool True16,
       a ^= fp_format::F16::kSign;
     else if constexpr (negated_source == NegatedSource::SRC1)
       b ^= fp_format::F16::kSign;
-    return binary_f16_simd<operation>(a, b, denorm, ovfl);
+    return binary_f16_simd_unscoped<operation>(a, b, denorm, ovfl);
   };
-  return try_execute_binary_vop3_f16_simd<True16, uint32_t>(
+  return try_execute_binary_vop3_f16_simd<True16, uint32_t, true>(
       inst, wf, vop3_float_operation<fp_format::F16>(inst, wf, raw_operation),
-      SimdFastPath::VOP3_BINARY_MODE_FP16);
+      SimdFastPath::VOP3_BINARY_MODE_FP16, 0);
 }
 
 template <fp_mode::Arithmetic operation, bool True16,
