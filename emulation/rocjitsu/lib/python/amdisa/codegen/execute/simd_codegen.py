@@ -949,15 +949,9 @@ SIMD_VOP2_CARRY.update(
 # performs the fused operation in native<double> chunks and applies the current
 # FP16 MODE controls without an intervening f32 rounding. v_fmac_f64 likewise
 # has a dedicated split-VGPR, MODE-aware path in SIMD_VOP2_FMA_F64.
-_FMA_ACC_F32 = (
-    '[&wf](auto a, auto b, auto d, auto) { return amdgpu::fma_f32_simd_unscoped(a, b, d, wf); }'
-)
-_FMA_ADDK_F32 = (
-    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, b, k, wf); }'
-)
-_FMA_MULK_F32 = (
-    '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, k, b, wf); }'
-)
+_FMA_ACC_F32 = '[&wf](auto a, auto b, auto d, auto) { return amdgpu::fma_f32_simd_unscoped(a, b, d, wf); }'
+_FMA_ADDK_F32 = '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, b, k, wf); }'
+_FMA_MULK_F32 = '[&wf](auto a, auto b, auto, auto k) { return amdgpu::fma_f32_simd_unscoped(a, k, b, wf); }'
 _FMA_ACC_F16 = (
     '[](auto a, auto b, auto d, auto) {'
     ' return util::f32_to_f16_simd(util::stdx::fma('
@@ -2704,11 +2698,7 @@ def _guard_mode_arithmetic_probe(template_name: str, probe: str | None) -> str |
     dtype = next((field for field in fields if field in ('f16', 'f32', 'f64')), None)
     if dtype is None or (fields[1] == 'ldexp' and dtype != 'f16'):
         return probe
-    if (
-        dtype == 'f32'
-        and 'dx9' not in fields
-        and _uses_unscoped_f32_core(probe)
-    ):
+    if dtype == 'f32' and 'dx9' not in fields and _uses_unscoped_f32_core(probe):
         # The probe scopes the guest environment to the chunk loop and output
         # scaling is raw-bit, so callbacks keep the caller's FP state in every MODE.
         return probe
@@ -2758,9 +2748,7 @@ def _simd_probe_line(
         cpp_t, cpp_op = spec2
         round_mode = SIMD_VOP2_SCOPED.get(template_name)
         if round_mode is not None:
-            probe = (
-                f'  ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED({cpp_t}, {cpp_op}, {round_mode});'
-            )
+            probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY_SCOPED({cpp_t}, {cpp_op}, {round_mode});'
         else:
             probe = f'  ROCJITSU_TRY_SIMD_VOP2_BINARY({cpp_t}, {cpp_op});'
         if _probe_uses_fp16_ovfl_f16_result_narrow(cpp_op):
@@ -2798,9 +2786,7 @@ def _simd_probe_line(
                 if accumulate
                 else 'ROCJITSU_TRY_SIMD_VOP2_TERNARY_SCOPED'
             )
-            return (
-                f'  {scoped}({cpp_t}, {k_expr}, {cpp_op}, wf.fp_round_mode_f32());'
-            )
+            return f'  {scoped}({cpp_t}, {k_expr}, {cpp_op}, wf.fp_round_mode_f32());'
         macro = (
             'ROCJITSU_TRY_SIMD_VOP2_TERNARY_ACC'
             if accumulate
