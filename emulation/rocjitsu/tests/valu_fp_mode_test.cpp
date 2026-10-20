@@ -3207,10 +3207,9 @@ std::vector<ArithmeticCase> subtraction_mode_cases() {
       // rounding, which the helper cannot honor.
       const bool nearest = ((mode >> 2) & 3u) == 0;
       const SimdPathExpectation simd =
-          !nearest  ? expect_simd_fallback()
-          : vop3_form
-              ? expect_simd_path(amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16)
-              : expect_simd_path(amdgpu::SimdFastPath::VOP_WORDS);
+          !nearest    ? expect_simd_fallback()
+          : vop3_form ? expect_simd_path(amdgpu::SimdFastPath::VOP3_BINARY_MODE_FP16)
+                      : expect_simd_path(amdgpu::SimdFastPath::VOP_WORDS);
       cases.push_back({std::format("{}Mode{:02X}", lane.name, mode),
                        ROCJITSU_CODE_ARCH_RDNA4,
                        {lane.encoding.words[0], lane.encoding.words[1], 0u},
@@ -3451,6 +3450,50 @@ std::vector<ArithmeticCase> mullit_cases() {
     for (const auto &[mode, result] : lane.mode_results)
       cases.push_back({std::format("{}Mode{:02X}", lane.name, mode),
                        ROCJITSU_CODE_ARCH_RDNA4,
+                       {words[0], words[1], 0u},
+                       {{0, lane.sources[0]}, {1, lane.sources[1]}, {2, lane.sources[2]}},
+                       {{6, result}},
+                       mode,
+                       FE_TONEAREST});
+  }
+  return cases;
+}
+
+// The minimum-normal boundary holds on gfx1100 with IEEE=1 as on gfx1201: a
+// product that rounds up to min_normal keeps it when F32 output denormals are
+// kept, and flushes to a signed zero when they are not. These are the plain and
+// NEG(S0) gfx1100 IEEE=1 captures of the gfx1201 boundary lanes; MODE bit 9
+// (0x200) is IEEE. OMOD forms are excluded: gfx1100 disables OMOD under IEEE=1.
+std::vector<ArithmeticCase> rdna3_mullit_boundary_cases() {
+  struct Lane {
+    const char *name;
+    uint8_t neg;
+    std::array<uint32_t, 3> sources;
+    std::array<std::pair<uint32_t, uint32_t>, 2> mode_results;
+  };
+  constexpr std::array<Lane, 3> lanes = {{
+      {"TinyProductRoundsToMinNormal",
+       0,
+       {0x00800000u, 0x3f7fffffu, 0x3f800000u},
+       {{{0x200u, 0u}, {0x2f0u, 0x00800000u}}}},
+      {"NegativeS0TinyProductRoundsToMinNormal",
+       0,
+       {0x80800000u, 0x3f7fffffu, 0x3f800000u},
+       {{{0x200u, 0x80000000u}, {0x2f0u, 0x80800000u}}}},
+      {"NegTinyProductRoundsToMinNormal",
+       1,
+       {0x00800000u, 0x3f7fffffu, 0x3f800000u},
+       {{{0x200u, 0x80000000u}, {0x2f0u, 0x80800000u}}}},
+  }};
+  std::vector<ArithmeticCase> cases;
+  for (const Lane &lane : lanes) {
+    // llvm-mc gives gfx1100 and gfx1201 the same v_mullit_f32 words.
+    const auto words =
+        rdna4::build_vop3(rdna4::kVMullitF32Vop3,
+                          {.vdst = 6, .src0 = 256, .src1 = 257, .src2 = 258, .neg = lane.neg});
+    for (const auto &[mode, result] : lane.mode_results)
+      cases.push_back({std::format("Gfx1100Ieee1{}Mode{:03X}", lane.name, mode),
+                       ROCJITSU_CODE_ARCH_RDNA3,
                        {words[0], words[1], 0u},
                        {{0, lane.sources[0]}, {1, lane.sources[1]}, {2, lane.sources[2]}},
                        {{6, result}},
@@ -3967,6 +4010,12 @@ INSTANTIATE_TEST_SUITE_P(Rdna3Omod, ValuMullitModeTest,
 
 INSTANTIATE_TEST_SUITE_P(SignalingNan, ValuMullitModeTest,
                          testing::ValuesIn(mullit_signaling_nan_cases()),
+                         [](const testing::TestParamInfo<ArithmeticCase> &info) {
+                           return info.param.name;
+                         });
+
+INSTANTIATE_TEST_SUITE_P(Rdna3Boundary, ValuMullitModeTest,
+                         testing::ValuesIn(rdna3_mullit_boundary_cases()),
                          [](const testing::TestParamInfo<ArithmeticCase> &info) {
                            return info.param.name;
                          });
