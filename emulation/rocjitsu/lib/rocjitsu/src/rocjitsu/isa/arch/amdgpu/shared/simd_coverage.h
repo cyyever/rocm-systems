@@ -287,9 +287,9 @@ template <bool Extended, typename Slot>
   };
   if (!matches_mode(x) || !matches_mode(y))
     return false;
-  // Matching controls still permit arithmetic to raise host exception flags.
-  // Each arithmetic chunk below runs under a ScopedEnvironment, as the scalar path
-  // does; register access, which can run callbacks, stays outside it.
+  // Matching controls still permit arithmetic to raise host exception flags. The
+  // MODE-aware F32 helpers scope their own arithmetic; the remaining host multiply
+  // scopes itself. Register access, which can run callbacks, stays outside both.
   struct Results {
     alignas(util::native<uint32_t>) uint32_t words[64]{};
     alignas(util::native<uint64_t>) uint64_t pairs[64]{};
@@ -361,9 +361,6 @@ template <bool Extended, typename Slot>
     for (uint32_t base = 0; base < wf.wf_size(); base += W) {
       if (!((exec >> base) & util::mask<uint64_t>(W)))
         continue;
-      std::optional<fp_mode::ScopedEnvironment> environment;
-      if (is_arithmetic(slot))
-        environment.emplace(0);
       U av = a.template load_native<uint32_t>(base);
       U bv = b ? b->template load_native<uint32_t>(base) : U(0);
       U cv = c ? c->template load_native<uint32_t>(base) : U(slot.src2_imm);
@@ -403,11 +400,15 @@ template <bool Extended, typename Slot>
         result = std::bit_cast<U>(binary_f32_simd<fp_mode::Arithmetic::ADD>(
             std::bit_cast<F>(av ^ U(0x80000000u)), bf, wf));
         break;
-      case 7:
+      case 7: {
+        // The only slot operation still multiplying on the host; scope the
+        // environment so its exception flags stay out of the caller's.
+        fp_mode::ScopedEnvironment environment(0);
         result = std::bit_cast<U>(af * bf);
         util::stdx::where(((av & U(0x7fffffffu)) == U(0)) || ((bv & U(0x7fffffffu)) == U(0)),
                           result) = U(0);
         break;
+      }
       case 8:
         result = av;
         break;
