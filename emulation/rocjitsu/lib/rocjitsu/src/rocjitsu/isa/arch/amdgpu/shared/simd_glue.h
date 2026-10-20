@@ -1764,8 +1764,8 @@ template <bool True16, typename Inst>
     else
       raw = raw & util::broadcast<T>(0xffffu);
     const auto src = apply_vop3_src_mod_f32<0>(cvt_f32_f16_mode_simd(raw, wf), abs, neg);
-    // A widened F16 value cannot overflow F32 under OMOD.
-    const auto result = apply_vop3_dst_mod_f32(src, omod, clamp, floating_clamp_nan_to_zero(wf), 0);
+    const auto result = apply_vop3_dst_mod_f32(src, omod, clamp, floating_clamp_nan_to_zero(wf),
+                                               wf.fp_round_mode_f32());
     dst.template store_native<T>(base, std::bit_cast<util::native<T>>(result), chunk);
   }
   return true;
