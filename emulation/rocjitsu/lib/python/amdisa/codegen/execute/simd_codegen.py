@@ -3108,10 +3108,12 @@ def _simd_probe_line(
                 flush = 'true' if base.upper() in FLUSH_NEAREST_F32_OPS else 'false'
                 # TRANS results ignore MODE.FP_ROUND, so their OMOD overflow
                 # rounds to nearest even; the scalar lowering selects the same way.
-                omod_round = (
+                round_mode = (
                     '0' if base.upper() in TRANS_F32_OPS else 'wf.fp_round_mode_f32()'
                 )
-                modifier_args = f', {flush} /* force_output_flush */, {omod_round} /* omod overflow */'
+                modifier_args = (
+                    f', {flush} /* force_output_flush */, {round_mode} /* round_mode */'
+                )
                 return f'  ROCJITSU_TRY_SIMD_VOP3_UNARY_FP(float32_t, float32_t, {cpp_op}{modifier_args});'
             if base in ('v_cvt_i16_f16', 'v_cvt_u16_f16'):
                 cpp_op = _modified_conversion_op(cpp_op, bits=16, arity=1)
