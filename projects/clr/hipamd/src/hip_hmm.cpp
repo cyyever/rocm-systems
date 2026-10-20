@@ -487,8 +487,11 @@ hipError_t ihipMallocManaged(void** ptr, size_t size, size_t align, bool use_hos
   if (memObj == nullptr) {
     return hipErrorMemoryAllocation;
   }
-  // saves the current device id so that it can be accessed later
-  memObj->getUserData().deviceId = hipDev->deviceId();
+
+  // Promotion of a __managed__ variable reaches here before any HIP API has established
+  // a current device. Device 0 is fine in that case since managed memory is reachable
+  // from every device.
+  memObj->getUserData().deviceId = (hipDev != nullptr) ? hipDev->deviceId() : 0;
 
   ClPrint(amd::LOG_INFO, amd::LOG_API, "ihipMallocManaged ptr=0x%zx", *ptr);
   return hipSuccess;

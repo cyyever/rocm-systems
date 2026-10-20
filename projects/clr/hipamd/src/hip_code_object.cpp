@@ -415,7 +415,7 @@ hipError_t StatCO::RemoveFatBinary(FatBinaryInfo** module) {
   if (managedVarsIter != managedVars_.end()) {
     for (auto& managedVar : managedVarsIter->second) {
       hipError_t err = hipSuccess;
-      if (managedVar->IsSvmOwned()) {
+      if (managedVar->IsSvmRegistered()) {
         err = ihipFree(*(static_cast<void**>(managedVar->GetManagedVarPtr())));
       } else {
         void** pointer = static_cast<void**>(managedVar->GetManagedVarPtr());
@@ -489,7 +489,7 @@ void StatCO::RemoveAllFatBinaries() {
 
       // Free the managed memory allocation itself
       void** managed_ptr = static_cast<void**>(managed_var->GetManagedVarPtr());
-      if (managed_var->IsSvmOwned()) {
+      if (managed_var->IsSvmRegistered()) {
         [[maybe_unused]] hipError_t err = ihipFree(*managed_ptr);
         assert(err == hipSuccess);
       } else {
@@ -622,30 +622,11 @@ hipError_t StatCO::GetGlobalVar(const void* hostVar, int deviceId, hipDeviceptr_
   return hipSuccess;
 }
 
-namespace {
-
-// ihipMallocManaged resolves the allocating device from TLS, but promotion runs
-// during hip::init (before HIP_INIT_TLS_DEVICE) and on dlopen threads that have
-// never entered a HIP API. Establish the same default those paths would.
-void EnsureCurrentDevice() {
-  if (hip::getCurrentDevice() == nullptr && !g_devices.empty()) {
-    hip::tls.device_ = g_devices[0];
-    amd::Os::setPreferredNumaNode(g_devices[0]->devices()[0]->getPreferredNumaNode());
-  }
-}
-
-}  // namespace
-
-hipError_t StatCO::PromoteManagedVar(Var* var) {
-  EnsureCurrentDevice();
-  return var->EnsureManagedStorageMapped();
-}
-
 hipError_t StatCO::PromoteManagedVars() {
   std::scoped_lock lock(sclock_);
   for (const auto& it : managedVars_) {
     for (const auto& var : it.second) {
-      IHIP_RETURN_ONFAIL(PromoteManagedVar(var));
+      IHIP_RETURN_ONFAIL(var->EnsureManagedStorageMapped());
     }
   }
   return hipSuccess;
@@ -658,7 +639,7 @@ hipError_t StatCO::RegisterManagedVar(Var* var) {
   // is up and the init-time promotion sweep has run without seeing this variable,
   // so a late registration has to promote its own storage.
   if (managedVarsDevicePtrInitializedSize_ > 0) {
-    IHIP_RETURN_ONFAIL(PromoteManagedVar(var));
+    IHIP_RETURN_ONFAIL(var->EnsureManagedStorageMapped());
   }
 
   // A new variable's pointer slot is unwritten on every device. Clear the

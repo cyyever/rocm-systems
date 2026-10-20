@@ -108,8 +108,8 @@ class Var {
     size_ = size;
     dVarKind_ = DVK_Managed;
   }
-  bool IsSvmOwned() const { return svmOwned_; }
-  void SetSvmOwned(bool val) { svmOwned_ = val; }
+  bool IsSvmRegistered() const { return svmRegistered_; }
+  void SetSvmRegistered(bool val) { svmRegistered_ = val; }
 
  private:
   std::vector<amd::Memory*> dMem_;  //!< Per-device memory objects; index matches g_devices
@@ -123,7 +123,8 @@ class Var {
   FatBinaryInfo** modules_;         //!< Owning fat binary; nullptr for dynamic COs
   void* managedVarPtr_;             //!< Managed storage, or its host shadow slot (DVK_Managed)
   size_t align_;                    //!< Alignment of the managed allocation in bytes
-  bool svmOwned_;                   //!< Release path: ihipFree if set, else Os::releaseMemory
+  //! For Set once ihipMallocManaged has registered this storage with the SVM allocator.
+  bool svmRegistered_;
 };
 
 };  // namespace hip

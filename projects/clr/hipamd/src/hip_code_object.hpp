@@ -211,8 +211,6 @@ class StatCO : public CodeObject {
 
  private:
   // Precondition: caller holds sclock_.
-  hipError_t PromoteManagedVar(Var* var);
-  // Precondition: caller holds sclock_.
   hipError_t WriteManagedVarDevicePtr(Var* var, amd::Memory* mem, int deviceId);
 
   mutable std::recursive_mutex sclock_;    //!< Guards Static Code object

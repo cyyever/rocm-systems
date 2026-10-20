@@ -304,7 +304,7 @@ void __hipRegisterManagedVar(
   } else {
     HIP_INIT_VOID();
     hipError_t alloc_status = ihipMallocManaged(pointer, size, align, 0);
-    var_ptr->SetSvmOwned(true);
+    var_ptr->SetSvmRegistered(true);
     if (alloc_status == hipSuccess) {
       hip::Stream* stream = hip::getNullStream();
       if (stream != nullptr) {
