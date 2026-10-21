@@ -82,24 +82,19 @@ class Var {
 
   void* shadowVptr = nullptr;  //!< Host-side textureReference shadow; device-independent
 
-  //! Two meanings by provenance: for `__hipRegisterManagedVar` this is the address of the
-  //! application's host shadow pointer and callers dereference it to reach the storage; for
-  //! a `DynCO` variable it is the storage address itself, since a dynamically loaded module
-  //! has no shadow pointer to fill. `StatCO::managedVars_` and `DynCO::vars_` hold the two
-  //! populations separately; a consumer that guesses wrong is off by one indirection.
   void* GetManagedVarPtr() const { return managedVarPtr_; }
   void SetManagedVarInfo(void* pointer, size_t size) {
     managedVarPtr_ = pointer;
     size_ = size;
     dVarKind_ = DVK_Managed;
   }
-  bool IsSvmRegistered() const { return svmRegistered_; }
-  void SetSvmRegistered(bool val) { svmRegistered_ = val; }
+  bool IsManagedVarMapped() const { return managedVarMapped_; }
+  void SetManagedVarMapped(bool val) { managedVarMapped_ = val; }
 
-  //! Position in StatCO's managed-variable registration order. A device written up to this
-  //! number already holds this variable's device-side pointer.
-  uint64_t RegistrationNumber() const { return registrationNumber_; }
-  void SetRegistrationNumber(uint64_t number) { registrationNumber_ = number; }
+  //! Position in StatCO's registration order. A device written up to this number already
+  //! holds this variable's device-side pointer.
+  uint64_t GetManagedRegNum() const { return managedRegNum_; }
+  void SetManagedRegNum(uint64_t number) { managedRegNum_ = number; }
 
  private:
   std::vector<amd::Memory*> dMem_;  //!< Per-device memory objects; index matches g_devices
@@ -111,10 +106,9 @@ class Var {
   FatBinaryInfo** modules_;         //!< Owning fat binary; nullptr for dynamic COs
   void* managedVarPtr_;             //!< Managed storage, or its host shadow ptr (DVK_Managed)
   size_t align_;                    //!< Alignment of the managed allocation in bytes
-  //! Set once ihipMallocManaged has registered this storage with the SVM allocator.
-  bool svmRegistered_;
-  //! StatCO registration number (DVK_Managed); 0 until RegisterManagedVar assigns it
-  uint64_t registrationNumber_ = 0;
+  bool managedVarMapped_;           //! Set once ihipMallocManaged has run for this variable.
+  //! StatCO registration number; 0 until RegisterManagedVar assigns it
+  uint64_t managedRegNum_ = 0;
 };
 
 };  // namespace hip

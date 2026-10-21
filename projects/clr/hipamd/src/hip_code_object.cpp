@@ -415,7 +415,7 @@ hipError_t StatCO::RemoveFatBinary(FatBinaryInfo** module) {
   if (managedVarsIter != managedVars_.end()) {
     for (auto& managedVar : managedVarsIter->second) {
       hipError_t err = hipSuccess;
-      if (managedVar->IsSvmRegistered()) {
+      if (managedVar->IsManagedVarMapped()) {
         err = ihipFree(*(static_cast<void**>(managedVar->GetManagedVarPtr())));
       } else {
         void** pointer = static_cast<void**>(managedVar->GetManagedVarPtr());
@@ -489,7 +489,7 @@ void StatCO::RemoveAllFatBinaries() {
 
       // Free the managed memory allocation itself
       void** managed_ptr = static_cast<void**>(managed_var->GetManagedVarPtr());
-      if (managed_var->IsSvmRegistered()) {
+      if (managed_var->IsManagedVarMapped()) {
         [[maybe_unused]] hipError_t err = ihipFree(*managed_ptr);
         assert(err == hipSuccess);
       } else {
@@ -644,7 +644,7 @@ hipError_t StatCO::RegisterManagedVar(Var* var) {
   // No device has been written up to this number yet, so the next launch on each device
   // writes this variable's pointer and skips the ones it already wrote.
   const uint64_t registration = managedVarRegCount_.load(std::memory_order_relaxed) + 1;
-  var->SetRegistrationNumber(registration);
+  var->SetManagedRegNum(registration);
   managedVarRegCount_.store(registration, std::memory_order_release);
 
   managedVars_[var->ModuleInfo()].push_back(var);
@@ -694,7 +694,7 @@ hipError_t StatCO::InitManagedVarDevicePtr(int deviceId) {
     for (auto& var : vecIter.second) {
       // Variables registered at or before this point already have their pointer on this
       // device, so a dlopen that adds one does not rewrite the rest.
-      if (var->RegistrationNumber() <= written) {
+      if (var->GetManagedRegNum() <= written) {
         continue;
       }
 

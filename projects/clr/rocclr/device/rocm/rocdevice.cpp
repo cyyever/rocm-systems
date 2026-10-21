@@ -2635,9 +2635,7 @@ bool Device::writeDeviceGlobal(amd::Memory& dst, size_t offset, size_t size,
   if (target == nullptr || src == nullptr) {
     return false;
   }
-  // memory_copy runs on a ROCr-internal queue, so the write is not ordered against work the
-  // application queued. A blocking copy on the null stream instead would wait for that work,
-  // deadlocking whenever it is gated on something the host only does after the launch returns.
+  // ROCr runs this as a blit on its own utility queue and blocks until it completes.
   hsa_status_t status = Hsa::memory_copy(target + offset, src, size);
   if (status != HSA_STATUS_SUCCESS) {
     ClPrint(amd::LOG_ERROR, amd::LOG_MEM,

@@ -1469,18 +1469,11 @@ bool Device::writeDeviceGlobal(amd::Memory& dst, size_t offset, size_t size,
   if (src == nullptr) {
     return false;
   }
-  // The write lands as a CP CmdUpdateMemory packet, which transfers whole DWORDs to a
-  // DWORD-aligned destination.
-  constexpr size_t kDwordMask = sizeof(uint32_t) - 1;
-  if (((offset | size) & kDwordMask) != 0) {
-    return false;
-  }
   pal::Memory* devMem = getGpuMemory(&dst);
   if (devMem == nullptr) {
     return false;
   }
-  // A packet on the transfer queue, which no application stream feeds. That queue is
-  // created with enableSyncedBlit(), so the write has retired when writeRawData returns.
+  // PAL runs this as a CP packet on its own transfer queue and blocks until it completes.
   static_cast<const KernelBlitManager&>(xferMgr()).writeRawData(*devMem, offset, size, src);
   return true;
 }

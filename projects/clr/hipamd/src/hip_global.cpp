@@ -166,7 +166,7 @@ Var::Var(const std::string& name, DeviceVarKind dVarKind, void* pointer, size_t 
       size_(size),
       modules_(modules),
       managedVarPtr_(pointer),
-      svmRegistered_(false),
+      managedVarMapped_(false),
       align_(align),
       type_(0),
       norm_(0) {
@@ -266,17 +266,16 @@ hipError_t Var::GetStatDeviceVar(amd::Memory** mem, int deviceId) {
 }
 
 // ================================================================================================
-// Makes this managed variable's storage exist and be reachable from the device. Idempotent:
-// the eager path (Windows, or HIP_ENABLE_DEFERRED_LOADING=0) already did it at registration.
+// Makes this managed variable reachable from the device.
 hipError_t Var::EnsureManagedVarIsMapped() {
   void** pointer = static_cast<void**>(managedVarPtr_);
-  if (!svmRegistered_) {
+  if (!managedVarMapped_) {
     // `use_host_ptr` registers the host range that `__hipRegisterManagedVar` already
     // reserved and initialized as a fine-grain SVM buffer, leaving migration to HMM.
     // Passing false would allocate fresh storage and drop the initial value.
     const bool use_host_ptr = true;
     IHIP_RETURN_ONFAIL(ihipMallocManaged(pointer, size_, align_, use_host_ptr));
-    svmRegistered_ = true;
+    managedVarMapped_ = true;
   }
   if (dMem_.empty()) {
     ResizeDVar(g_devices.size());
