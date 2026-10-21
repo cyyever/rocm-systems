@@ -1724,8 +1724,9 @@ ncclResult_t rcclSelectAllReduce(struct ncclComm* comm, const void* sendbuff, vo
   // size a buffer. kThreshUnlimited = no upper bound (null table or explicit table entry);
   // env var 0 disables registered CE. Independent of the 2-shot selector
   // (ceNonRegMax/env, 0 = off) and ceARTmpBuf sizing.
+  const size_t ceArRegMin = rcclCeRegMinTab(archTable, ncclFuncAllReduce);
   const size_t ceArRegMax = rcclCeRegMaxTab(archTable, ncclFuncAllReduce);
-  const bool ceRegInWindow = ceArRegMax == kThreshUnlimited || msgBytes <= ceArRegMax;
+  const bool ceRegInWindow = rcclWindowFits(msgBytes, ceArRegMin, ceArRegMax);
   if (!cs.bestPreferredFound && !symEligible && ceAvailable && !hasSysmemSegment &&
       ((comm->config.CTAPolicy & NCCL_CTA_POLICY_ZERO) || force)) {
     rcclCollDecision cand = *decision;
