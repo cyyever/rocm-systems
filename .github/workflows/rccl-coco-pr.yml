@@ -41,6 +41,9 @@ on:
 
 permissions:
   contents: read
+  # Must be at least as wide as rccl-coco-run.yml's own permissions block, or
+  # GitHub rejects this whole workflow at parse time rather than at a job.
+  pull-requests: write
 
 # Cancelling is safe: coco traps SIGINT/SIGTERM and releases its allocations.
 concurrency:

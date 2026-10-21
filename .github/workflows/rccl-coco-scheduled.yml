@@ -33,6 +33,11 @@ on:
 
 permissions:
   contents: read
+  # Must be at least as wide as rccl-coco-run.yml's own permissions block, or
+  # GitHub rejects this whole workflow at parse time rather than at a job.
+  # mode=run itself never posts a PR comment, but the reusable workflow's
+  # request still must fit inside what this caller grants.
+  pull-requests: write
 
 jobs:
   setup:
