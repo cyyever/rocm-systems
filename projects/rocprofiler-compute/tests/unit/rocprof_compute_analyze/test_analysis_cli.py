@@ -60,7 +60,7 @@ def workload_with_operator_forest():
 
 
 def apply_torch_operator_glob(pattern):
-    args = argparse.Namespace(torch_operator=[pattern])
+    args = argparse.Namespace(operator=[pattern])
     cli = cli_analysis(args, {})
     workload = workload_with_operator_forest()
     pmc_group_keys = cli.apply_operator_filter(args, workload, "/workload", ["torch"])
@@ -126,12 +126,8 @@ def test_pre_processing_membw_auto_run(membw_collected, expect_called, monkeypat
         path=[["/tmp/test"]],
         verbose=0,
         time_unit="ns",
-        torch_operator=None,
-        triton_operator=None,
-        ml_api_operator=None,
-        torch_list_ops=False,
-        triton_list_ops=False,
-        ml_api_list_ops=False,
+        operator=None,
+        list_operators=None,
     )
     inst._OmniAnalyze_Base__args = args
 
@@ -162,76 +158,6 @@ def test_pre_processing_membw_auto_run(membw_collected, expect_called, monkeypat
     inst.pre_processing()
 
     assert len(membw_calls) == (1 if expect_called else 0)
-
-
-# -- parse_operator_patterns (torch_operator) -------------------------------
-
-
-def test_parse_patterns_basic():
-    """Single and multiple patterns are parsed correctly."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    args = argparse.Namespace(torch_operator=["relu"])
-    assert parse_operator_patterns(args, ["torch"]) == {"torch": ["relu"]}
-
-    args = argparse.Namespace(torch_operator=["relu", "conv2d"])
-    assert parse_operator_patterns(args, ["torch"]) == {"torch": ["relu", "conv2d"]}
-
-
-def test_parse_patterns_comma_split():
-    """Comma-separated patterns in a single arg are split."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    args = argparse.Namespace(torch_operator=["relu,conv2d"])
-    assert parse_operator_patterns(args, ["torch"]) == {"torch": ["relu", "conv2d"]}
-
-
-def test_parse_patterns_whitespace():
-    """Leading/trailing whitespace is stripped."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    args = argparse.Namespace(torch_operator=["  relu  ", " conv2d , linear "])
-    result = parse_operator_patterns(args, ["torch"])
-    assert result == {"torch": ["relu", "conv2d", "linear"]}
-
-
-def test_parse_patterns_empty():
-    """Flag given with no args defaults to '**'; absent flag returns None."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    parse = parse_operator_patterns
-    assert parse(argparse.Namespace(torch_operator=[]), ["torch"]) == {"torch": ["**"]}
-    assert parse(argparse.Namespace(torch_operator=None), ["torch"]) is None
-    assert parse(argparse.Namespace(), ["torch"]) is None
-
-
-def test_parse_operator_patterns_generic_attr():
-    """parse_operator_patterns reads the given dest attribute."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    args = argparse.Namespace(
-        triton_operator=["*matmul*,*softmax*"], torch_operator=None
-    )
-    assert parse_operator_patterns(args, ["triton"]) == {
-        "triton": ["*matmul*", "*softmax*"]
-    }
-    assert parse_operator_patterns(args, ["triton"]) != parse_operator_patterns(
-        args, ["torch"]
-    )
-    assert parse_operator_patterns(
-        argparse.Namespace(triton_operator=[]), ["triton"]
-    ) == {"triton": ["**"]}
-
-
-def test_parse_patterns_star():
-    """'*' is passed through as-is by the pattern parser."""
-    from rocprof_compute_analyze.analysis_cli import parse_operator_patterns
-
-    args = argparse.Namespace(torch_operator=["*"])
-    assert parse_operator_patterns(args, ["torch"]) == {"torch": ["*"]}
-
-    args = argparse.Namespace(torch_operator=["*,torch.relu"])
-    assert parse_operator_patterns(args, ["torch"]) == {"torch": ["*", "torch.relu"]}
 
 
 def test_operator_glob_relu_returns_relu_keys():
@@ -277,7 +203,7 @@ def test_list_operators_joint_backend_heading(capsys):
 
 
 def test_handle_operator_prints_matched_subtree(capsys):
-    args = argparse.Namespace(torch_operator=["*addmm*"])
+    args = argparse.Namespace(operator=["*addmm*"])
     cli = cli_analysis(args, {})
     workload = workload_with_operator_forest()
     cli.apply_operator_filter(args, workload, "/workload", ["torch"])
@@ -298,7 +224,7 @@ def test_apply_operator_filter_missed_glob_errors(monkeypatch):
         "rocprof_compute_analyze.analysis_cli.console_error",
         record_error,
     )
-    args = argparse.Namespace(torch_operator=["nomatch"])
+    args = argparse.Namespace(operator=["nomatch"])
     cli = cli_analysis(args, {})
     workload = workload_with_operator_forest()
     with pytest.raises(SystemExit) as excinfo:
@@ -312,7 +238,7 @@ def test_apply_operator_filter_missed_glob_errors(monkeypatch):
 
 
 def test_apply_operator_filter_keeps_nodes_from_requested_backend():
-    args = argparse.Namespace(torch_operator=["*"])
+    args = argparse.Namespace(operator=["torch:*"])
     cli = cli_analysis(args, {})
     workload = schema.Workload()
     workload.ml_api_call_trees = torch_parent_triton_child_forest()
@@ -341,10 +267,8 @@ def test_pre_processing_lists_operators_for_every_path(monkeypatch):
         path=[["/w1"], ["/w2"]],
         verbose=0,
         time_unit="ns",
-        torch_operator=None,
-        triton_operator=None,
-        list_torch_operators=True,
-        list_triton_operators=False,
+        operator=None,
+        list_operators=["torch"],
     )
     inst = cli_with_two_operator_workloads(args)
     listed_paths = []
@@ -384,8 +308,7 @@ def test_pre_processing_lists_operators_for_every_path(monkeypatch):
 def test_run_analysis_prints_matched_tree_for_every_path(monkeypatch):
     args = argparse.Namespace(
         path=[["/w1"], ["/w2"]],
-        torch_operator=["*addmm*"],
-        triton_operator=None,
+        operator=["*addmm*"],
         list_stats=False,
     )
     inst = cli_with_two_operator_workloads(args)

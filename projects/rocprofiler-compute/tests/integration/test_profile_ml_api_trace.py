@@ -57,7 +57,7 @@ def ml_api_trace_profiled_workload(
             workload_dir,
             [
                 "--experimental",
-                "--ml-api-trace",
+                "--trace-ml-api",
                 "--iteration-multiplexing",
             ],
             check_success=True,
@@ -88,8 +88,8 @@ def test_list_both_operators(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--list-torch-operators",
-        "--list-triton-operators",
+        "--list-operators",
+        "torch,triton",
         "--path",
         ml_api_trace_profiled_workload,
     ])
@@ -107,7 +107,8 @@ def test_list_torch_only_confines_tree_and_kernels(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--list-torch-operators",
+        "--list-operators",
+        "torch",
         "--path",
         ml_api_trace_profiled_workload,
     ])
@@ -125,7 +126,8 @@ def test_list_triton_only_confines_tree_and_kernels(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--list-triton-operators",
+        "--list-operators",
+        "triton",
         "--path",
         ml_api_trace_profiled_workload,
     ])
@@ -148,8 +150,8 @@ def test_filter_triton_selects_listed_kernel_ids(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--triton-operator",
-        "*",
+        "--operator",
+        "triton:*",
         "--path",
         ml_api_trace_profiled_workload,
     ])
@@ -166,8 +168,8 @@ def test_filter_torch_selects_listed_kernel_ids(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--torch-operator",
-        "*",
+        "--operator",
+        "torch:*",
         "--path",
         ml_api_trace_profiled_workload,
     ])
@@ -184,10 +186,9 @@ def test_filter_torch_and_triton_together(
     code = binary_handler_analyze_rocprof_compute([
         "--experimental",
         "analyze",
-        "--torch-operator",
-        "*",
-        "--triton-operator",
-        "*",
+        "--operator",
+        "torch:*",
+        "triton:*",
         "--path",
         ml_api_trace_profiled_workload,
     ])
