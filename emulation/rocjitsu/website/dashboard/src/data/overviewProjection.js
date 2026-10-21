@@ -108,11 +108,17 @@ export function selectOverviewProjection(data, filters, { range = 'ALL', catalog
     const points = configurations.map((row) => projectPoint(run, row));
     return { run, runId: run.runId, points, eligible: points.length > 0 && points.every((point) => point.durationSeconds !== null) };
   });
+  const attemptPoints = new Map(attempts.map(({ run, points }) => [run, points]));
   const plotted = resolved.id === '1W' ? attempts.filter(({ eligible }) => eligible).map(({ run }) => run) : candidates;
   const slots = createSlots(window.dayKeys, plotted, resolved.id);
   const latestIndex = slots.findLastIndex(({ run }) => run !== null);
-  const rows = configurations.map((row) => {
-    const points = slots.map(({ run, dayKey }) => ({ ...projectPoint(run, row), dayKey }));
+  const rows = configurations.map((row, rowIndex) => {
+    const points = slots.map(({ run, dayKey }) => {
+      const point = run ? attemptPoints.get(run)[rowIndex] : projectPoint(null, row);
+      // Row speedups and mutable wrappers are independent; source leaves stay original.
+      return { ...point, dayKey, results: point.results.map((result) => ({ ...result })),
+        reasons: point.reasons.map((reason) => ({ ...reason })) };
+    });
     const reference = points.find((point) => point.durationSeconds > 0) ?? null;
     for (const point of points) {
       const ratio = reference && point.durationSeconds > 0 ? reference.durationSeconds / point.durationSeconds : null;
