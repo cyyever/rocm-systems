@@ -1,16 +1,23 @@
-import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { readMaintainedExamplePublication } from '../helpers/maintainedExamplePublication.js';
 
-function maintainedPublication() {
-  const document = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
-  const [, index, catalog, run] = [...document.matchAll(/```json\n([\s\S]*?)\n```/g)]
-    .map(([, json]) => JSON.parse(json));
-  return { index, runs: [run], catalogs: { [run.benchmark_catalog]: catalog } };
-}
+test('documentation publication setup returns fresh independent nested objects on every call', () => {
+  const first = readMaintainedExamplePublication();
+  const second = readMaintainedExamplePublication();
+  expect(first).toEqual(second);
+  expect(first.index).not.toBe(second.index);
+  expect(first.runs[0]).not.toBe(second.runs[0]);
+  const catalog = first.runs[0].benchmark_catalog;
+  expect(first.catalogs[catalog]).not.toBe(second.catalogs[catalog]);
+  first.runs[0].configurations[0].benchmark_results.pop();
+  first.index.runFiles.length = 0;
+  delete first.catalogs[catalog].benchmark_definitions.gemm;
+  expect(readMaintainedExamplePublication()).toEqual(second);
+});
 
 test('maintained publication preserves literal policies, typed definitions and published export', () => {
-  const source = maintainedPublication();
+  const source = readMaintainedExamplePublication();
   const before = structuredClone(source);
   const { data, sourceData } = validatePublishedDashboardData(source);
   expect(data.schemaVersion).toBe(1);
@@ -25,7 +32,7 @@ test('maintained publication preserves literal policies, typed definitions and p
 });
 
 function repeatedPublication(left, right) {
-  const source = maintainedPublication();
+  const source = readMaintainedExamplePublication();
   const catalog = source.catalogs[source.runs[0].benchmark_catalog];
   Object.values(catalog.benchmark_definitions)[0].problem = { value: left };
   const secondCatalog = structuredClone(catalog);
@@ -71,7 +78,7 @@ test.each([
   ['zero duration', (s) => { s.runs[0].configurations[0].benchmark_results[0].durationSeconds = 0; }],
   ['nonfinite problem', (s) => { s.catalogs[s.runs[0].benchmark_catalog].benchmark_definitions.gemm.problem = { nested: [Infinity] }; }],
 ])('maintained validation rejects %s', (_, mutate) => {
-  const source = maintainedPublication();
+  const source = readMaintainedExamplePublication();
   mutate(source);
   expect(() => validatePublishedDashboardData(source)).toThrow();
 });
@@ -82,7 +89,7 @@ test.each([
   ['PR without source base', (s) => { s.runs[0].source.pullRequest = { number: 1 }; }],
   ['PR URL query', (s) => { s.runs[0].source.base = { branch: 'main', commit: 'b'.repeat(40) }; s.runs[0].source.pullRequest = { number: 1, url: 'https://github.com/ROCm/rocm-systems/pull/1?x=1' }; }],
 ])('maintained source contract rejects %s', (_, mutate) => {
-  const source = maintainedPublication();
+  const source = readMaintainedExamplePublication();
   mutate(source);
   expect(() => validatePublishedDashboardData(source)).toThrow();
 });

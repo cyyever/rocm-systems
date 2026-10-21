@@ -16,13 +16,13 @@ function descendants(node, predicate) {
 
 function renderOption(dataType) {
   const option = { id: 'fictional-scalar', name: 'Fictional scalar workload', suite: 'Triton', problem: { operation: 'gemm', dataType } };
-  const picker = BenchmarkGridPicker({ allOptions: [option], availableOptions: [option], selected: [], showingAll: false, onChange() {} });
+  const picker = BenchmarkGridPicker({ availableOptions: [option], selected: [], onChange() {} });
   return picker.props.renderOption({ key: option.id, role: 'option', 'aria-selected': true, tabIndex: -1 }, option, { selected: true });
 }
 
 it('grid groups interleaved suites contiguously without mutating exact options or losing bounded search', () => {
   const options = Array.from({ length: 60 }, (_, index) => ({ id: `exact-${index}`, name: `Workload ${index}`, suite: index % 2 ? 'Llama' : 'Triton', problem: { dataType: index } }));
-  const picker = BenchmarkGridPicker({ allOptions: options, availableOptions: options, selected: [], showingAll: false, onChange() {} });
+  const picker = BenchmarkGridPicker({ availableOptions: options, selected: [], onChange() {} });
   const suites = picker.props.options.map(picker.props.groupBy);
   expect(suites.filter((suite, index) => index === 0 || suite !== suites[index - 1])).toHaveLength(2);
   expect(new Set(picker.props.options)).toEqual(new Set(options));
@@ -32,7 +32,7 @@ it('grid groups interleaved suites contiguously without mutating exact options o
 });
 
 it('grid popup and long chip sets have viewport-bounded local scrolling', () => {
-  const picker = BenchmarkGridPicker({ allOptions: [], availableOptions: [], selected: [], showingAll: false, onChange() {} });
+  const picker = BenchmarkGridPicker({ availableOptions: [], selected: [], onChange() {} });
   expect(picker.props.limitTags).toBe(-1);
   expect(picker.props.sx['& .MuiAutocomplete-inputRoot']?.overflowY).toBe('auto');
   expect(picker.props.sx['& .MuiAutocomplete-inputRoot'].maxHeight).toContain('dvh');

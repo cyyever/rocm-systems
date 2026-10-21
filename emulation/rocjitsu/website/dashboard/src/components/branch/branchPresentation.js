@@ -1,4 +1,5 @@
 import { formatFullDate, shortSha } from '../../utils/formatters';
+import { hasConfiguration } from '../../data/runSchema';
 
 export function runOptionLabel(run) {
   return `${shortSha(run)} · ${run.branch} · ${formatFullDate(run.timestamp)} · ${run.runId}`;
@@ -12,11 +13,10 @@ export function filterRunOptions(options, { inputValue }) {
 export function configurationState(candidate, baseline, comparison, target, mode) {
   const matched = comparison.comparable.length;
   const excluded = comparison.notComparable.length;
-  const published = (run) => run?.configurations?.some((configuration) => configuration.target === target && configuration.thread_policy === mode);
   const reason = !candidate ? 'Candidate attempt unavailable'
     : !baseline ? 'No reference selected'
-      : !published(candidate) ? 'Candidate configuration not published'
-        : !published(baseline) ? 'Reference configuration not published'
+      : !hasConfiguration(candidate, target, mode) ? 'Candidate configuration not published'
+        : !hasConfiguration(baseline, target, mode) ? 'Reference configuration not published'
           : !matched ? (excluded ? 'No matched completed benchmarks' : 'No benchmarks in the selected suites or search') : null;
   return { matched, excluded, available: reason === null, reason,
     deltaSeconds: reason ? null : comparison.candidateDuration - comparison.baselineDuration,

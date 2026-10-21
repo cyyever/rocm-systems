@@ -1,6 +1,5 @@
 import { formatDuration, formatFullDate, shortSha } from '../../utils/formatters';
 import { commitTimestampFor } from '../../data/runOrdering';
-import { selectBenchmarkCatalog } from '../../data/selectors';
 import { resolveHistoryRange } from '../../config/historyRanges';
 
 export function benchmarkResultChoices(viewModel) {
@@ -23,10 +22,6 @@ export function filterBenchmarkOptions(options, query) {
   const normalized = query.trim().toLowerCase();
   return options.filter((option) => [option.name, option.suite, option.problem?.operation, option.problem?.dataType]
     .filter(Boolean).join(' ').toLowerCase().includes(normalized)).slice(0, 50);
-}
-
-export function explorerCatalog(data, filters) {
-  return selectBenchmarkCatalog(data, filters);
 }
 
 // Like canonical Overview, the range is commit-time based and anchored to published

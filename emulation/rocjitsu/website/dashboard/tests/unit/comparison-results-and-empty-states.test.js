@@ -53,6 +53,33 @@ test('a missing baseline is not mislabelled as catalog absence', () => {
   expect(html).not.toContain('No completed benchmark results are comparable between these runs.');
 });
 
+test('excluded cells preserve optional configuration presence and published status precedence on both sides', () => {
+  const source = benchmarkData.runs.at(-1);
+  const measured = source.tests[0];
+  const configuration = { target: measured.target, thread_policy: measured.mode };
+  for (const [configurations, label] of [
+    [undefined, 'Configuration not published'], [null, 'Configuration not published'], [[], 'Configuration not published'],
+    [[configuration], 'Unavailable in catalog'],
+    [[{ ...configuration, target: 'missing-target' }], 'Configuration not published'],
+    [[{ ...configuration, thread_policy: 'missing-policy' }], 'Configuration not published'],
+    [[{ ...configuration, target: 1250 }], 'Configuration not published'],
+    [[{ ...configuration, thread_policy: 1 }], 'Configuration not published'],
+  ]) {
+    const empty = { ...source, runId: 'empty', configurations, tests: [] };
+    const failed = { ...source, runId: 'failed', configurations: null, tests: [{ ...measured, status: 'failed', durationSeconds: null }] };
+    const before = structuredClone([empty, failed]);
+    for (const [baseline, candidate] of [[empty, failed], [failed, empty]]) {
+      const html = renderComparison(baseline, candidate);
+      const row = html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g).find((entry) => entry.includes(measured.name));
+      const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((entry) => entry[1]);
+      expect(cells[baseline === empty ? 3 : 4]).toContain(label);
+      expect(cells[baseline === empty ? 4 : 3]).toContain('Failed');
+      expect(cells[baseline === empty ? 4 : 3]).not.toContain('Configuration not published');
+    }
+    expect([empty, failed]).toEqual(before);
+  }
+});
+
 test('selected run labels retain one clock while metadata excludes bookkeeping clocks', () => {
   const html = renderComparison(benchmarkData.runs.at(-2), benchmarkData.runs.at(-1));
   const inputs = [...html.matchAll(/<input[^>]*role="combobox"[^>]*value="([^"]*)"/g)].map((match) => match[1]);

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test, vi } from 'vitest';
 import BenchmarksView from '../../src/components/views/BenchmarksView.jsx';
 import * as explorer from '../../src/components/benchmarks/benchmarkExplorer.js';
+import { selectBenchmarkCatalog } from '../../src/data/selectors.js';
 
 const charts = vi.hoisted(() => ({ props: [] }));
 vi.mock('../../src/components/benchmarks/BenchmarkHistoryChart.jsx', () => ({ default: (props) => { charts.props.push(props); return createElement('div', { 'data-testid': 'measured-chart' }); } }));
@@ -31,9 +32,9 @@ test('grid-first page has shared range, Add and inspect controls while retaining
 });
 
 test('eligible catalog follows explicit mode and empty mode is an empty analysis', () => {
-  expect(explorer.explorerCatalog(data, filters).available.map((test) => test.id)).toEqual(['a']);
-  expect(explorer.explorerCatalog(data, { ...filters, modes: ['default'] }).available.map((test) => test.id)).toEqual(['b']);
-  expect(explorer.explorerCatalog(data, { ...filters, modes: [] }).available).toEqual([]);
+  expect(selectBenchmarkCatalog(data, filters).available.map((test) => test.id)).toEqual(['a']);
+  expect(selectBenchmarkCatalog(data, { ...filters, modes: ['default'] }).available.map((test) => test.id)).toEqual(['b']);
+  expect(selectBenchmarkCatalog(data, { ...filters, modes: [] }).available).toEqual([]);
 });
 
 test('workload range slices canonical source by commit period without changing measurements', () => {

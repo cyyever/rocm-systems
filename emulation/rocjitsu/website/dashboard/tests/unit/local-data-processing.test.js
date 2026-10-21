@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { writeMaintainedFixtureDirectory } from '../fixtures/maintainedDataset.js';
 import { validateDashboardDataDirectory } from '../../scripts/validate-dashboard-data.mjs';
-const processing = await import('../../scripts/process-dashboard-data.mjs').catch(() => ({}));
+import * as processing from '../../scripts/process-dashboard-data.mjs';
 
 test('local processing validates before output and preserves source, modes and serializable backfill identities', async () => {
-  expect(typeof processing.processDashboardDataDirectory).toBe('function');
   const root = await mkdtemp(path.join(tmpdir(), 'schema2-processing-'));
   try {
     const source = await writeMaintainedFixtureDirectory(path.join(root, 'input'));

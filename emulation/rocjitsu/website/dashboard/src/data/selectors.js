@@ -81,7 +81,7 @@ export function selectBenchmarkSeries(data, filters, logicalTestId) {
   const { runs, labels } = labeledRuns(data);
   return { runs, labels, series: pairsFor(filters).map((pair, index) => {
     const records = runs.map((run) => {
-      const test = selected(run, filters).find((t) => t.target === pair.target && t.mode === pair.mode && t.logicalTestId === logicalTestId);
+      const test = (run?.tests ?? []).find((t) => testMatches(t, filters) && t.target === pair.target && t.mode === pair.mode && t.logicalTestId === logicalTestId);
       return test ? { run, test } : null;
     });
     return { ...pair, name: `${pair.target} ${pair.mode}`, color: targetColor(pair.target, index), records,

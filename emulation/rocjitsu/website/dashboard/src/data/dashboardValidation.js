@@ -224,10 +224,8 @@ export function validatePublishedDashboardData({ index, runs, runErrors = [], ca
     } catch (error) { failures.push(`- ${file}: ${error.message}`); }
   });
   if (failures.length) throw new Error(`Dashboard data failed validation:\n${failures.join('\n')}`);
-  const ids = new Set(); const commits = new Map(); const definitions = new Map();
+  const commits = new Map(); const definitions = new Map();
   for (const run of normalizedRuns) {
-    if (ids.has(run.runId)) throw new Error(`Duplicate run ID ${run.runId}`);
-    ids.add(run.runId);
     const sha = run.provenance.rocjitsuCommitSha; const timestamp = Date.parse(run.commitTimestamp);
     if (commits.has(sha) && commits.get(sha) !== timestamp) throw new Error(`Commit ${sha} has conflicting committedAt values`);
     commits.set(sha, timestamp);

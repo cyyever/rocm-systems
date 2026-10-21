@@ -2,6 +2,20 @@ import { expect, test } from 'vitest';
 import { validatePublishedDashboardData, validatePublishedResult } from '../../src/data/dashboardValidation.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
+test('duplicate identities retain exact mixed-invalid aggregation and source order', () => {
+  const source = createMaintainedPublication();
+  source.runs[24].id = source.runs[0].id;
+  source.index.runFiles[24] = `runs/side-branches/${source.runs[0].id}.json`;
+  source.runs[1].schemaVersion = 99;
+  const before = structuredClone(source);
+  expect(() => validatePublishedDashboardData(source)).toThrow(
+    'Dashboard data failed validation:\n' +
+    '- runs/default-branch/fictional-develop-01.json: Run fictional-develop-01 has unsupported schema version 99; expected maintained schema 1\n' +
+    '- runs/side-branches/fictional-develop-00.json: Duplicate run ID fictional-develop-00',
+  );
+  expect(source).toEqual(before);
+});
+
 const invalidCases = [
   ['unsafe repository', (s) => { s.siteConfig = { repository: 'javascript:alert(1)', isBeta: true, canonicalBranch: 'develop' }; }, /repository URL/],
   ['credential URL', (s) => { s.siteConfig = { repository: 'https://name:secret@example.test/', isBeta: true, canonicalBranch: 'develop' }; }, /repository URL/],

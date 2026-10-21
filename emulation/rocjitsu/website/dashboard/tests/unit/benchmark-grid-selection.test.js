@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import BenchmarksView from '../../src/components/views/BenchmarksView.jsx';
 import { benchmarkData } from '../fixtures/publishedData.js';
-import { selectBenchmarkSeries } from '../../src/data/selectors.js';
+import { selectBenchmarkCatalog, selectBenchmarkSeries } from '../../src/data/selectors.js';
 import * as model from '../../src/components/benchmarks/benchmarkExplorer.js';
 
 test('grid-first empty page does not resurrect legacy Single/Grid or aggregate modes', () => {
@@ -46,6 +46,6 @@ test('catalog respects target membership as well as suites without hiding failur
     { logicalTestId: 'b', target: 'gfx1250', mode: 'single', status: 'completed' },
     { logicalTestId: 'c', target: 'gfx950', mode: 'single', status: 'timeout' },
   ] }] };
-  expect(model.explorerCatalog?.(data, { targets: ['gfx950'], suites: ['A'], modes: ['single'] })).toMatchObject({ available: [{ id: 'a' }], hiddenCount: 2 });
-  expect(model.explorerCatalog?.(data, { targets: [], suites: ['A'], modes: ['single'] }).available).toEqual([]);
+  expect(selectBenchmarkCatalog(data, { targets: ['gfx950'], suites: ['A'], modes: ['single'] })).toMatchObject({ available: [{ id: 'a' }], hiddenCount: 2 });
+  expect(selectBenchmarkCatalog(data, { targets: [], suites: ['A'], modes: ['single'] }).available).toEqual([]);
 });

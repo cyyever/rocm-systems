@@ -1,8 +1,8 @@
 # Bundled IBM Plex fonts
 
 This directory contains the dashboard's bundled IBM Plex WOFF2 fonts and their
-license files. IBM Plex Sans is a variable font; the bundled 400/500/600 filenames
-contain the same variable face. IBM Plex Mono has separate 400/500/600 faces.
+license files. IBM Plex Sans is a variable font; the 400/500/600 declarations
+share `ibm-plex-sans-400.woff2`. IBM Plex Mono has separate 400/500/600 faces.
 
 `src/index.css` declares the six normal-weight faces with local relative `url()`
 references so Vite processes them in development and production. No font CDN is

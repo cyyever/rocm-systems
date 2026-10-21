@@ -19,8 +19,8 @@ describe('v10 bundled fonts', () => {
     expect(faces).toHaveLength(6);
     for (const family of ['sans', 'mono']) {
       for (const weight of [400, 500, 600]) {
-        const filename = `ibm-plex-${family}-${weight}.woff2`;
-        const face = faces.find((item) => item.includes(filename));
+        const face = faces.find((item) => item.includes(`font-family: 'IBM Plex ${family === 'sans' ? 'Sans' : 'Mono'}'`) && item.includes(`font-weight: ${weight};`));
+        const filename = `ibm-plex-${family}-${family === 'sans' ? 400 : weight}.woff2`;
         expect(face).toBeDefined();
         expect(face).toContain(`font-weight: ${weight}`);
         expect(face).toContain('font-display: swap');

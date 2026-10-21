@@ -80,6 +80,30 @@ test('Largest Changes excludes invalid endpoints and preserves empty/unavailable
   expect(render([])).toContain('No configurations selected');
 });
 
+test('Largest Changes keeps first duplicate reference, strict special-string IDs, ties and inputs', () => {
+  const ids = ['__proto__', 'constructor', '1', 'missing'];
+  const first = { durationSeconds: 100 };
+  const row = { ...projection.rows[0], cohortIds: ids,
+    reference: { ...point, results: [
+      { id: '__proto__', result: first }, { id: '__proto__', result: { durationSeconds: 1 } },
+      { id: 'constructor', result: { durationSeconds: 100 } },
+      { id: 1, result: { durationSeconds: 1 } }, { id: '1', result: { durationSeconds: 100 } },
+    ] },
+    latest: { ...point, results: ids.map((id) => ({ id, result: { name: `name-${id}`, suite: 'Triton', durationSeconds: 110 } })) },
+  };
+  const before = structuredClone(row);
+  const html = renderToStaticMarkup(createElement(LargestChanges, { projection: { ...projection, catalogId: 'current', rows: [row] } }));
+  expect([...html.matchAll(/data-workload="([^"]+)"/g)].map((match) => match[1])).toEqual(['__proto__', '1', 'constructor'].sort((a, b) => a.localeCompare(b)));
+  expect((html.match(/\+10\.0%/g) ?? [])).toHaveLength(3);
+  expect(row).toEqual(before);
+  expect(row.reference.results[0].result).toBe(first);
+  const empty = { ...row, latest: { ...row.latest, results: [] } };
+  expect(renderToStaticMarkup(createElement(LargestChanges, { projection: { ...projection, catalogId: 'current', rows: [empty] } }))).toContain('No comparable results');
+  const unusedReference = { ...row, reference: { ...row.reference, results: undefined } };
+  const filtered = { ...projection, catalogId: null, rows: [unusedReference] };
+  expect(renderToStaticMarkup(createElement(LargestChanges, { projection: filtered, catalogs: [] }))).toContain('No shared workloads');
+});
+
 test('catalog routing preserves unrelated query/hash and explicit selections', () => {
   expect(readDashboardRoute('https://example.test/').historyRange).toBe('1W');
   const route = readDashboardRoute('https://example.test/?catalog=cat-a&range=1M&targets=&view=overview&keep=yes#anchor');

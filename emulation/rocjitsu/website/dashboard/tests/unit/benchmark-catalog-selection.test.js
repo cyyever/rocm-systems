@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, expect, test, vi } from 'vitest';
 import BenchmarksView from '../../src/components/views/BenchmarksView.jsx';
 import { BenchmarkGridPicker } from '../../src/components/benchmarks/BenchmarkPicker.jsx';
-import { explorerCatalog } from '../../src/components/benchmarks/benchmarkExplorer.js';
 import { selectBenchmarkCatalog } from '../../src/data/selectors.js';
 
 const catalog = ['st', 'mt', 'absent', 'other-suite', 'other-target'].map((id) => ({
@@ -17,16 +16,14 @@ const data = { testCatalog: catalog, runs: [{ tests: catalog.filter(({ id }) => 
 const filters = { targets: ['gfx1250'], suites: ['Triton'] };
 const roots = [];
 
-test.each([
-  { name: 'shared selector', selectCatalog: selectBenchmarkCatalog },
-  { name: 'explorer delegate', selectCatalog: explorerCatalog },
-])('$name resolves omitted result suites from the catalog', ({ selectCatalog }) => {
+test('shared selector resolves omitted result suites from the catalog', () => {
   const input = { ...data, runs: data.runs.map((run) => ({ ...run,
     tests: run.tests.map((test) => { const result = { ...test }; delete result.suite; return result; }),
   })) };
   const before = structuredClone(input);
   for (const [scope, ids] of [
     [filters, ['st', 'mt']],
+    [{ ...filters, modes: null }, ['st', 'mt']],
     [{ ...filters, modes: ['single'] }, ['st']],
     [{ ...filters, modes: ['default'] }, ['mt']],
     [{ ...filters, modes: ['single', 'default'] }, ['st', 'mt']],
@@ -36,9 +33,10 @@ test.each([
     [{ ...filters, targets: ['gfx950'] }, ['other-target']],
     [{ ...filters, targets: [] }, []],
   ]) {
-    const result = selectCatalog(input, scope);
+    const result = selectBenchmarkCatalog(input, scope);
     expect(result.all).toBe(catalog);
     expect(result.available).toEqual(catalog.filter(({ id }) => ids.includes(id)));
+    result.available.forEach((entry) => expect(entry).toBe(catalog.find(({ id }) => id === entry.id)));
     expect(result.hiddenCount).toBe(catalog.length - ids.length);
   }
   expect(input).toEqual(before);
@@ -88,6 +86,7 @@ test('mounted benchmark picker defaults omitted modes to single and default and 
   picker.apply();
   expect(picker.cards()).toEqual(['mt']);
   for (const [scope, expected] of [
+    [{ ...filters, modes: null }, ['st', 'mt']],
     [{ ...filters, modes: ['single'] }, ['st']],
     [{ ...filters, modes: ['default'] }, ['mt']],
     [{ ...filters, modes: [] }, []],

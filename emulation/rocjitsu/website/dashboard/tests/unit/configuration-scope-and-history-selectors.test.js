@@ -22,6 +22,61 @@ test('policy-specific benchmark histories keep positive measurements and missing
   expect(selectBenchmarkCatalog(data, { ...filters, modes: [] }).available).toEqual([]);
 });
 
+test('benchmark history retains first-match identity, scope defaults, attempt order and unavailable points without mutation', () => {
+  const makeTest = (mode, status, durationSeconds) => ({ target: 'gfx1250', suite: 'Triton', logicalTestId: 'a', mode, status, durationSeconds });
+  const first = makeTest('single', 'failed', null);
+  const zero = makeTest('default', 'completed', 0);
+  const timeout = makeTest('single', 'timeout', null);
+  const nonfinite = makeTest('single', 'completed', Infinity);
+  const measured = makeTest('default', 'completed', 2);
+  const original = { runId: 'original', timestamp: '2026-01-01T12:00:00Z', commitTimestamp: '2026-01-01T00:00:00Z', provenance: { rocjitsuCommitSha: 'a'.repeat(40) }, tests: [
+    { ...first, suite: 'Other' }, { ...first, suite: undefined }, { ...first, logicalTestId: 'other' },
+    { ...first, target: 'gfx950' }, { ...first, mode: 'unknown' },
+    first, makeTest('single', 'completed', 99), zero,
+  ] };
+  const retry = { ...original, runId: 'retry', timestamp: '2026-01-02T12:00:00Z', tests: [timeout] };
+  const newer = { ...original, runId: 'newer', commitTimestamp: '2026-01-03T00:00:00Z', provenance: { rocjitsuCommitSha: 'b'.repeat(40) }, tests: [nonfinite, measured] };
+  const empty = { ...newer, runId: 'empty', tests: [] };
+  const omitted = { ...newer, runId: 'omitted', tests: undefined };
+  const nullable = { ...newer, runId: 'nullable', tests: null };
+  const input = { runs: [newer, retry, nullable, original, omitted, empty], testCatalog: [{ id: 'a', suite: 'Triton' }] };
+  const before = structuredClone(input);
+  const ordered = [original, retry, empty, newer, nullable, omitted];
+  const scope = { targets: ['gfx1250'], suites: ['Triton'] };
+  for (const [filters, modes] of [
+    [scope, ['single', 'default']], [{ ...scope, modes: null }, ['single', 'default']],
+    [{ ...scope, modes: ['single'] }, ['single']], [{ ...scope, modes: ['default'] }, ['default']],
+    [{ ...scope, modes: [] }, []], [{ ...scope, targets: [] }, []],
+    [{ ...scope, targets: ['unpublished-target'] }, ['single', 'default']],
+    [{ ...scope, suites: [] }, ['single', 'default']],
+    [{ ...scope, targets: ['gfx1250', 'gfx1250'], modes: ['default', 'single', 'single'] }, ['default', 'single', 'single']],
+  ]) {
+    const model = selectBenchmarkSeries(input, filters, 'a');
+    expect(model.runs).toEqual(ordered);
+    model.runs.forEach((run, index) => expect(run).toBe(ordered[index]));
+    expect(model.labels[0]).toContain('1/2');
+    expect(model.labels[1]).toContain('2/2');
+    expect(model.series.map(({ target, mode }) => [target, mode])).toEqual(filters.targets.flatMap((target) => modes.map((mode) => [target, mode])));
+    for (const series of model.series) {
+      const expected = series.mode === 'single' ? [first, timeout, null, nonfinite, null, null] : [zero, null, null, measured, null, null];
+      series.records.forEach((record, index) => {
+        const test = filters.suites.length && series.target === 'gfx1250' ? expected[index] : null;
+        if (!test) { expect(record).toBeNull(); expect(series.points[index]).toBeNull(); return; }
+        expect(record).toEqual({ run: ordered[index], test });
+        expect(record.run).toBe(ordered[index]);
+        expect(record.test).toBe(test);
+        if (test.status === 'completed' && Number.isFinite(test.durationSeconds)) {
+          expect(series.points[index]).toEqual({ value: test.durationSeconds, record });
+          expect(series.points[index].record).toBe(record);
+        } else expect(series.points[index]).toBeNull();
+      });
+    }
+  }
+  const missing = selectBenchmarkSeries(input, scope, 'missing-workload');
+  expect(missing.series.every(({ records, points }) => records.every((record) => record === null) && points.every((point) => point === null))).toBe(true);
+  expect(input).toEqual(before);
+});
+
 test('recent history includes only the latest 20 canonical executions and preserves failure denominators', () => {
   const recent = selectRecentRunSummaries(selectRecentRunAttempts(data).slice(0, 20), filters);
   expect(recent).toHaveLength(20);

@@ -24,6 +24,7 @@ import SectionCard from '../shared/SectionCard';
 import StatusChip from '../shared/StatusChip';
 import { selectRunComparison } from '../../data/selectors';
 import { compareRunExecution } from '../../data/runOrdering';
+import { hasConfiguration } from '../../data/runSchema';
 import {
   escapeHtml,
   formatDuration,
@@ -38,7 +39,7 @@ const NOISE_TOLERANCE = 3;
 
 function TestAvailability({ test, run, benchmark }) {
   const label = !run ? 'No run selected'
-    : !run.configurations?.some(({ target, thread_policy }) => target === benchmark.target && thread_policy === benchmark.mode)
+    : !hasConfiguration(run, benchmark.target, benchmark.mode)
       ? 'Configuration not published' : 'Unavailable in catalog';
   return run && test
     ? <StatusChip status={test.status} />

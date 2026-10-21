@@ -8,13 +8,13 @@ import BenchmarkResultDialog from '../benchmarks/BenchmarkResultDialog';
 import ChartPointSelector from '../benchmarks/ChartPointSelector';
 import SectionCard from '../shared/SectionCard';
 import CategoryTag from '../shared/CategoryTag';
-import { benchmarkRangeData, benchmarkResultChoices, boundedGridSelection, explorerCatalog } from '../benchmarks/benchmarkExplorer';
-import { selectBenchmarkSeries } from '../../data/selectors';
+import { benchmarkRangeData, benchmarkResultChoices, boundedGridSelection } from '../benchmarks/benchmarkExplorer';
+import { selectBenchmarkCatalog, selectBenchmarkSeries } from '../../data/selectors';
 import { historyRanges } from '../../config/historyRanges';
 import { formatFullDate } from '../../utils/formatters';
 
 export default function BenchmarksView({ data, filters, historyRange: controlledRange, onRangeChange, initialBenchmarkIds, selectedBenchmarks, onBenchmarksChange, selectedRunIds = [], onSelectRun, onClearSelectedRuns }) {
-  const catalog = useMemo(() => explorerCatalog(data, filters), [data, filters]);
+  const catalog = useMemo(() => selectBenchmarkCatalog(data, filters), [data, filters]);
   const [localRange, setLocalRange] = useState('ALL');
   const range = controlledRange ?? localRange;
   const changeRange = (next) => { setLocalRange(next); onRangeChange?.(next); };
@@ -90,7 +90,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
       </SectionCard>
       <Dialog open={draft !== null} onClose={() => setDraft(null)} fullWidth maxWidth="sm" aria-labelledby="add-benchmarks-title">
         <DialogTitle id="add-benchmarks-title">Add benchmarks</DialogTitle>
-        <DialogContent><Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose up to eight workloads. Options follow the selected targets, suites and thread policies.</Typography><BenchmarkGridPicker allOptions={catalog.all} availableOptions={catalog.available} hiddenCount={0} selected={draft ?? []} showingAll={false} maxSelected={8} onChange={setDraft} /></DialogContent>
+        <DialogContent><Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Choose up to eight workloads. Options follow the selected targets, suites and thread policies.</Typography><BenchmarkGridPicker availableOptions={catalog.available} selected={draft ?? []} maxSelected={8} onChange={setDraft} /></DialogContent>
         <DialogActions><Button color="inherit" onClick={() => setDraft(null)}>Cancel</Button><Button variant="contained" onClick={() => { changeSelection(draft ?? []); setDraft(null); }}>Apply selection</Button></DialogActions>
       </Dialog>
       <Dialog open={Boolean(inspectedBenchmark)} disableEnforceFocus={Boolean(selectedRecord)} onClose={closeInspector} fullWidth maxWidth="sm" aria-labelledby="inspect-results-title">

@@ -1,4 +1,4 @@
-export const MAX_TIMING_SECONDS = 4503599627370495;
+const MAX_TIMING_SECONDS = 4503599627370495;
 export const isSupportedNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
 export const isTimingNumber = (value) => isSupportedNumber(value) && value > 0 && value <= MAX_TIMING_SECONDS;

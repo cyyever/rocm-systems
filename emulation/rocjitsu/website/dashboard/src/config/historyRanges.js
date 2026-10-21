@@ -6,7 +6,7 @@ export const historyRanges = [
   { id: 'ALL', days: null, label: 'All available history', period: 'all available history' },
 ];
 
-export const historyRangeById = new Map(historyRanges.map((range) => [range.id, range]));
+const historyRangeById = new Map(historyRanges.map((range) => [range.id, range]));
 const compatibilityRanges = new Map([
   ['1D', { id: '1D', days: 1 }],
   ['6M', { id: '6M', days: 180 }],

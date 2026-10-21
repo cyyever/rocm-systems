@@ -15,9 +15,14 @@ export default function LargestChanges({ projection, catalogs = [] }) {
     const baseline = row.reference;
     const candidate = row.latest;
     if (!(candidate?.durationSeconds > 0 && baseline?.durationSeconds > 0)) return [];
+    let references;
     return candidate.results.flatMap(({ id, result }) => {
       if (sharedOnly && !sharedIds.has(id)) return [];
-      const reference = baseline.results.find((item) => item.id === id)?.result;
+      if (!references) {
+        references = new Map();
+        for (const item of baseline.results) if (!references.has(item.id)) references.set(item.id, item.result);
+      }
+      const reference = references.get(id);
       const delta = reference?.durationSeconds > 0 ? (result.durationSeconds - reference.durationSeconds) / reference.durationSeconds * 100 : null;
       return Number.isFinite(delta) ? [{ id, result, delta, row, baseline, candidate }] : [];
     });

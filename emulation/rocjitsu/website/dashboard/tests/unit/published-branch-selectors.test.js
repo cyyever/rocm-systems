@@ -1,11 +1,11 @@
 import { expect, test } from 'vitest';
 import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+import * as selectors from '../../src/data/branchSelectors.js';
+
 const data = validatePublishedDashboardData(createMaintainedPublication()).data;
-const selectors = await import('../../src/data/branchSelectors.js').catch(() => ({}));
 
 test('published branches use the inclusive publication-relative 30-day window and searchable branch/PR/SHA', () => {
-  expect(typeof selectors.selectPublishedBranches).toBe('function');
   const branches = selectors.selectPublishedBranches(data);
   expect(branches).toHaveLength(20);
   expect(branches[0].branch).toBe('fictional/optimization-20');
@@ -35,7 +35,6 @@ test('all qualifying branches are returned without a twenty-branch cap, newest e
 });
 
 test('automatic reference prefers the latest exact develop-base attempt and otherwise uses strictly earlier execution', () => {
-  expect(typeof selectors.selectAutomaticReference).toBe('function');
   const candidate = data.allRuns.find(({ runId }) => runId === 'fictional-branch-01');
   const base = data.runs.find(({ runId }) => runId === 'fictional-develop-20');
   const retry = { ...base, runId: 'retry-z', timestamp: candidate.timestamp };
@@ -50,7 +49,6 @@ test('automatic reference prefers the latest exact develop-base attempt and othe
 });
 
 test('configuration comparison is one exact pair and scope, including symmetric exclusions and seconds sorting', () => {
-  expect(typeof selectors.selectConfigurationComparison).toBe('function');
   const candidate = data.allRuns.find(({ runId }) => runId === 'fictional-branch-03');
   const baseline = data.runs.find(({ runId }) => runId === 'fictional-develop-23');
   const result = selectors.selectConfigurationComparison(candidate, baseline, { target: 'gfx1250', mode: 'single', suites: data.suites });

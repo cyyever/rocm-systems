@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readMaintainedExamplePublication } from '../helpers/maintainedExamplePublication.js';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,8 +8,8 @@ import { validateDashboardDataDirectory } from '../../scripts/validate-dashboard
 import { processDashboardDataDirectory } from '../../scripts/process-dashboard-data.mjs';
 
 function publicationBodies() {
-  const text = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
-  const [, index, catalog, run] = [...text.matchAll(/```json\n([\s\S]*?)\n```/g)].map(([, json]) => JSON.parse(json));
+  const { index, catalogs, runs: [run] } = readMaintainedExamplePublication();
+  const catalog = catalogs[run.benchmark_catalog];
   return { 'index.json': JSON.stringify(index), [run.benchmark_catalog]: JSON.stringify(catalog), [index.runFiles[0]]: JSON.stringify(run) };
 }
 const load = (bodies) => loadDashboardDataFiles({

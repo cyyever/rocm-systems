@@ -24,6 +24,38 @@ test('configuration availability uses explicit published modes and positive matc
   expect(presentation.configurationState(run, run, measured, 'gfx1250', 'single')).toMatchObject({ available: true, matched: 1, deltaSeconds: 0, deltaPercent: null });
 });
 
+test('configuration reasons preserve missing-run precedence and exact optional presence checks without mutation', () => {
+  const run = { configurations: [{ target: 'gfx1250', thread_policy: 'single' }] };
+  const comparison = { comparable: [{}], notComparable: [], candidateDuration: 0, baselineDuration: 0, aggregateDelta: null };
+  const absent = 'Candidate configuration not published';
+  const cases = [
+    { candidate: null, baseline: null, reason: 'Candidate attempt unavailable' },
+    { candidate: {}, baseline: null, reason: 'No reference selected' },
+    ...[undefined, null, [], [{ target: 'gfx950', thread_policy: 'single' }], [{ target: 'gfx1250', thread_policy: 'default' }]].map((configurations) => ({ candidate: { configurations }, baseline: run, reason: absent })),
+    { candidate: run, baseline: {}, reason: 'Reference configuration not published' },
+    { candidate: run, baseline: run, reason: null },
+    { candidate: run, baseline: run, target: null, reason: absent },
+    { candidate: run, baseline: run, target: undefined, reason: absent },
+    { candidate: run, baseline: run, mode: null, reason: absent },
+    { candidate: run, baseline: run, mode: undefined, reason: absent },
+    { candidate: { configurations: [{ target: 1250, thread_policy: 'single' }] }, baseline: run, target: '1250', reason: absent },
+    { candidate: { configurations: [{ target: 'gfx1250', thread_policy: 1 }] }, baseline: run, mode: '1', reason: absent },
+  ];
+  const before = structuredClone(cases);
+  for (const entry of cases) {
+    const target = Object.hasOwn(entry, 'target') ? entry.target : 'gfx1250';
+    const mode = Object.hasOwn(entry, 'mode') ? entry.mode : 'single';
+    expect(presentation.configurationState(entry.candidate, entry.baseline, comparison, target, mode)).toEqual({
+      matched: 1, excluded: 0, available: entry.reason === null, reason: entry.reason,
+      deltaSeconds: entry.reason ? null : 0, deltaPercent: null,
+    });
+  }
+  expect(cases).toEqual(before);
+  for (const [notComparable, reason] of [[[], 'No benchmarks in the selected suites or search'], [[{}], 'No matched completed benchmarks']]) {
+    expect(presentation.configurationState(run, run, { ...comparison, comparable: [], notComparable }, 'gfx1250', 'single').reason).toBe(reason);
+  }
+});
+
 test('real suite grouping sorts signed measured seconds by default and signed percentages on request', () => {
   const pair = (name, suite, base, next) => ({ candidateTest: { name, suite, testId: name, durationSeconds: next }, baselineTest: { durationSeconds: base }, delta: base ? ((next - base) / base) * 100 : null });
   const rows = [pair('small', 'Suite A', 1, 2), pair('large', 'Suite A', 100, 80), pair('zero', 'Suite A', 0, 0), pair('other', 'Suite B', 60, 55)];
