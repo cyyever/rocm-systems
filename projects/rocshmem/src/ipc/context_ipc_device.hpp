@@ -389,6 +389,32 @@ class IPCContext : public Context {
                                     const size_t* start_coord, const size_t* boundary,
                                     int ndim, size_t element_size, int root, uint64_t flags);
 
+  // Typed (templated) tile reduce helpers used by the type-erased wrappers above
+  template <typename T, ROCSHMEM_OP Op>
+  __device__ inline int tile_reduce_typed_impl(
+      rocshmem_team_t team, const void* src_data, const size_t* src_strides,
+      const size_t* start_coord, const size_t* boundary, int ndim, int root,
+      size_t segment_start, size_t segment_elems, size_t segment_capacity,
+      int worker_id, int worker_count);
+
+  template <typename T, ROCSHMEM_OP Op>
+  __device__ inline int tile_reduce_typed(
+      rocshmem_team_t team, void* dst_data, const void* src_data,
+      const size_t* dst_strides, const size_t* src_strides,
+      const size_t* start_coord, const size_t* boundary, int ndim, int root);
+
+  template <typename T, ROCSHMEM_OP Op>
+  __device__ inline int tile_reduce_typed_wave(
+      rocshmem_team_t team, void* dst_data, const void* src_data,
+      const size_t* dst_strides, const size_t* src_strides,
+      const size_t* start_coord, const size_t* boundary, int ndim, int root);
+
+  template <typename T, ROCSHMEM_OP Op>
+  __device__ inline int tile_reduce_typed_wg(
+      rocshmem_team_t team, void* dst_data, const void* src_data,
+      const size_t* dst_strides, const size_t* src_strides,
+      const size_t* start_coord, const size_t* boundary, int ndim, int root);
+
  private:
 
   //context class has IpcImpl object (ipcImpl_)
@@ -464,6 +490,9 @@ class IPCContext : public Context {
   __device__ void internal_fcollectmem_wave(rocshmem_team_t team, void *dst,
                                             const void *src, int nelems);
 
+  __device__ void internal_fcollectmem_wg(rocshmem_team_t team, void *dst,
+                                          const void *src, int nelems);
+
   __device__ void internal_sync(int pe, int PE_start, int stride, int PE_size,
                                 int64_t *pSync);
 
@@ -529,9 +558,6 @@ class IPCContext : public Context {
 
   //Temporary scratchpad memory used by internal barrier algorithms.
   int64_t *barrier_sync{nullptr};
-
-  //Struct defining memory ordering for atomic operations.
-  detail::atomic::rocshmem_memory_orders orders_{};
 
   //Buffer to perform Atomic store to enforce memory ordering
   int *fence_pool{nullptr};

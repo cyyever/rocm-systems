@@ -641,6 +641,11 @@ __device__ void IPCContext::fcollectmem_linear_wave(rocshmem_team_t team, void *
   internal_sync_wave(my_pe, pe_start, stride, pe_size, pSync);
 }
 
+__device__ void IPCContext::internal_fcollectmem_wg(rocshmem_team_t team, void *dst,
+                                                    const void *src, int nelems) {
+  fcollectmem_linear_wg(team, dst, src, nelems);
+}
+
 __device__ void IPCContext::fcollectmem_wg(rocshmem_team_t team, void *dst,
                                      const void *src, int nelems) {
   fcollectmem_linear_wg(team, dst, src, nelems);
