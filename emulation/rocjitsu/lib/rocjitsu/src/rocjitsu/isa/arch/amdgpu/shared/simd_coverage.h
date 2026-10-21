@@ -295,9 +295,11 @@ template <bool Extended, typename Slot>
   };
   if (!matches_mode(x) || !matches_mode(y))
     return false;
-  // Matching controls still permit arithmetic to raise host exception flags. The
-  // MODE-aware F32 helpers scope their own arithmetic; the remaining host multiply
-  // scopes itself. Register access, which can run callbacks, stays outside both.
+  // Matching controls still permit host computation to raise exception flags, so
+  // every slot route that computes on host floats scopes the environment itself:
+  // the MODE-aware F32 helpers, the remaining host multiply, and the RDNA3/3.5
+  // MIN/MAX comparisons. Raw-bit routes need none, and register access, which can
+  // run callbacks, stays outside every scope.
   struct Results {
     alignas(util::native<uint32_t>) uint32_t words[64]{};
     alignas(util::native<uint64_t>) uint64_t pairs[64]{};
@@ -436,6 +438,9 @@ template <bool Extended, typename Slot>
                                  : minmax::evaluate<fp_format::F32, minmax::MinNum>(policy, av, bv);
           break;
         }
+        // Both the comparisons and fmax/fmin below raise invalid on a signaling
+        // NaN, so scope the environment around all of them, not just the calls.
+        fp_mode::ScopedEnvironment environment(0);
         F selected = bf;
         if (slot.op == 10)
           util::stdx::where(af > bf, selected) = af;

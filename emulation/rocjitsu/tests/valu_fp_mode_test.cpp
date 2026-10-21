@@ -141,6 +141,17 @@ const std::vector<ArithmeticCase> kCases{
      {{6, 0x3f800001u}, {7, 0x3f800001u}},
      241u,
      FE_TONEAREST},
+    // A VOPD pair mixing arithmetic with MAX: the RDNA3 MIN/MAX slot computes on
+    // host floats, whose comparison and fmax both raise invalid on a signaling
+    // NaN. mxcsr_mask makes the harness assert the caller's flags survive.
+    {"gfx1100VopdMixedMaxSignalingNanKeepsHostFlags",
+     ROCJITSU_CODE_ARCH_RDNA3,
+     {0xc9140300u, 0x06060702u},
+     {{0, 0x3f800000u}, {1, 0x3f800000u}, {2, 0x7f800001u}, {3, 0x3f800000u}},
+     {{6, 0x40000000u}, {7, 0x3f800000u}},
+     240u,
+     FE_TONEAREST,
+     _MM_EXCEPT_MASK},
     {"gfx1150VopdDenormFlush",
      ROCJITSU_CODE_ARCH_RDNA3_5,
      {0xc9080300u, 0x06060702u},
