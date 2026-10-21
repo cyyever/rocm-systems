@@ -3330,8 +3330,22 @@ void Device::getHwEventTime(const amd::Event& event, uint64_t* start, uint64_t* 
     ClPrint(amd::LOG_INFO, amd::LOG_SIG, "No HW event to read time");
     *start = *end = 0;
   } else {
-    fetchSignalTime(reinterpret_cast<ProfilingSignal*>(hw_event)->signal_, getBackendDevice(),
-                    start, end);
+    // Read raw GPU ticks from the amd_signal_t and convert to nanoseconds using
+    // integer arithmetic.  This avoids hsa_amd_profiling_get_dispatch_time() which
+    // returns inverted/unreliable values for barrier signals on some hardware
+    // (e.g. gfx1171).  Using raw ticks for all signal types ensures consistent
+    // timestamps between barrier (event record) and dispatch (kernel) signals
+    // in the EventDD::time() path used by hipEventElapsedTime.
+    auto* ps = reinterpret_cast<ProfilingSignal*>(hw_event);
+    const auto* amdSignal = reinterpret_cast<const amd_signal_t*>(ps->signal_.handle);
+    uint64_t freq = 0;
+    Hsa::system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &freq);
+    if (freq == 0) freq = 1;
+    auto ticksToNs = [freq](uint64_t ticks) -> uint64_t {
+      return (ticks / freq) * 1000000000ULL + (ticks % freq) * 1000000000ULL / freq;
+    };
+    *start = ticksToNs(amdSignal->start_ts);
+    *end = ticksToNs(amdSignal->end_ts);
   }
 }
 

@@ -3250,10 +3250,15 @@ void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_ti
     return;
   }
 
-  // Order is important, we want to translate the end time first to ensure that packet duration is
-  // not impacted by clock measurement latency jitter.
+  // Translate end first to reduce clock measurement jitter impact on duration.
   time.end = TranslateTime(end);
   time.start = TranslateTime(start);
+
+  // Barrier packets on some hardware (e.g. gfx1171) write start_ts > end_ts.
+  // Swap to ensure the caller always sees start <= end.
+  if (time.start > time.end) {
+    std::swap(time.start, time.end);
+  }
 }
 
 void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) {
@@ -3301,32 +3306,30 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
   // clock read certainty is <4us.
   if (((t1_.GPUClockCounter - t0_.GPUClockCounter) >> 2) + t1_.GPUClockCounter < tick) SyncClocks();
 
-  // Good for ~300 yrs
-  // uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
-  // uint64_t gpudelta = t1_.GPUClockCounter - t0_.GPUClockCounter;
-  // int64_t offtick = int64_t(tick - t1_.GPUClockCounter);
-  //__int128 num = __int128(sysdelta)*__int128(offtick) +
-  //__int128(gpudelta)*__int128(t1_.SystemClockCounter);
-  //__int128 sysLarge = num / __int128(gpudelta);
-  // return sysLarge;
-
-  // Good for ~3.5 months.
+  // Use __int128 integer arithmetic to avoid double-precision loss that corrupts
+  // timestamps for signals with very close start/end ticks (e.g. barrier packets).
+  // Good for ~300 yrs.
   uint64_t system_tick = 0;
-  int64_t elapsed = 0;
-  double ratio;
+  double ratio = 0;
 
   // Valid ticks only need at most one SyncClocks.
   for (int i = 0; i < 2; i++) {
-    ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
-        double(t1_.GPUClockCounter - t0_.GPUClockCounter);
-    elapsed = int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)));
+    uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
+    uint64_t gpudelta = t1_.GPUClockCounter - t0_.GPUClockCounter;
+    int64_t offtick = int64_t(tick - t1_.GPUClockCounter);
+    __int128 num = __int128(sysdelta) * __int128(offtick) +
+                   __int128(gpudelta) * __int128(t1_.SystemClockCounter);
+    __int128 sysLarge = num / __int128(gpudelta);
+    system_tick = uint64_t(sysLarge);
+
+    // Compute ratio for historical_clock_ratio_ fallback below
+    ratio = double(sysdelta) / double(gpudelta);
 
     // Skip clock sync if under the extrapolation limit.
+    int64_t elapsed = int64_t(system_tick) - int64_t(t1_.SystemClockCounter);
     if (elapsed < max_extrapolation) break;
     SyncClocks();
   }
-
-  system_tick = uint64_t(elapsed) + t1_.SystemClockCounter;
 
   // tick predates HSA startup - extrapolate with fixed clock ratio
   if (tick < t0_.GPUClockCounter) {
