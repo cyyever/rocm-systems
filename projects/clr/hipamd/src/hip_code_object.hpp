@@ -10,6 +10,7 @@
 #include "hip_global.hpp"
 
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -224,9 +225,13 @@ class StatCO : public CodeObject {
   std::unordered_map<FatBinaryInfo**, std::vector<const void*> > module_to_hostFunctions_;
   //! Reverse mapping of vars
   std::unordered_map<FatBinaryInfo**, std::vector<const void*> > module_to_hostVars_;
-  //! Set once every variable in managedVars_ has had its device-side pointer written on that
-  //! device.
-  std::vector<std::atomic<bool>> allManagedDevPtrsWritten_;
+  //! Managed variables registered so far; never decremented, since removing a fat binary
+  //! only shrinks managedVars_. Each Var keeps the number it was given.
+  std::atomic<uint64_t> managedVarRegCount_{0};
+  //! Indexed by device id: the registration number this device's managed-variable pointers
+  //! have been written up to. Never grown in place, since std::atomic is neither copyable
+  //! nor movable.
+  std::vector<std::atomic<uint64_t>> managedDevPtrWrittenUpTo_;
 };
 
 };  // namespace hip

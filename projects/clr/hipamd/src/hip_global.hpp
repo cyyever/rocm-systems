@@ -72,22 +72,7 @@ class Var {
 
   hipError_t EnsureManagedVarIsMapped();
 
-  void ResizeDVar(size_t size) {
-    dMem_.resize(size);
-    managedDevPtrWritten_.resize(size, 0);
-  }
-
-  //! Whether this managed variable's device-side pointer has been written on
-  //! deviceId. Guarded by StatCO::sclock_.
-  bool IsManagedDevPtrWritten(int deviceId) const {
-    return static_cast<size_t>(deviceId) < managedDevPtrWritten_.size() &&
-        managedDevPtrWritten_[deviceId] != 0;
-  }
-  void SetManagedDevPtrWritten(int deviceId) {
-    if (static_cast<size_t>(deviceId) < managedDevPtrWritten_.size()) {
-      managedDevPtrWritten_[deviceId] = 1;
-    }
-  }
+  void ResizeDVar(size_t size) { dMem_.resize(size); }
 
   FatBinaryInfo** ModuleInfo() { return modules_; }
   DeviceVarKind GetVarKind() const { return dVarKind_; }
@@ -111,10 +96,13 @@ class Var {
   bool IsSvmRegistered() const { return svmRegistered_; }
   void SetSvmRegistered(bool val) { svmRegistered_ = val; }
 
+  //! Position in StatCO's managed-variable registration order. A device written up to this
+  //! number already holds this variable's device-side pointer.
+  uint64_t RegistrationNumber() const { return registrationNumber_; }
+  void SetRegistrationNumber(uint64_t number) { registrationNumber_ = number; }
+
  private:
   std::vector<amd::Memory*> dMem_;  //!< Per-device memory objects; index matches g_devices
-  //! Per-device "device pointer written" state (DVK_Managed); index matches g_devices
-  std::vector<uint8_t> managedDevPtrWritten_;
   std::string name_;                //!< Symbol name for code-object lookup (not a unique key)
   DeviceVarKind dVarKind_;          //!< Classification: regular, surface, texture, or managed
   size_t size_;                     //!< Size of the variable in bytes
@@ -123,8 +111,10 @@ class Var {
   FatBinaryInfo** modules_;         //!< Owning fat binary; nullptr for dynamic COs
   void* managedVarPtr_;             //!< Managed storage, or its host shadow ptr (DVK_Managed)
   size_t align_;                    //!< Alignment of the managed allocation in bytes
-  //! For Set once ihipMallocManaged has registered this storage with the SVM allocator.
+  //! Set once ihipMallocManaged has registered this storage with the SVM allocator.
   bool svmRegistered_;
+  //! StatCO registration number (DVK_Managed); 0 until RegisterManagedVar assigns it
+  uint64_t registrationNumber_ = 0;
 };
 
 };  // namespace hip

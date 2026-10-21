@@ -155,7 +155,7 @@ Var::Var(const std::string& name, DeviceVarKind dVarKind, size_t size, int type,
       modules_(modules),
       managedVarPtr_(nullptr),
       align_(0) {
-  ResizeDVar(g_devices.size());
+  dMem_.resize(g_devices.size());
 }
 
 // ================================================================================================
@@ -170,7 +170,7 @@ Var::Var(const std::string& name, DeviceVarKind dVarKind, void* pointer, size_t 
       align_(align),
       type_(0),
       norm_(0) {
-  ResizeDVar(g_devices.size());
+  dMem_.resize(g_devices.size());
 }
 
 // ================================================================================================
