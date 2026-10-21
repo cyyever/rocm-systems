@@ -709,19 +709,9 @@ static inline ncclResult_t rcclIbCastIflushMultiSeg(void* recvComm, int n, void*
            comm->devs[i].gpuFlush.qp.qp->qp_num, wrId);
       iflushRet = wrap_ibv_post_send(comm->devs[i].gpuFlush.qp.qp, &flushWrs[0], &bad_wr);
       TIME_STOP(4);
-      if (iflushRet != ncclSuccess) {
-        int posted = 0;
-        for (struct ibv_send_wr* w = &flushWrs[0]; w != NULL && w != bad_wr; w = w->next) posted++;
-        // RCCL: the flush event is armed only after a full post. Keep a prefix so Test() can drain it.
-        if (posted > 0) {
-          IbCastAddEvent(req, i);
-          req->type = NCCL_NET_IB_REQ_FAILED;
-          *request = req;
-          IbCastStatsFatalError(&comm->base.stats);
-          return ncclSuccess;
-        }
-        goto iflushFail;
-      }
+      // RCCL: only the tail read is signaled, so a prefix has no completion.
+      // iflushFail frees the request unless an earlier device already armed one.
+      if (iflushRet != ncclSuccess) goto iflushFail;
     }
 
     IbCastAddEvent(req, i);

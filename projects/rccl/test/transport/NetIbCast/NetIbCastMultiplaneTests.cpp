@@ -16,6 +16,7 @@
  * verifies multiple lookup scenarios.
  */
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -416,6 +417,73 @@ TEST_F(MultiplaneLoadTest, IPv6PipResolution) {
   EXPECT_EQ(pipGids[1].raw[15], 0x20);
 
   remove(path.c_str());
+}
+
+// A multi-read flush signals only the tail. If that post fails, the prefix has
+// no completion, so IbCastIflush must free the request instead of arming one.
+int g_flushNWrs = 0;
+int g_flushNSignaled = 0;
+
+extern "C" int FailFlushSignaledTail(struct ibv_qp*, struct ibv_send_wr* wr, struct ibv_send_wr** bad_wr) {
+  g_flushNWrs = 0;
+  g_flushNSignaled = 0;
+  struct ibv_send_wr* tail = wr;
+  for (struct ibv_send_wr* w = wr; w != nullptr; w = w->next) {
+    g_flushNWrs++;
+    if (w->send_flags & IBV_SEND_SIGNALED) g_flushNSignaled++;
+    tail = w;
+  }
+  if (bad_wr) *bad_wr = tail;
+  return ENOMEM;
+}
+
+TEST(NetIbCastFlushPrefix, FailedSignaledTailFreesRequest) {
+  auto* comm = static_cast<ncclIbRecvComm*>(std::calloc(1, sizeof(ncclIbRecvComm)));
+  ASSERT_NE(comm, nullptr);
+  comm->flushEnabled = 1;
+  comm->base.vProps.ndevs = 1;
+
+  ibv_context ctx;
+  ibv_qp qp;
+  std::memset(&ctx, 0, sizeof(ctx));
+  std::memset(&qp, 0, sizeof(qp));
+  ctx.ops.post_send = FailFlushSignaledTail;
+  qp.context = &ctx;
+  qp.qp_num = 1;
+  comm->devs[0].gpuFlush.qp.qp = &qp;
+
+  ibv_mr mr0, mr1;
+  std::memset(&mr0, 0, sizeof(mr0));
+  std::memset(&mr1, 0, sizeof(mr1));
+  mr0.rkey = 1;
+  mr1.rkey = 2;
+
+  ncclIbMrHandle handle;
+  std::memset(&handle, 0, sizeof(handle));
+  handle.nSegments = 2;
+  handle.segStart[0] = 0x1000;
+  handle.segLen[0] = 0x1000;
+  handle.segStart[1] = 0x2000;
+  handle.segLen[1] = 0x1000;
+  handle.segMrs[0][0] = &mr0;
+  handle.segMrs[1][0] = &mr1;
+
+  // [0x1800, 0x2800) overlaps both segments, so the flush posts two reads.
+  void* data = reinterpret_cast<void*>(static_cast<uintptr_t>(0x1800));
+  int size = 0x1000;
+  void* mhandle = &handle;
+  void* request = reinterpret_cast<void*>(static_cast<uintptr_t>(0x1));
+
+  const ncclResult_t ret = IbCastIflush(comm, 1, &data, &size, &mhandle, &request);
+
+  EXPECT_EQ(g_flushNWrs, 2);
+  EXPECT_EQ(g_flushNSignaled, 1);
+  EXPECT_EQ(ret, ncclSystemError);
+  EXPECT_EQ(request, nullptr);
+  EXPECT_EQ(comm->base.reqs[0].type, NCCL_NET_IB_REQ_UNUSED);
+  EXPECT_EQ(comm->base.reqs[0].events[0], 0);
+  EXPECT_EQ(comm->base.stats.fatalErrorCount, 1);
+  std::free(comm);
 }
 
 }  // namespace
