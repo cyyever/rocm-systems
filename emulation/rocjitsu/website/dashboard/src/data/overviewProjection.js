@@ -2,20 +2,25 @@ import { resolveHistoryRange } from '../config/historyRanges.js';
 import { commitShaFor, commitTimestampFor, sortRunsByCommit } from './runOrdering.js';
 import { configurationKey, hasConfiguration, THREAD_POLICIES } from './runSchema.js';
 
-const dayFor = (run) => new Date(commitTimestampFor(run)).toISOString().slice(0, 10);
+const utcDay = (timestamp) => new Date(timestamp).toISOString().split('T')[0];
+const dayTime = (day) => Date.parse(`${day}T00:00:00Z`);
+const dayFor = (run) => utcDay(commitTimestampFor(run));
 const shiftDay = (day, offset) => {
   const date = new Date(`${day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
+  return date.toISOString().split('T')[0];
 };
 
 function dateWindow(runs, generatedAt, range) {
-  const anchorDay = runs.length ? dayFor(runs.at(-1)) : generatedAt ? new Date(generatedAt).toISOString().slice(0, 10) : null;
+  const anchorDay = runs.length ? dayFor(runs.at(-1)) : generatedAt ? utcDay(generatedAt) : null;
   if (!anchorDay) return { anchorDay: null, startDay: null, dayKeys: [] };
   const startDay = range.id === 'ALL' ? (runs.length ? dayFor(runs[0]) : anchorDay)
-    : range.id === 'YTD' ? `${anchorDay.slice(0, 4)}-01-01` : shiftDay(anchorDay, -(range.days - 1));
+    : range.id === 'YTD' ? `${anchorDay.slice(0, -6)}-01-01` : shiftDay(anchorDay, -(range.days - 1));
   const dayKeys = [];
-  for (let day = startDay; day <= anchorDay; day = shiftDay(day, 1)) dayKeys.push(day);
+  for (let day = startDay; dayTime(day) <= dayTime(anchorDay); day = shiftDay(day, 1)) {
+    dayKeys.push(day);
+    if (day === anchorDay) break;
+  }
   return { anchorDay, startDay, dayKeys };
 }
 
@@ -98,7 +103,7 @@ export function selectOverviewProjection(data, filters, { range = 'ALL', catalog
   const resolved = resolveHistoryRange(range, { compatibility: true });
   const developRuns = sortRunsByCommit(data.runs.filter((run) => run.branch === (data.canonicalBranch ?? 'develop')));
   const window = dateWindow(developRuns, data.generatedAt, resolved);
-  const withinWindow = developRuns.filter((run) => dayFor(run) >= window.startDay && dayFor(run) <= window.anchorDay
+  const withinWindow = developRuns.filter((run) => dayTime(dayFor(run)) >= dayTime(window.startDay) && dayTime(dayFor(run)) <= dayTime(window.anchorDay)
     && (catalogId === null || run.catalogId === catalogId));
   const candidates = selectRuns(withinWindow, resolved.id);
   const configurations = configurationRows(data, filters, candidates);

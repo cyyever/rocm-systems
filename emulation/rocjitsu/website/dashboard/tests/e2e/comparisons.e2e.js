@@ -1,8 +1,11 @@
 import { fixtureRunPath } from '../fixtures/runPath.js';
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { formatDuration } from '../../src/utils/formatters.js';
+import { formatDuration, formatPercent } from '../../src/utils/formatters.js';
+import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { readChart } from './helpers/chart.js';
+import { readMetricGeometry, metricContainmentFailures } from './helpers/metricGeometry.js';
+import { selectRunComparison } from '../../src/data/selectors.js';
 import { installPublication, openDashboard, ready, selectRun } from './helpers/dashboard.js';
 
 const chartFor = (page) => page.getByRole('img', { name: 'Performance change by benchmark comparison chart' });
@@ -11,6 +14,154 @@ const bars = (page) => readChart(chartFor(page), (instance) => instance.getOptio
   candidate: point.comparison.candidateTest.durationSeconds,
   baseline: point.comparison.baselineTest.durationSeconds,
 })));
+for (const width of [1440, 390]) test(`numeric availability stays truthful and ordinary charts restore at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 900 });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const publication = createMaintainedPublication();
+  const scenarios = [
+    { id: 'fictional-develop-14', seconds: 1e-300, delta: null },
+    { id: 'fictional-develop-15', seconds: 2.5e-291, delta: 1.6e308 },
+    { id: 'fictional-develop-16', seconds: 5e-291, delta: 8e307 },
+    { id: 'fictional-develop-17', seconds: 1e-289, delta: 3.9999999999999994e306 },
+  ];
+  for (const { id, seconds } of [...scenarios, { id: 'fictional-branch-01', seconds: 4e15 }]) {
+    for (const config of publication.runs.find((run) => run.id === id).configurations) {
+      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    }
+  }
+  validatePublishedDashboardData(publication);
+  await installPublication(page, { publication });
+  const branch = publication.runs.find((run) => run.id === 'fictional-branch-01').source.branch;
+  await openDashboard(page, `/?${new URLSearchParams({ view: 'branch', branch, run: 'fictional-branch-01', reference: 'fictional-develop-14', manual: '1', target: 'gfx1250', mode: 'single', detail: '1' })}`);
+  const card = page.getByTestId('branch-config-gfx1250-single');
+  await expect(card).toContainText('Percentage unavailable');
+  await expect(card).not.toContainText('zero reference runtime');
+  await expect(card).toContainText('4 matched');
+  const result = page.getByTestId(`${width < 768 ? 'branch-mobile-result-' : 'branch-result-'}gfx1250/single:a`);
+  await expect(result).toBeVisible();
+  await expect(result).toContainText(formatDuration(1e-300));
+  await expect(result).toContainText(formatDuration(4e15));
+  await expect(result).toContainText('Percentage unavailable');
+  await expect(result).not.toContainText('zero reference runtime');
+  await expect(result).toContainText('more time');
+  const comparisonUrl = (baseline, candidate = 'fictional-branch-01') => `/?${new URLSearchParams({ view: 'compare', compareBaseline: baseline, compareCandidate: candidate, targets: 'gfx1250', modes: 'single' })}`;
+  for (const scenario of scenarios) {
+    await openDashboard(page, comparisonUrl(scenario.id));
+    await expectPair(page, 'fictional-branch-01', scenario.id);
+    await expect(metricValue(page, 'comparable')).toHaveText('4');
+    if (scenario.id === 'fictional-develop-17') {
+      await expect(chartFor(page)).toBeVisible();
+      const domain = await readChart(chartFor(page), (instance) => ({
+        extent: instance.getModel().getComponent('xAxis').axis.scale.getExtent(),
+        blank: instance.getModel().getComponent('xAxis').axis.scale.isBlank(),
+      }));
+      expect(domain.blank).toBe(false);
+      expect(domain.extent.every(Number.isFinite)).toBe(true);
+      expect(Number.isFinite(domain.extent[1] - domain.extent[0])).toBe(true);
+      expect(domain.extent[0]).toBeLessThan(domain.extent[1]);
+      const plotted = await bars(page);
+      expect(plotted).toHaveLength(4);
+      for (const point of plotted) {
+        expect(point.delta).toBe(scenario.delta);
+        expect(point.delta).toBeGreaterThanOrEqual(domain.extent[0]);
+        expect(point.delta).toBeLessThanOrEqual(domain.extent[1]);
+      }
+    } else {
+      await expect(chartFor(page)).toHaveCount(0);
+      await expect(page.getByText(scenario.delta === null
+        ? 'No percentage changes available. Measured results remain in the results table below.'
+        : 'Chart unavailable: percentage changes exceed the supported chart range. Measured results remain in the results table below.', { exact: true })).toBeVisible();
+    }
+    await page.getByText('View comparable results (4)', { exact: true }).click();
+    const rows = page.getByRole('table', { name: 'Comparable benchmark results' }).locator('tbody tr');
+    await expect(rows).toHaveCount(4);
+    for (const row of await rows.all()) {
+      await expect(row.getByRole('cell').nth(1)).toHaveText(formatDuration(scenario.seconds));
+      await expect(row.getByRole('cell').nth(2)).toHaveText(formatDuration(4e15));
+      await expect(row.getByRole('cell').nth(3)).toContainText(scenario.delta === null ? 'percentage unavailable' : formatPercent(scenario.delta));
+    }
+    await testInfo.attach(`numeric-${scenario.id}-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
+  }
+  await openDashboard(page, comparisonUrl('fictional-branch-01', 'fictional-develop-15'));
+  expect((await bars(page)).every((point) => point.delta === -100)).toBe(true);
+  await openDashboard(page, comparisonUrl('fictional-develop-00', 'fictional-develop-08'));
+  const ordinary = await bars(page);
+  expect(ordinary).toHaveLength(2);
+  expect(ordinary.every((point) => Number.isFinite(point.delta) && point.delta > -100 && point.delta < 100)).toBe(true);
+  await expect(page.getByText(/^Chart unavailable:/)).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+for (const width of [1440, 900, 390]) test(`comparison metric painted values remain contained at ${width}px`, async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width, height: 900 });
+  const publication = createMaintainedPublication();
+  for (const [id, seconds] of [['fictional-develop-17', 1e-289], ['fictional-develop-16', 2e15], ['fictional-branch-01', 4e15]]) {
+    for (const config of publication.runs.find((run) => run.id === id).configurations) {
+      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    }
+  }
+  const data = validatePublishedDashboardData(publication).data;
+  await installPublication(page, { publication });
+  const scenarios = [
+    ['extreme', 'fictional-develop-17', 'fictional-branch-01'],
+    ['long-totals', 'fictional-develop-16', 'fictional-branch-01'],
+    ['reverse', 'fictional-branch-01', 'fictional-develop-17'],
+    ['ordinary', 'fictional-develop-00', 'fictional-develop-08'],
+    ['unavailable', 'fictional-missing', 'fictional-branch-01'],
+  ];
+  for (const theme of ['light', 'dark']) for (const [scenario, baselineId, candidateId] of scenarios) {
+    await openDashboard(page, `/?${new URLSearchParams({ view: 'compare', compareBaseline: baselineId, compareCandidate: candidateId, targets: 'gfx1250', modes: 'single' })}`);
+    const toggle = page.getByRole('button', { name: theme === 'dark' ? 'Use dark theme' : 'Use light theme', exact: true });
+    if (await toggle.count()) await toggle.click();
+    const baseline = data.allRuns.find((run) => run.runId === baselineId);
+    const candidate = data.allRuns.find((run) => run.runId === candidateId);
+    const model = selectRunComparison(candidate, baseline, { targets: ['gfx1250'], modes: ['single'], suites: ['Triton', 'Llama'] });
+    const hasPair = Boolean(candidate && baseline);
+    const expected = [formatPercent(model.aggregateDelta), model.comparable.length ? formatDuration(model.candidateDuration) : '—', model.comparable.length ? formatDuration(model.baselineDuration) : '—', hasPair ? String(model.comparable.length) : '—', hasPair ? String(model.notComparable.length) : '—'];
+    const geometry = await readMetricGeometry(page);
+    expect(geometry.map((cell) => cell.text)).toEqual(expected);
+    await testInfo.attach(`metrics-${width}-${theme}-${scenario}`, { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
+    await testInfo.attach(`metrics-${width}-${theme}-${scenario}-scrolled`, { body: await page.screenshot(), contentType: 'image/png' });
+    expect(metricContainmentFailures(geometry), 'painted values must fit their own content bounds without adjacent/caption/commit collision').toEqual([]);
+    if (scenario === 'ordinary') expect(geometry.every((cell) => new Set(cell.value.map((line) => line.top)).size === 1)).toBe(true);
+    const commits = page.getByTestId('comparison-metric-aggregate-change').getByTestId('compared-commits');
+    if (hasPair) await expect(commits).toBeVisible();
+    else await expect(commits).toHaveCount(0);
+    if (scenario === 'extreme' && width === 1440 && theme === 'light') {
+      const value = metricValue(page, 'aggregate-change');
+      const saved = await value.evaluate((element) => {
+        const number = element.querySelector('[data-metric-number]');
+        const originals = [element, number].map((node) => node.getAttribute('style'));
+        element.style.overflowWrap = 'normal';
+        number.style.minWidth = 'auto';
+        number.style.overflowWrap = 'normal';
+        return originals;
+      });
+      try {
+        const negative = await readMetricGeometry(page);
+        expect(negative.map((cell) => cell.text)).toEqual(expected);
+        const failures = metricContainmentFailures(negative);
+        expect(failures).toContain('comparison-metric-aggregate-change: value outside right');
+        await testInfo.attach('metrics-isolated-negative', { body: JSON.stringify({ negative, failures }), contentType: 'application/json' });
+      } finally {
+        await value.evaluate((element, originals) => {
+          [element, element.querySelector('[data-metric-number]')].forEach((node, index) => {
+            if (originals[index] === null) node.removeAttribute('style');
+            else node.setAttribute('style', originals[index]);
+          });
+        }, saved);
+      }
+      expect(await value.evaluate((element) => [element, element.querySelector('[data-metric-number]')].map((node) => node.getAttribute('style')))).toEqual(saved);
+      const restored = await readMetricGeometry(page);
+      expect(metricContainmentFailures(restored)).toEqual([]);
+      expect(restored).toEqual(geometry);
+      await testInfo.attach('metrics-exact-restoration', { body: JSON.stringify(restored), contentType: 'application/json' });
+    }
+  }
+});
+
 const metricValue = (page, name) => page.getByTestId(`comparison-metric-${name}`).locator(':scope > .MuiTypography-root').nth(1);
 
 async function expectPair(page, candidate, baseline) {
@@ -120,28 +271,41 @@ test('branch-only publications keep comparison filters usable and long linked id
   await expect(metricValue(page, 'comparable')).toHaveText('4');
   // Branch measurements must not become canonical Overview measurements.
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
-  await expect(page.getByTestId('metric-card-latest-duration')).toContainText('No configurations selected');
+  const duration = page.getByTestId('metric-card-latest-duration');
+  await expect(page.getByRole('checkbox', { name: 'gfx1250', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'single', exact: true })).toBeChecked();
+  await expect(duration.locator('[data-configuration]')).toHaveCount(1);
+  await expect(duration.locator('[data-configuration="gfx1250/single"]')).toContainText('No shared workloads');
+  await expect(duration.locator('[data-configuration="gfx1250/single"] p').last()).toHaveText('No shared workloads');
+  await expect(page.getByTestId('speedup-empty-state')).toBeVisible();
+  await expect(page.getByTestId('performance-trend').getByRole('img')).toHaveCount(0);
+  await expect(page.getByTestId('recent-runs-table').locator('tbody tr')).toHaveCount(0);
+  await expect(page.getByTestId('largest-changes').locator('[data-change-state]')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Run Comparison', exact: true }).click();
   await expectPair(page, candidate.id, baseline.id);
   await expect(page.getByRole('checkbox', { name: 'single', exact: true })).toBeEnabled();
   await expect(metricValue(page, 'comparable')).toHaveText('4');
 });
 
-test('zero baselines remain measured, arbitrary metadata stays aligned and chart text is escaped', async ({ page }) => {
+test('positive overflow ratios remain measured, arbitrary metadata stays aligned and chart text is escaped', async ({ page }) => {
   const publication = createMaintainedPublication();
   const injected = '<img src=x onerror="window.__tooltipInjection=true">';
   for (const catalog of Object.values(publication.catalogs)) catalog.benchmark_definitions.b.name = injected;
   for (const [id, side] of [['fictional-develop-14', 'baseline'], ['fictional-branch-01', 'candidate']]) {
-    Object.assign(publication.runs.find((run) => run.id === id).provenance.auxiliary, { custom: side, same: false, [`${side}Only`]: 0 });
+    const run = publication.runs.find((run) => run.id === id);
+    Object.assign(run.provenance.auxiliary, { custom: side, same: false, [`${side}Only`]: 0 });
+    run.configurations.find((config) => config.target === 'gfx1250' && config.thread_policy === 'single')
+      .benchmark_results.find((result) => result.id === 'a').timing_results_s = [side === 'baseline' ? 1e-300 : 4e15];
   }
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=compare&compareCandidate=fictional-branch-01&compareBaseline=fictional-develop-14&targets=gfx1250&modes=single');
   await expect(metricValue(page, 'comparable')).toHaveText('4');
   await expect(page.getByText('1 percentage unavailable', { exact: true })).toBeVisible();
   await page.getByText(/^View comparable results/).click();
-  const zero = page.getByRole('table', { name: 'Comparable benchmark results' }).getByRole('row', { name: /Fictional GEMM/ });
-  await expect(zero.getByRole('cell').nth(1)).toHaveText(formatDuration(0));
-  await expect(zero).toContainText('percentage unavailable');
+  const measured = page.getByRole('table', { name: 'Comparable benchmark results' }).getByRole('row', { name: /Fictional GEMM/ });
+  await expect(measured.getByRole('cell').nth(1)).toHaveText(formatDuration(1e-300));
+  await expect(measured.getByRole('cell').nth(2)).toHaveText(formatDuration(4e15));
+  await expect(measured).toContainText('percentage unavailable');
   expect((await bars(page)).map((point) => point.id)).not.toContain('gfx1250/single:a');
   const metadata = page.getByTestId('metadata-row-auxiliary.custom');
   await expect(metadata.getByRole('cell').nth(0)).toHaveText('baseline');

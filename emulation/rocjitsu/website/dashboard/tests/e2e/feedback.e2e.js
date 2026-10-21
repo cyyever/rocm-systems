@@ -145,8 +145,10 @@ test('feedback: compared metadata highlights complete differing rows instead of 
     await theme(page, mode);
     const table = page.getByRole('table', { name: 'Run metadata differences', exact: true });
     await expect(table.getByText('Changed', { exact: true })).toHaveCount(0);
-    const different = page.getByTestId('metadata-row-sdk');
+    const different = page.getByTestId('metadata-row-auxiliary.sdk');
     await expect(different).toHaveAttribute('data-different', 'true');
+    await expect(different.getByRole('cell').nth(0)).toHaveText('test-b');
+    await expect(different.getByRole('cell').nth(1)).toHaveText('test-branch');
     const backgrounds = await different.locator('th, td').evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).backgroundColor));
     expect(backgrounds).toHaveLength(3);
     expect(new Set(backgrounds).size).toBe(1);

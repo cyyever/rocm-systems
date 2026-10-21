@@ -69,7 +69,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw ma
   const initialImmutable = policies.filter(({ url }) => /\/(runs|test-catalogs)\//.test(url));
   expect(initialImmutable).toHaveLength(publication.runs.length + Object.keys(publication.catalogs).length);
   expect(policies.filter(({ url }) => /\/index\.json/.test(url)).every(({ cache }) => cache === 'no-store')).toBe(true);
-  expect(initialImmutable.every(({ cache }) => cache === 'force-cache')).toBe(true);
+  expect(initialImmutable.every(({ cache }) => cache === 'no-store')).toBe(true);
 
   const before = indexFailures;
   status = 503;
@@ -95,7 +95,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw ma
   const normal = await fetchPolicies(page);
   const immutable = normal.filter(({ url }) => /\/(runs|test-catalogs)\//.test(url));
   expect(immutable.length).toBeGreaterThan(0);
-  expect(immutable.every(({ url, cache }) => cache === 'force-cache' && new URL(url).searchParams.get('reload') === generation)).toBe(true);
+  expect(immutable.every(({ url, cache }) => cache === 'no-store' && new URL(url).searchParams.get('reload') === generation)).toBe(true);
   expect(normal.filter(({ url }) => /\/index\.json/.test(url)).every(({ url, cache }) => cache === 'no-store' && !new URL(url).searchParams.has('reload'))).toBe(true);
 });
 

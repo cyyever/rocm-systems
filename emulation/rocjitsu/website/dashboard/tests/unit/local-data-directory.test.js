@@ -1,4 +1,6 @@
 import { Writable } from 'node:stream';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -114,6 +116,29 @@ function request(middleware, url) {
     });
   });
 }
+
+test.each(['/data/%00.json', '/data/nested/%00.json', '/data/%00/'])('rejects decoded NUL at the request boundary: %s', async (url) => {
+  await expect(request(createDashboardDataMiddleware(fixtureDataDirectory), url)).resolves.toMatchObject({ status: 400, body: Buffer.alloc(0) });
+});
+
+test('NUL rejection is request-local and a subsequent HTTP index request remains healthy', async () => {
+  const middleware = createDashboardDataMiddleware(fixtureDataDirectory);
+  const server = createServer((req, res) => middleware(req, res, () => res.end()));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const failed = await fetch(`${base}/data/%00.json`);
+    expect(failed.status).toBe(400);
+    expect(await failed.text()).toBe('');
+    const healthy = await fetch(`${base}/data/index.json`);
+    expect(healthy.status).toBe(200);
+    expect((await healthy.json()).runFiles[0]).toBe('runs/default-branch/fictional-develop-00.json');
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 
 test('serves JSON from the mounted /data/ path and blocks escapes', async () => {
   const middleware = createDashboardDataMiddleware(fixtureDataDirectory);

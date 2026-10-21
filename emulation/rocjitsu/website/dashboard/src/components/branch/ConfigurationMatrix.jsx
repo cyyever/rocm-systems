@@ -37,7 +37,7 @@ export default function ConfigurationMatrix({ candidate, reference, selection, s
             <Typography component="span" sx={{ fontFamily: monoFont, fontSize: summary.available ? 20 : 14, fontWeight: 600,
               color: summary.available && Number.isFinite(summary.deltaPercent) && summary.deltaPercent < -3 ? 'success.main' : summary.available && summary.deltaPercent > 3 ? 'error.main' : 'text.secondary' }}>{value}</Typography>
             <Typography component="span" variant="caption" color="text.secondary">{summary.available ? `${direction} · ${summary.matched} matched` : summary.reason}</Typography>
-            {summary.available && summary.deltaPercent === null && <Typography component="span" variant="caption" color="text.secondary">Percentage unavailable: zero reference runtime</Typography>}
+            {summary.available && summary.deltaPercent === null && <Typography component="span" variant="caption" color="text.secondary">{comparison.baselineDuration === 0 ? 'Percentage unavailable: zero reference runtime' : 'Percentage unavailable'}</Typography>}
           </ButtonBase>;
         })}
       </Fragment>)}

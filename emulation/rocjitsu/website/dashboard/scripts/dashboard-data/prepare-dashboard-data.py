@@ -35,6 +35,14 @@ def canonical(value):
     )
 
 
+def _json_identity(encoded):
+    """Compare numeric values without changing retained serialized source data."""
+    def integral_float(token):
+        value = float(token)
+        return int(value) if number(value) and value.is_integer() else value
+    return canonical(json.loads(encoded, parse_float=integral_float))
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -114,7 +122,8 @@ def validate_manifest_run(raw, declaration):
     require(not missing and not extra, f'Incomplete manifest matrix: missing={sorted(missing)} extra={sorted(extra)}')
     for result in raw['benchmark_results']:
         definition = {key: result[key] for key in ('suite', 'name', 'operation', 'problem')}
-        require(canonical(definition) == declaration['definitions'][result['id']],
+        encoded, expected = canonical(definition), declaration['definitions'][result['id']]
+        require(_json_identity(encoded) == _json_identity(expected),
                 f'Pinned workload definition mismatch: {result["id"]}')
 
 
@@ -288,8 +297,9 @@ def validate_consistency(inputs):
             if section == 'rocjitsu':
                 left = {k: v for k, v in left.items() if k != 'target_config_sha256'}
                 right = {k: v for k, v in right.items() if k != 'target_config_sha256'}
+            encoded_left, encoded_right = canonical(left), canonical(right)
             require(
-                canonical(left) == canonical(right),
+                _json_identity(encoded_left) == _json_identity(encoded_right),
                 f'Inconsistent {section} provenance across raw runs',
             )
         for key in ('warmups', 'samples', 'timeout_seconds', 'benchmark_suite'):
@@ -321,7 +331,7 @@ def normalize_runs(
             test_id = result['id']
             definition = {key: result[key] for key in ('suite', 'name', 'operation', 'problem')}
             encoded = canonical(definition)
-            require(test_id not in definitions or definitions[test_id] == encoded,
+            require(test_id not in definitions or _json_identity(definitions[test_id]) == _json_identity(encoded),
                     f'Conflicting workload definition: {test_id}')
             definitions[test_id] = encoded
             results = groups.setdefault((result['target'], result['thread_policy']), {})
@@ -385,8 +395,10 @@ def normalize_runs(
 
 def write_json(path, value):
     """Replace a file atomically; callers check immutable conflicts first."""
-    if path.exists() and canonical(read_json(path)) == canonical(value):
-        return
+    if path.exists():
+        existing, candidate = canonical(read_json(path)), canonical(value)
+        if _json_identity(existing) == _json_identity(candidate):
+            return
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix='.dashboard-', dir=path.parent)
     try:
@@ -437,8 +449,9 @@ def write_built_run(root, run, catalog):
     }
     for name, value in resources.items():
         if (root / name).exists():
+            existing, candidate = canonical(read_json(root / name)), canonical(value)
             require(
-                canonical(read_json(root / name)) == canonical(value),
+                _json_identity(existing) == _json_identity(candidate),
                 f'Immutable resource conflict: {name}',
             )
     for name, value in resources.items():

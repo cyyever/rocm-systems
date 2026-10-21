@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { readChart } from './helpers/chart.js';
+import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
+import { formatDuration } from '../../src/utils/formatters.js';
+import { clickLastCompletedChartPoint, readChart, selectedRunIds } from './helpers/chart.js';
 import { expectDialogTypographyContained } from './helpers/dialog.js';
 import { ensureGridBenchmark, expectLocalScroll, expectNoDocumentOverflow, inspectResult, openDashboard } from './helpers/dashboard.js';
 
@@ -36,7 +39,17 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   });
   await trend.tap({ position: { x: pixel[0], y: pixel[1] } });
   await trend.dispatchEvent('pointerleave', { pointerType: 'touch' });
-  await expect(page.getByTestId('performance-trend').getByRole('status')).toContainText(createMaintainedPublication().runs.find((run) => run.id === 'fictional-develop-23').provenance.rocjitsu.rocjitsu_commit_sha.slice(0, 8));
+  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const projection = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: ['single'] }, { range: '1W' });
+  const index = projection.slots.findIndex((slot) => slot.run?.runId === 'fictional-develop-23');
+  const status = page.getByTestId('performance-trend').getByRole('status');
+  await expect(status).toContainText('Attempt fictional-develop-23');
+  for (const row of projection.rows) {
+    const point = row.points[index];
+    await expect(status).toContainText(`${row.target} ${row.mode}: ${point.speedup.toFixed(3)}× · ${formatDuration(point.durationSeconds)}`);
+  }
+  const sha = projection.slots[index].run.provenance.rocjitsuCommitSha.slice(0, 8);
+  await expect(trend.getByRole('img').getByText(sha, { exact: false })).toBeVisible();
   await trend.press('Escape');
   await expect(page.getByTestId('performance-trend').getByRole('status')).toHaveCount(0);
 
@@ -73,6 +86,19 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   await expectLocalScroll(page.getByRole('region', { name: 'Compared run metadata scroll area' }));
   await expectNoDocumentOverflow(page);
   expect(errors).toEqual([]);
+});
+
+test('phone unscaled direct chart input opens the exact attempt and preserves selected markers', async ({ page }) => {
+  await openDashboard(page, '/?view=benchmarks');
+  expect(await page.evaluate(() => getComputedStyle(document.body).zoom)).toBe('1');
+  await ensureGridBenchmark(page, 'Fictional GEMM');
+  const chart = page.getByRole('img', { name: 'Fictional GEMM duration history', exact: true });
+  const clicked = await clickLastCompletedChartPoint(chart);
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('fictional-develop-23', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Thread policy', { exact: true }).locator('..')).toContainText(clicked.mode);
+  await dialog.getByRole('button', { name: 'Close details', exact: true }).click();
+  expect(await selectedRunIds(chart)).toEqual(['fictional-develop-23']);
 });
 
 test('phone branch list/detail restores local scroll, focus and exact selections with Back and Forward', async ({ page }) => {

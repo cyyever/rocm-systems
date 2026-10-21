@@ -2,6 +2,7 @@ import { fixtureRunPath } from '../fixtures/runPath.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
+import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
 import { downloadSource, installPublication, openDashboard, RAW_DATA_PREFIX, ready } from '../e2e/helpers/dashboard.js';
 
 async function artifactFiles(directory, prefix = '') {
@@ -96,11 +97,13 @@ test('a newer publication is available on reload without rebuilding the website 
   next.index.generatedAt = '2026-10-06T12:00:00.000Z';
   const run = structuredClone(next.runs[23]);
   run.id = 'fictional-next-publication';
-  run.source.commit = 'b'.repeat(40);
-  run.source.committedAt = '2026-10-06T10:00:00.000Z';
-  run.execution.completedAt = '2026-10-06T11:00:00.000Z';
+  run.provenance.rocjitsu.rocjitsu_commit_sha = 'b'.repeat(40);
+  run.provenance.rocjitsu.rocjitsu_commit_timestamp = '2026-10-06T10:00:00.000Z';
+  run.execution_summary.timestamp = '2026-10-06T10:30:00.000Z';
+  run.execution_summary.finished_at = '2026-10-06T11:00:00.000Z';
   next.runs.push(run);
   next.index.runFiles.push(fixtureRunPath(run));
+  validatePublishedDashboardData(next);
   await installPublication(page, { prefix: RAW_DATA_PREFIX, publication: next });
   await page.getByRole('button', { name: 'Reload all data' }).click();
   await ready(page);

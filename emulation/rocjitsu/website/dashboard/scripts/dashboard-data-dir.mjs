@@ -64,6 +64,11 @@ export function createDashboardDataMiddleware(dataDirectory) {
       res.end();
       return;
     }
+    if (relative.includes('\0')) {
+      res.statusCode = 400;
+      res.end();
+      return;
+    }
     if (!relative || relative.endsWith('/')) {
       res.statusCode = 404;
       res.end();

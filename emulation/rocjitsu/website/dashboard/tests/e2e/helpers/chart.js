@@ -33,6 +33,7 @@ export async function clickLastCompletedChartPoint(chart) {
   let previous;
   let position;
   let selectedMode;
+  let dimensions;
   await expect.poll(async () => {
     const point = await readChart(chart, (instance) => {
       const option = instance.getOption();
@@ -43,14 +44,23 @@ export async function clickLastCompletedChartPoint(chart) {
       return {
         position: instance.convertToPixel({ seriesIndex }, [option.xAxis[0].data[index], series.data[index].value]),
         mode: series.data[index].record.test.mode,
+        width: instance.getWidth(), height: instance.getHeight(),
       };
     });
     position = point.position;
+    dimensions = { width: point.width, height: point.height };
     selectedMode = point.mode;
     const stable = previous && Math.abs(previous[0] - position[0]) < 0.5 && Math.abs(previous[1] - position[1]) < 0.5;
     previous = position;
     return Boolean(stable);
   }).toBe(true);
-  await chart.click({ position: { x: position[0], y: position[1] } });
+  const box = await chart.boundingBox();
+  expect(box).not.toBeNull();
+  const rendered = { x: position[0] * box.width / dimensions.width, y: position[1] * box.height / dimensions.height };
+  expect(rendered.x).toBeGreaterThanOrEqual(0);
+  expect(rendered.x).toBeLessThan(box.width);
+  expect(rendered.y).toBeGreaterThanOrEqual(0);
+  expect(rendered.y).toBeLessThan(box.height);
+  await chart.click({ position: rendered });
   return { mode: selectedMode };
 }

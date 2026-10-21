@@ -43,6 +43,10 @@ def validate_index(index):
         generated_at,
     ):
         raise ValueError('Invalid index timestamp')
+    if not generated_at.endswith('Z') and (
+        int(generated_at[-5:-3]) > 23 or int(generated_at[-2:]) > 59
+    ):
+        raise ValueError('Invalid index timestamp')
     try:
         datetime.fromisoformat(generated_at.replace('Z', '+00:00'))
     except ValueError as error:

@@ -322,6 +322,7 @@ export async function loadDashboardDataFiles({
     if (typeof runFile !== 'string' || !RUN_FILE_PATTERN.test(runFile)) {
       return settle({ run: null, error: new Error(`Invalid run filename: ${String(runFile)}`) });
     }
+    let result;
     try {
       const run = await fetchJsonResource(
         withReloadToken(new URL(runFile, immutableBaseUrl), activeCacheGeneration),
@@ -330,12 +331,13 @@ export async function loadDashboardDataFiles({
         resourceType: 'run file',
         },
       );
-      return settle({ run, error: null });
+      result = { run, error: null };
     } catch (error) {
       // Cancellation is a caller decision about the whole load, never one skippable run.
       if (isLoadCancelled(error)) throw error;
-      return settle({ run: null, error });
+      result = { run: null, error };
     }
+    return settle(result);
   });
 
   const catalogPaths = [...new Set(runResults

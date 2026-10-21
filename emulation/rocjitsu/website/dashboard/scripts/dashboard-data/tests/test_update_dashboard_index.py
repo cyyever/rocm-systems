@@ -199,3 +199,36 @@ def test_existing_index_shape_and_values_are_strict(tmp_path, index):
     assert result.returncode != 0
     assert 'index' in result.stderr.lower() or 'timestamp' in result.stderr.lower()
     assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize('offset', ['+00:60', '-01:99', '+24:00', '-24:00'])
+@pytest.mark.parametrize('run_path', ['runs/default-branch/old.json', 'runs/default-branch/new.json'])
+def test_invalid_offset_rejects_retry_and_append_without_rewrite(tmp_path, offset, run_path):
+    data_dir = tmp_path / 'data'
+    data_dir.mkdir()
+    path = data_dir / 'index.json'
+    original = json.dumps({'generatedAt': f'2026-01-01T02:00:00{offset}',
+                           'runFiles': ['runs/default-branch/old.json']}).encode()
+    path.write_bytes(original)
+    result = invoke(data_dir, run_path)
+    assert result.returncode != 0
+    assert 'Invalid index timestamp' in result.stderr
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize('timestamp', ['2026-01-01T02:00:00Z', '2026-01-01T02:00:00+00:59',
+                                      '2026-01-01T02:00:00-23:59', '2024-02-29T02:00:00.123456+05:30'])
+def test_bounded_offsets_preserve_retry_bytes_and_append_order(tmp_path, timestamp):
+    data_dir = tmp_path / 'data'
+    data_dir.mkdir()
+    path = data_dir / 'index.json'
+    original = json.dumps({'generatedAt': timestamp, 'runFiles': ['runs/default-branch/old.json',
+                           'runs/side-branches/old.json']}).encode()
+    path.write_bytes(original)
+    retry = invoke(data_dir, 'runs/default-branch/old.json')
+    assert retry.returncode == 0, retry.stderr
+    assert path.read_bytes() == original
+    append = invoke(data_dir, 'runs/default-branch/new.json')
+    assert append.returncode == 0, append.stderr
+    assert json.loads(path.read_bytes())['runFiles'] == ['runs/default-branch/old.json',
+           'runs/side-branches/old.json', 'runs/default-branch/new.json']

@@ -3,6 +3,7 @@
 """Frozen-source CLI acceptance, using fictional timings and real consumer tools."""
 import copy
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -223,3 +224,106 @@ assert.deepEqual(view.rows[0].cohortIds,[]);
 assert.ok(view.rows[0].points.every(point=>point.durationSeconds===null && point.reason==='no-comparable-workloads'));
 console.log('Prepared disjoint suite: empty intersection is unavailable, never zero PASS');'''
     assert_ok(subprocess.run(['node', '--input-type=module', '-e', empty_script, str(file), projection_url], capture_output=True, text=True))
+
+
+def commit_numeric_pin(root, name):
+    repo = root / name
+    repo.mkdir()
+    content = f'name = "{name}"\n'
+    for identity in ('a', 'b'):
+        content += f'''[[cases]]
+id = "{identity}"
+suite = "Triton"
+name = "{identity}"
+operation = "Compute"
+targets = ["gfx950"]
+thread_policies = ["default"]
+params = {{shape = [1, 2], options = {{transpose = false}}, nested = {{value = 1, zero = 0}}}}
+'''
+    (repo / 'suite.toml').write_text(content)
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
+    git('init', '-q')
+    git('add', 'suite.toml')
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+        '-c', 'commit.gpgsign=false', 'commit', '--no-gpg-sign', '--no-signoff', '-qm', 'Independent numeric pin')
+    return repo, git('rev-parse', 'HEAD')
+
+
+def test_numeric_identity_actual_cli_updater_and_js_consumers(tmp_path):
+    # Both explicit pins exist before constructing any candidate raw variants.
+    pins = [commit_numeric_pin(tmp_path, name) for name in ('NumericA', 'NumericB')]
+    output = tmp_path / 'output'
+    originals = []
+    for index, ((repo, sha), token) in enumerate(zip(pins, ('1', '1e0'))):
+        value = fixture_input(name=repo.name, day=index + 1)
+        value['provenance']['corpus']['corpus_commit_sha'] = sha
+        value['provenance']['auxiliary'] = {'open': [None, False, '1e0', -0.0]}
+        for row in value['benchmark_results']:
+            row['problem']['nested'] = {'value': 'TOKEN', 'zero': 'ZERO'}
+        value['benchmark_results'][0]['timing_results_s'] = [9, 1, 4, 2]
+        value['benchmark_results'][1].update(status='failed', timing_results_s=[5, 2],
+                                              error='Fictional failure', exit_code=1)
+        path = tmp_path / 'numeric-raw.json'
+        text = json.dumps(value).replace('"TOKEN"', token).replace('"ZERO"', '-0.0')
+        path.write_text(text)
+        assert '"value": ' + token in path.read_text() and '-0.0' in path.read_text()
+        assert_ok(invoke(tmp_path, [], repo, sha, output=output, run_id=f'numeric-{index}',
+                         extra=('--raw-run', str(path))))
+        originals.append(json.loads((output / f'runs/default-branch/numeric-{index}.json').read_text()))
+        before = inventory(output)
+        # Equal parsed provenance, definition and summary spelling must reuse exact bytes.
+        path.write_text(text.replace('"wall_time_s": 1', '"wall_time_s": 1.0')
+                        .replace('"value": ' + token, '"value": 1.0'))
+        assert_ok(invoke(tmp_path, [], repo, sha, output=output, run_id=f'numeric-{index}',
+                         extra=('--raw-run', str(path))))
+        assert inventory(output) == before
+        print(json.dumps({'pin': sha, 'catalog': repo.name, 'raw_token': token, 'byte_reuse': True}))
+    parsed = index_and_process(output, ['numeric-0', 'numeric-1'])
+    # Parsed processor result, not raw Node stdout; JS JSON has one numeric type.
+    (tmp_path / 'processed-parsed.json').write_text(json.dumps(parsed, indent=2))
+    assert len(parsed['sourceData']['catalogs']) == 2 and len(parsed['data']['runs']) == 2
+    assert parsed['sourceData']['runs'] == originals
+    for index, run in enumerate(parsed['data']['runs']):
+        assert run['runId'] == f'numeric-{index}'
+        source = originals[index]
+        assert source['source'] == {'branch': 'develop', 'message': 'Fictional source-boundary test'}
+        assert source['provenance']['auxiliary'] == {'open': [None, False, '1e0', -0.0], 'tensile_commit_sha': 'd' * 40}
+        catalog = parsed['sourceData']['catalogs'][source['benchmark_catalog']]
+        assert catalog['membership'] == {'gfx950': {'default': ['a', 'b']}}
+        emitted = json.loads((output / source['benchmark_catalog']).read_text())
+        for identity in ('a', 'b'):
+            original_problem = emitted['benchmark_definitions'][identity]['problem']
+            assert type(original_problem['nested']['value']) is (int if index == 0 else float)
+            assert original_problem['nested']['value'] == 1
+            assert type(original_problem['nested']['zero']) is float
+            assert math.copysign(1, original_problem['nested']['zero']) == -1
+            problem = catalog['benchmark_definitions'][identity]['problem']
+            assert type(problem['nested']['value']) in (int, float) and problem['nested']['value'] == 1
+            assert type(problem['nested']['zero']) in (int, float) and problem['nested']['zero'] == 0
+            assert type(problem['shape']) is list and problem['shape'] == [1, 2]
+            assert all(type(v) in (int, float) for v in problem['shape'])
+            assert problem['options']['transpose'] is False
+        original_open = source['provenance']['auxiliary']['open']
+        assert type(original_open[-1]) is float and math.copysign(1, original_open[-1]) == -1
+        exported_open = parsed['sourceData']['runs'][index]['provenance']['auxiliary']['open']
+        assert type(exported_open) is list and exported_open[0] is None and exported_open[1] is False
+        assert type(exported_open[2]) is str and exported_open[2] == '1e0'
+        assert type(exported_open[3]) in (int, float) and exported_open[3] == 0
+        assert [(t['logicalTestId'], t['status'], t['timing_results_s'], t['durationSeconds']) for t in run['tests']] == [
+            ('a', 'completed', [9, 1, 4, 2], 3), ('b', 'failed', [5, 2], None)]
+        assert all(t['problem'] == {'shape': [1, 2], 'options': {'transpose': False},
+                                   'nested': {'value': 1, 'zero': 0}} for t in run['tests'])
+        for test in run['tests']:
+            assert type(test['problem']['nested']['value']) in (int, float)
+            assert type(test['problem']['nested']['zero']) in (int, float)
+            assert test['problem']['options']['transpose'] is False
+            assert all(type(v) in (int, float) for v in test['timing_results_s'])
+    before = inventory(output)
+    for token in ('true', '2', '"1"'):
+        path.write_text(text.replace('"TOKEN"', token) if '"TOKEN"' in text else
+                        text.replace('"value": 1e0', '"value": ' + token))
+        result = invoke(tmp_path, [], *pins[1], output=output, run_id='rejected-' + token.replace('"', ''),
+                        extra=('--raw-run', str(path)))
+        assert result.returncode == 1 and 'Pinned workload definition mismatch' in result.stderr
+        assert inventory(output) == before

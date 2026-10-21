@@ -1,3 +1,5 @@
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import { bindChartNativeInput } from './chartNativeInput';
 import ReactEChartsCore from 'echarts-for-react/esm/core';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart, ScatterChart } from 'echarts/charts';
@@ -20,6 +22,13 @@ echarts.use([
 ]);
 
 export default function Chart({ option, height = 280, ariaLabel, ariaDescribedBy, onEvents, onReady, lazyUpdate = true }) {
+  const cleanupInput = useRef(null);
+  useLayoutEffect(() => () => cleanupInput.current?.(), []);
+  const handleReady = useCallback((chart) => {
+    cleanupInput.current?.();
+    cleanupInput.current = bindChartNativeInput(chart);
+    onReady?.(chart);
+  }, [onReady]);
   const theme = useTheme();
   const tooltip = option.tooltip ? {
     backgroundColor: theme.palette.background.paper,
@@ -54,7 +63,7 @@ export default function Chart({ option, height = 280, ariaLabel, ariaDescribedBy
       notMerge
       lazyUpdate={lazyUpdate}
       onEvents={onEvents}
-      onChartReady={onReady}
+      onChartReady={handleReady}
       opts={{ renderer: 'canvas' }}
       style={{ width: '100%', height }}
       aria-label={ariaLabel}

@@ -9,7 +9,7 @@ function MeasuredChange({ row, measurement = 'seconds' }) {
   const { seconds, percent } = rowChanges(row);
   const direction = seconds < 0 ? 'less time' : seconds > 0 ? 'more time' : 'same time';
   return <Box sx={{ fontFamily: monoFont, fontVariantNumeric: 'tabular-nums', color: percent < -3 ? 'success.main' : percent > 3 ? 'error.main' : 'text.secondary' }}>
-    {measurement === 'percent' ? (percent !== null ? formatPercent(percent) : <Typography variant="caption">Percentage unavailable: zero reference runtime</Typography>)
+    {measurement === 'percent' ? (percent !== null ? formatPercent(percent) : <Typography variant="caption">{row.baselineTest.durationSeconds === 0 ? 'Percentage unavailable: zero reference runtime' : 'Percentage unavailable'}</Typography>)
       : seconds === null ? '—' : <>{seconds > 0 ? '+' : seconds < 0 ? '−' : ''}{formatDuration(Math.abs(seconds))} · {direction}</>}
   </Box>;
 }

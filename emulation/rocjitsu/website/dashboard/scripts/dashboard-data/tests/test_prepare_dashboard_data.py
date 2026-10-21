@@ -12,6 +12,11 @@ import shutil
 import sys
 import tempfile
 import unittest
+import importlib.util
+import math
+import runpy
+from unittest.mock import patch
+import pytest
 from manifest_fixture import declare_fixture
 
 HERE = Path(__file__).resolve().parent
@@ -1349,6 +1354,247 @@ class PrepareTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Immutable resource conflict', result.stderr)
         self.assertEqual(before, self.snapshot())
+
+
+@pytest.fixture
+def identity_producer():
+    spec = importlib.util.spec_from_file_location('identity_preparer', SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def normalize_identity(producer, inputs, **changes):
+    return producer.normalize_runs(inputs, **{
+        'run_id': 'identity', 'branch': 'develop', 'commit_message': 'Fictional',
+        'machine_id': 'fixture', 'trigger': 'manual', 'workflow_commit_sha': 'c' * 40,
+        'tensile_commit_sha': 'd' * 40, **changes})
+
+
+@pytest.mark.parametrize('first,last', [(1, 1.0), (1.0, 1), (0, -0.0), (-0.0, 0)])
+def test_numeric_identity_collector_preserves_original_values(identity_producer, first, last):
+    p = identity_producer
+    value = raw()
+    row = value['benchmark_results'][0]
+    row['problem'] = {'nested': [first, {'fraction': 1.25, 'null': None, 'text': '1e0'}]}
+    other = copy.deepcopy(row)
+    other.update(target='gfx1250', problem={'nested': [last, {'text': '1e0', 'null': None, 'fraction': 1.25}]})
+    value['benchmark_results'].append(other)
+    snapshot = p.canonical(value)
+    run, catalog = normalize_identity(p, [value])
+    actual = catalog['benchmark_definitions']['case-1']['problem']['nested'][0]
+    assert type(actual) is type(last)
+    assert actual == last
+    if actual == 0: assert math.copysign(1, actual) == math.copysign(1, last)
+    assert p.canonical(value) == snapshot
+    assert run['provenance'] == {**value['provenance'],
+        'rocjitsu': {**value['provenance']['rocjitsu'], 'workflow_commit_sha': 'c' * 40},
+        'auxiliary': {'tensile_commit_sha': 'd' * 40}}
+    prepared = run['configurations'][0]['benchmark_results'][0]
+    assert prepared['timing_results_s'] == [1, 9, 2]
+    prepared['timing_results_s'].append(7)
+    assert row['timing_results_s'] == [1, 9, 2]
+    assert run['configurations'][1]['benchmark_results'][0]['timing_results_s'] == [1, 9, 2]
+
+
+@pytest.mark.parametrize('left,right,equal', [
+    (1, 1.0, True), (0, -0.0, True), (1.25, 1.250, True),
+    ({'a': [1, None], 'b': False}, {'b': False, 'a': [1.0, None]}, True),
+    (True, 1, False), (False, 0, False), ('1', 1, False), (None, 'null', False),
+    (1.25, 1.5, False), (1, 2, False), ([1, 2], [2, 1], False),
+    ([1], [1, 2], False), ({'a': 1}, {'b': 1}, False),
+])
+def test_numeric_identity_provenance_typed_matrix(identity_producer, left, right, equal):
+    p = identity_producer
+    first, second = raw(), raw()
+    first['provenance']['auxiliary'] = {'value': left}
+    second['provenance']['auxiliary'] = {'value': right}
+    snapshot = p.canonical([first, second])
+    if equal:
+        p.validate_consistency([first, second])
+        second['execution_summary']['samples'] = 4
+        with pytest.raises(ValueError, match='^Inconsistent samples across raw runs$'):
+            p.validate_consistency([first, second])
+        second['execution_summary']['samples'] = 3
+    else:
+        with pytest.raises(ValueError, match='^Inconsistent auxiliary provenance across raw runs$'):
+            p.validate_consistency([first, second])
+    assert p.canonical([first, second]) == snapshot
+
+
+@pytest.mark.parametrize('equivalent', [True, False])
+def test_numeric_identity_duplicate_still_precedes_cardinality(identity_producer, equivalent):
+    first, second = raw(), raw()
+    second['benchmark_results'][0]['problem']['size'] = 8.0 if equivalent else True
+    expected = 'Duplicate result identity' if equivalent else 'Conflicting workload definition'
+    with pytest.raises(ValueError, match=expected):
+        normalize_identity(identity_producer, [first, second], workflow_commit_sha='bad')
+
+
+@pytest.mark.parametrize('field,invalid,error,message', [
+    ('status', None, KeyError, 'status'), ('timing_results_s', 1, TypeError, 'not iterable'),
+    ('error', None, KeyError, 'error'),
+])
+def test_numeric_identity_row_error_before_later_duplicate(identity_producer, field, invalid, error, message):
+    first = raw()
+    if invalid is None: del first['benchmark_results'][0][field]
+    else: first['benchmark_results'][0][field] = invalid
+    with pytest.raises(error, match=message):
+        normalize_identity(identity_producer, [first, raw()], workflow_commit_sha='bad')
+
+
+def test_numeric_identity_module_error_and_operand_order(identity_producer, tmp_path):
+    p = identity_producer
+    for values in ([], [raw(), raw('default')]):
+        with pytest.raises(ValueError, match='^Expected one consolidated raw execution$'):
+            normalize_identity(p, values, workflow_commit_sha='bad')
+    empty = raw()
+    empty['benchmark_results'] = []
+    empty_run, empty_catalog = normalize_identity(p, [empty])
+    assert empty_run['configurations'] == [] and empty_catalog['benchmark_definitions'] == {}
+    first, second = raw(), raw()
+    del first['benchmark_results'][0]['suite']
+    second['benchmark_results'][0]['problem']['size'] = float('nan')
+    with pytest.raises(KeyError, match='suite'):
+        normalize_identity(p, [first, second])
+    with pytest.raises(ValueError, match='workflow_commit_sha must be a full 40-hex SHA'):
+        normalize_identity(p, [raw()], workflow_commit_sha='bad')
+    for bad, category in [(object(), TypeError), (float('nan'), ValueError), (float('inf'), ValueError)]:
+        value = raw()
+        value['benchmark_results'][0]['problem'] = {'bad': bad}
+        with pytest.raises(category): normalize_identity(p, [value])
+    # Actual canonical operands must both complete before any comparison decoding.
+    first, second = raw(), raw()
+    first['provenance']['machine']['bad'] = object()
+    second['provenance']['machine']['bad'] = float('nan')
+    with pytest.raises(TypeError): p.validate_consistency([first, second])
+    first['provenance']['machine'].pop('bad')
+    with pytest.raises(ValueError, match='Out of range float values'): p.validate_consistency([first, second])
+    path = tmp_path / 'existing.json'
+    path.write_text('not JSON')
+    with pytest.raises(json.JSONDecodeError): p.write_json(path, object())
+    path.write_text('{}')
+    with pytest.raises(TypeError): p.write_json(path, object())
+    run, catalog = normalize_identity(p, [raw()])
+    run['bad'] = object()
+    with patch.object(p, 'read_json', side_effect=AssertionError('must not read')):
+        with pytest.raises(TypeError): p.write_built_run(tmp_path, run, catalog)
+    assert p.canonical((1, 2)) == '[1,2]'
+    deep = 1.0
+    for _ in range(100): deep = [deep]
+    first['provenance']['machine'] = {'deep': deep}
+    second['provenance']['machine'] = {'deep': copy.deepcopy(deep)}
+    p.validate_consistency([first, second])
+
+
+def test_numeric_identity_atomic_writer_preserves_equal_bytes(identity_producer, tmp_path):
+    p = identity_producer
+    path = tmp_path / 'value.json'
+    original = b'{ "z": -0.0, "nested": [1e0, {"b":null,"a":false}] }\n'
+    path.write_bytes(original)
+    candidate = {'nested': [1, {'a': False, 'b': None}], 'z': 0}
+    with patch.object(p.os, 'replace', side_effect=AssertionError('equivalent rewrite')):
+        p.write_json(path, candidate)
+    assert path.read_bytes() == original
+    candidate['z'] = 2
+    with patch.object(p.os, 'replace', wraps=p.os.replace) as replace:
+        p.write_json(path, candidate)
+        assert replace.call_count == 1
+    assert json.loads(path.read_text()) == candidate
+
+
+@pytest.mark.parametrize('conflict', ['none', 'catalog', 'run'])
+def test_numeric_identity_immutable_preflight_no_partial_write(identity_producer, tmp_path, conflict):
+    p = identity_producer
+    run, catalog = normalize_identity(p, [raw()])
+    # Seed independently with source formatting and numeric spelling, not writer output.
+    paths = [(tmp_path / run['benchmark_catalog'], catalog), (tmp_path / p.run_filename(run), run)]
+    for path, value in paths:
+        if conflict == 'catalog' and path == paths[1][0]: continue
+        if conflict == 'run' and path == paths[0][0]: continue
+        seeded = copy.deepcopy(value)
+        if path == paths[0][0]:
+            seeded['benchmark_definitions']['case-1']['problem']['size'] = True if conflict == 'catalog' else 8.0
+        else:
+            seeded['execution_summary']['wall_time_s'] = 61 if conflict == 'run' else 60.0
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(seeded, indent=3, sort_keys=False) + '\n\n')
+    before = {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob('*.json')}
+    with patch.object(p.os, 'replace', side_effect=AssertionError('must not replace')):
+        if conflict == 'none': p.write_built_run(tmp_path, run, catalog)
+        else:
+            with pytest.raises(ValueError, match='^Immutable resource conflict:'):
+                p.write_built_run(tmp_path, run, catalog)
+    assert {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob('*.json')} == before
+
+
+@pytest.mark.parametrize('token', ['9007199254740993', '9007199254740993.0', '9.007199254740993e15',
+    '9007199254740991.00000000000000000000000000001', '1e-400', 'NaN', 'Infinity'])
+def test_numeric_identity_invalid_tokens_not_coerced(identity_producer, tmp_path, token):
+    path = tmp_path / 'invalid.json'
+    path.write_text('{"value":' + token + '}')
+    with pytest.raises(ValueError):
+        identity_producer.validate_numeric_values(identity_producer.read_json(path))
+
+
+def test_numeric_identity_token_and_module_api_preserved(identity_producer, tmp_path):
+    p = identity_producer
+    path = tmp_path / 'valid.json'
+    path.write_text('[9007199254740991,-0,-0.0,0e0,5e-324,1.25]')
+    parsed = p.read_json(path)
+    p.validate_numeric_values(parsed)
+    assert type(parsed[0]) is int and parsed[0] == 9007199254740991
+    assert type(parsed[1]) is int and parsed[1] == 0
+    assert type(parsed[2]) is float and math.copysign(1, parsed[2]) == -1
+    assert parsed[3:] == [0.0, 5e-324, 1.25]
+    assert p.canonical(parsed) == '[9007199254740991,0,-0.0,0.0,5e-324,1.25]'
+    copied = tmp_path / 'standalone.py'
+    copied.write_bytes(SCRIPT.read_bytes())
+    with patch('subprocess.run', side_effect=AssertionError('import time I/O')):
+        namespace = runpy.run_path(str(copied))
+    for name in ('canonical', 'normalize_runs', 'load_pinned_manifest', 'write_json', 'write_built_run', 'prepare'):
+        assert callable(namespace[name])
+    assert namespace['canonical']({2: (1, 2)}) == '{"2":[1,2]}'
+
+
+def test_numeric_identity_prepare_error_precedence(identity_producer, tmp_path):
+    p = identity_producer
+    def prepare(paths):
+        return p.prepare(paths, data_dir=tmp_path / 'output', run_id='order', expected_sha=SHA,
+            expected_corpus_sha=CORPUS, corpus_dir=tmp_path / 'absent-corpus', manifest='suite.toml',
+            machine_id='fixture', branch='develop', commit_message='Fictional', trigger='manual',
+            workflow_commit_sha='bad', tensile_commit_sha='bad')
+    first, second = tmp_path / 'first.json', tmp_path / 'second.json'
+    first.write_text('{}')
+    second.write_text('not JSON')
+    with pytest.raises(json.JSONDecodeError): prepare([first, second])
+    second.write_text(json.dumps(raw()))
+    with pytest.raises(KeyError, match='execution_summary'): prepare([first, second])
+    one, two = raw(), raw()
+    two['execution_summary']['samples'] = 4
+    first.write_text(json.dumps(one))
+    second.write_text(json.dumps(two))
+    with pytest.raises(ValueError, match='^Inconsistent samples across raw runs$'):
+        prepare([first, second])
+    two['provenance']['machine']['cpu'] = 'different'
+    second.write_text(json.dumps(two))
+    with pytest.raises(ValueError, match='^Inconsistent machine provenance across raw runs$'):
+        prepare([first, second])
+    assert not (tmp_path / 'output').exists()
+
+
+def test_numeric_identity_serialization_only_writer_contract(identity_producer, tmp_path):
+    p = identity_producer
+    missing = tmp_path / 'missing.json'
+    with patch.object(p, 'canonical', side_effect=AssertionError('missing path must not canonicalize')):
+        p.write_json(missing, {'tuple': (1, 2)})
+    assert missing.read_text() == '{\n  "tuple": [\n    1,\n    2\n  ]\n}\n'
+    # The temporary decoder is NOT a new numeric validator for incidental module paths.
+    missing.write_text('{"large":1e30}')
+    with patch.object(p, 'read_json', return_value={'large': 1e30}):
+        with patch.object(p.os, 'replace', side_effect=AssertionError('equal unsupported module value')):
+            p.write_json(missing, {'large': 1e30})
 
 
 # The optional export is fictional test data for the workflow's standalone validator.

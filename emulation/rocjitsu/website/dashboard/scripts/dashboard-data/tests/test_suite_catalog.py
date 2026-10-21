@@ -97,3 +97,46 @@ def test_pinned_source_failures_are_closed(tmp_path, kind):
     if kind == 'missing-blob': manifest = 'absent.toml'
     with pytest.raises((ValueError, TypeError)):
         producer.load_pinned_manifest(repo, manifest, sha)
+
+
+@pytest.mark.parametrize('declared', ['1', '1.0'])
+@pytest.mark.parametrize('token', ['1', '1.0', '1e0'])
+def test_numeric_identity_uses_independent_committed_pin(tmp_path, declared, token):
+    repo = tmp_path / 'corpus'
+    content = MANIFEST.replace('shape = [1, 2]',
+                               f'shape = [{declared}, 2], nested = {{value = {declared}}}')
+    sha = committed_manifest(repo, content)
+    declaration = producer.load_pinned_manifest(repo, 'suite.toml', sha)
+    assert isinstance(declaration['definitions']['a'], str)
+    assert declaration['tuples'] == {('a', target, policy) for target in ('gfx950', 'gfx1250')
+                                     for policy in ('default', 'single')}
+    before = copy.deepcopy(declaration)
+    (repo / 'suite.toml').write_text(content.replace('shape = [', 'forged = ['))
+    path = tmp_path / 'raw.json'
+    path.write_text(json.dumps({'execution_summary': {'benchmark_suite': 'Suite.v1'},
+                               'benchmark_results': rows()}).replace(
+                                   '"shape": [1, 2]',
+                                   '"nested":{"value":' + token + '},"shape":[' + token + ',2]'))
+    assert token in path.read_text()
+    value = producer.read_json(path)
+    snapshot = producer.canonical(value)
+    producer.validate_manifest_run(value, declaration)
+    assert producer.canonical(value) == snapshot
+    assert declaration == before == producer.load_pinned_manifest(repo, 'suite.toml', sha)
+    print(json.dumps({'pin': sha, 'declared': declared, 'raw_token': token}))
+
+
+@pytest.mark.parametrize('problem', [
+    {'shape': [True, 2], 'flag': True}, {'shape': ['1', 2], 'flag': True},
+    {'shape': [1.25, 2], 'flag': True}, {'shape': [2, 1], 'flag': True},
+    {'shape': [1], 'flag': True}, {'shape': [1, 2], 'flag': 1},
+    {'shape': [1, 2], 'flag': None}, {'shape': [1, 2], 'renamed': True},
+])
+def test_numeric_identity_pin_typed_negatives(tmp_path, problem):
+    repo = tmp_path / 'corpus'
+    sha = committed_manifest(repo)
+    declaration = producer.load_pinned_manifest(repo, 'suite.toml', sha)
+    value = {'execution_summary': {'benchmark_suite': 'Suite.v1'}, 'benchmark_results': rows()}
+    value['benchmark_results'][0]['problem'] = problem
+    with pytest.raises(ValueError, match='^Pinned workload definition mismatch: a$'):
+        producer.validate_manifest_run(value, declaration)

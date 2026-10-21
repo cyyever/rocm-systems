@@ -7,7 +7,10 @@ const modesFor = (filters) => filters.modes ?? THREAD_POLICIES;
 const completed = (test) => test?.status === 'completed' && Number.isFinite(test.durationSeconds);
 const sum = (tests) => tests.reduce((total, test) => total + test.durationSeconds, 0);
 const round = (value) => Number(value.toPrecision(15));
-const percentage = (candidate, baseline) => Number.isFinite(candidate) && Number.isFinite(baseline) && baseline > 0 ? (candidate - baseline) / baseline * 100 : null;
+const percentage = (candidate, baseline) => {
+  const value = Number.isFinite(candidate) && Number.isFinite(baseline) && baseline > 0 ? (candidate - baseline) / baseline * 100 : null;
+  return Number.isFinite(value) ? value : null;
+};
 const resultMap = (run) => new Map((run?.tests ?? []).map((test) => [test.testId, test]));
 const testMatches = (test, filters) => filters.targets.includes(test.target) && filters.suites.includes(test.suite) && modesFor(filters).includes(test.mode);
 const selected = (run, filters) => (run?.tests ?? []).filter((test) => testMatches(test, filters));
@@ -15,11 +18,11 @@ const pairsFor = (filters) => filters.targets.flatMap((target) => modesFor(filte
 
 export function periodKey(timestamp, period = 'weekly') {
   const date = new Date(timestamp);
-  if (period === 'monthly') return date.toISOString().slice(0, 7);
-  if (period === 'daily') return date.toISOString().slice(0, 10);
+  if (period === 'monthly') return date.toISOString().split('T')[0].slice(0, -3);
+  if (period === 'daily') return date.toISOString().split('T')[0];
   const day = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() - day + 1);
-  return date.toISOString().slice(0, 10);
+  return date.toISOString().split('T')[0];
 }
 
 export function compareRuns(candidate, baseline, filters) {

@@ -143,7 +143,7 @@ test('grid point selection survives timeframe and scope changes without legacy m
 });
 
 test('keyboard result details distinguish positive completion, failed, timeout and unpublished configurations', async ({ page }) => {
-  await openDashboard(page, '/?view=benchmarks');
+  await openDashboard(page, '/?view=benchmarks&range=ALL');
   await page.getByRole('checkbox', { name: 'gfx950', exact: true }).check();
   await ensureGridBenchmark(page, gemm);
   await page.getByRole('button', { name: `Inspect ${gemm} results`, exact: true }).click();

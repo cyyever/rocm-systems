@@ -90,8 +90,10 @@ test('branch matrix, diagnostics, manual reference and full comparison share one
   expect(params.getAll('compareSuites')).toEqual(['Triton']);
   for (const key of ['targets', 'modes', 'suites']) expect(params.getAll(key)).toEqual(['']);
   await expect(page.getByTestId('comparison-metric-comparable').getByText('2', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('metadata-row-sdk')).toHaveAttribute('data-different', 'true');
-  await expect(page.getByTestId('metadata-row-sdk')).not.toContainText('Changed');
+  await expect(page.getByTestId('metadata-row-auxiliary.sdk')).toHaveAttribute('data-different', 'true');
+  await expect(page.getByTestId('metadata-row-auxiliary.sdk')).not.toContainText('Changed');
+  await expect(page.getByTestId('metadata-row-auxiliary.sdk').getByRole('cell').nth(0)).toHaveText('test-b');
+  await expect(page.getByTestId('metadata-row-auxiliary.sdk').getByRole('cell').nth(1)).toHaveText('test-branch');
   await page.goBack();
   await expect(page.getByRole('tab', { name: 'Branch Runs' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('candidate-selected-identity')).toContainText('fictional-branch-01');

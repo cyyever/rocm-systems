@@ -28,7 +28,8 @@ export function rowChanges(row) {
   const baseline = row.baselineTest?.durationSeconds;
   const candidate = row.candidateTest?.durationSeconds;
   const seconds = Number.isFinite(baseline) && Number.isFinite(candidate) ? candidate - baseline : null;
-  return { seconds, percent: seconds !== null && baseline !== 0 ? seconds / baseline * 100 : null };
+  const percent = seconds !== null && baseline !== 0 ? seconds / baseline * 100 : null;
+  return { seconds, percent: Number.isFinite(percent) ? percent : null };
 }
 
 export function groupComparisonRows(rows, sort = 'seconds', direction = 'desc') {

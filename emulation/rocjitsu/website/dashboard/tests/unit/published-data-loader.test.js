@@ -467,6 +467,55 @@ test('a terminal progress callback failure cancels pending run requests without 
   }
 });
 
+test('a one-shot progress owner error escapes once and promptly aborts all owned run requests', async () => {
+  dataset = createSyntheticDataset(8);
+  const controller = new AbortController();
+  const signals = [];
+  const updates = [];
+  const failure = new Error('One-shot progress owner failed');
+  const deadline = new Error('Independent owner regression deadline');
+  let thrown = false;
+  let timer;
+  const { fetchImpl, state } = createFetchDouble({
+    behavior: (url, { signal }) => {
+      if (!url.includes('/runs/') || url.endsWith(dataset.runFiles[0])) return null;
+      signals.push(signal);
+      return new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(new TypeError('Owned request aborted')), { once: true });
+      });
+    },
+  });
+  const pending = loadSynthetic(fetchImpl, {
+    signal: controller.signal, retryDelaysMs: [0], requestTimeoutMs: 5_000, loadTimeoutMs: 5_000,
+    onProgress: (update) => {
+      updates.push(update);
+      if (update.loaded > 0 && !thrown) { thrown = true; throw failure; }
+    },
+  }).catch((error) => error);
+  try {
+    const result = await Promise.race([pending, new Promise((resolve) => { timer = setTimeout(() => resolve(deadline), 500); })]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    console.info('one-shot-progress-owner', JSON.stringify({
+      sameOwnerError: result === failure, independentDeadline: result === deadline,
+      updates, signals: signals.length, abortedBeforeExternalCleanup: signals.filter((signal) => signal.aborted).length,
+      externalAbortedBeforeCleanup: controller.signal.aborted, requests: state.urls.length, active: state.active,
+    }));
+    expect(result).toBe(failure);
+    expect(updates).toEqual([{ loaded: 0, total: 8 }, { loaded: 1, total: 8 }]);
+    expect(signals).toHaveLength(7);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
+    expect(state.urls).toHaveLength(9);
+    expect(state.active).toBe(0);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    await pending;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    console.info('one-shot-progress-cleanup', JSON.stringify({ active: state.active, requests: state.urls.length }));
+  }
+});
+
 test('a failing index is fatal rather than a warning', async () => {
   const { fetchImpl } = createFetchDouble({
     behavior: (url) => (url === dataset.indexUrl

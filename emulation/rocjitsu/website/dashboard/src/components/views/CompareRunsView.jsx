@@ -109,6 +109,7 @@ export default function CompareRunsView({
   const chartItems = viewModel.comparable.filter((item) => Number.isFinite(item.delta));
   const maximumDelta = Math.max(...chartItems.map((item) => Math.abs(item.delta)), 0);
   const axisLimit = Math.max(5, Math.ceil(maximumDelta * 1.25));
+  const chartRangeAvailable = Number.isFinite(axisLimit) && axisLimit > 0 && Number.isFinite(axisLimit * 2);
   const chartHeight = Math.min(720, Math.max(320, chartItems.length * 34 + 100));
   const richLabelStyles = {
     separator: { color: theme.palette.text.disabled },
@@ -285,12 +286,12 @@ export default function CompareRunsView({
           Totals use matched benchmarks with valid completed durations in both runs; bars and faster/slower/noise counts include only available percentage changes.
           Matching uses exact target + mode + workload identity, not environment equivalence. Exclusions are not zero-duration results. A zero baseline has no percentage ratio.
         </Typography>
-        {chartItems.length > 0 ? (
+        {chartItems.length > 0 && chartRangeAvailable ? (
           <Box sx={{ mx: { xs: -1.25, sm: -0.5 }, mt: 0.75 }}>
             <Chart option={option} height={chartHeight} ariaLabel="Performance change by benchmark comparison chart" />
           </Box>
         ) : (
-          <Typography sx={{ color: 'text.secondary', py: 8, textAlign: 'center' }}>{!hasRuns ? 'Select baseline and candidate runs to compare benchmark results.' : viewModel.comparable.length ? 'No percentage changes available. Measured zero baselines remain in the results table below.' : 'No completed benchmark results are comparable between these runs.'}</Typography>
+          <Typography sx={{ color: 'text.secondary', py: 8, textAlign: 'center' }}>{!hasRuns ? 'Select baseline and candidate runs to compare benchmark results.' : chartItems.length ? 'Chart unavailable: percentage changes exceed the supported chart range. Measured results remain in the results table below.' : viewModel.comparable.length ? 'No percentage changes available. Measured results remain in the results table below.' : 'No completed benchmark results are comparable between these runs.'}</Typography>
         )}
         {viewModel.comparable.length > 0 && (
           <Box component="details" sx={{ mt: 1 }}>

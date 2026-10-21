@@ -1,5 +1,129 @@
+import { fork } from 'node:child_process';
 import { expect, test, vi } from 'vitest';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
+
+function boundedEmptyCalendar(generatedAt, range, scenario = 'empty') {
+  return new Promise((resolve) => {
+    const child = fork(new URL('../helpers/overview-calendar-child.js', import.meta.url), [generatedAt, range, scenario], { silent: true, execArgv: [] });
+    const events = [];
+    let stderr = ''; let spawnError = null; let timeoutStage = null;
+    const started = Date.now();
+    let timer = setTimeout(() => { timeoutStage = 'setup'; child.kill('SIGKILL'); }, 5_000);
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', (error) => { spawnError = error.message; });
+    child.on('message', (message) => {
+      events.push(message);
+      if (message.stage === 'validated-before-projection') {
+        clearTimeout(timer);
+        timer = setTimeout(() => { timeoutStage = 'projection'; child.kill('SIGKILL'); }, 500);
+      }
+    });
+    child.once('close', (code, signal) => {
+      clearTimeout(timer);
+      let reaped = false;
+      try { process.kill(child.pid, 0); } catch (error) { reaped = error.code === 'ESRCH'; }
+      const evidence = { pid: child.pid, generatedAt, range, scenario, setupLimitMs: 5_000, projectionLimitMs: 500,
+        elapsedMs: Date.now() - started, events, code, signal, timeoutStage, stderr, spawnError, closed: true, reaped };
+      console.info('bounded-calendar-child', JSON.stringify(evidence));
+      resolve(evidence);
+    });
+  });
+}
+
+const calendarCases = [
+  { label: 'ordinary validated control', generatedAt: '2026-01-07T00:00:00Z', range: '1W', days: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05', '2026-01-06', '2026-01-07'] },
+  { label: 'upper-year weekly', generatedAt: '9999-12-31T00:00:00Z', range: '1W', days: ['9999-12-25', '9999-12-26', '9999-12-27', '9999-12-28', '9999-12-29', '9999-12-30', '9999-12-31'] },
+  { label: 'upper-year all', generatedAt: '9999-12-31T00:00:00Z', range: 'ALL', days: ['9999-12-31'] },
+  { label: 'lower-year weekly', generatedAt: '0000-01-01T00:00:00Z', range: '1W', days: [
+    '-000001-12-26', '-000001-12-27', '-000001-12-28', '-000001-12-29', '-000001-12-30', '-000001-12-31', '0000-01-01',
+  ] },
+  { label: 'lower-year monthly', generatedAt: '0000-01-01T00:00:00Z', range: '1M', days: [
+    '-000001-12-03', '-000001-12-04', '-000001-12-05', '-000001-12-06', '-000001-12-07', '-000001-12-08', '-000001-12-09',
+    '-000001-12-10', '-000001-12-11', '-000001-12-12', '-000001-12-13', '-000001-12-14', '-000001-12-15', '-000001-12-16',
+    '-000001-12-17', '-000001-12-18', '-000001-12-19', '-000001-12-20', '-000001-12-21', '-000001-12-22', '-000001-12-23',
+    '-000001-12-24', '-000001-12-25', '-000001-12-26', '-000001-12-27', '-000001-12-28', '-000001-12-29', '-000001-12-30',
+    '-000001-12-31', '0000-01-01',
+  ] },
+];
+test.each(calendarCases)('bounded empty calendar: $label terminates with exact inclusive keys', async ({ generatedAt, range, days }) => {
+  const evidence = await boundedEmptyCalendar(generatedAt, range);
+  expect(evidence.events[0]).toEqual({ stage: 'validated-before-projection', generatedAt, runs: 0, range });
+  expect(evidence.spawnError).toBeNull();
+  expect(evidence.stderr).toBe('');
+  expect(evidence.closed).toBe(true);
+  expect(evidence.reaped).toBe(true);
+  expect(evidence.timeoutStage, 'validated real projection must finish before the independently enforced child deadline').toBeNull();
+  expect([evidence.code, evidence.signal]).toEqual([0, null]);
+  expect(evidence.events[1]).toEqual({ stage: 'result', anchorDay: days.at(-1), startDay: days[0], dayKeys: days });
+  expect(evidence.events[1].dayKeys).toHaveLength(range === '1M' ? 30 : range === '1W' ? 7 : 1);
+  expect(new Set(evidence.events[1].dayKeys).size).toBe(days.length);
+}, 8_000);
+
+test.each([
+  { anchor: '2026-01-03', days: ['2025-12-28', '2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01', '2026-01-02', '2026-01-03'] },
+  { anchor: '2024-03-03', days: ['2024-02-26', '2024-02-27', '2024-02-28', '2024-02-29', '2024-03-01', '2024-03-02', '2024-03-03'] },
+  { anchor: '2025-03-03', days: ['2025-02-25', '2025-02-26', '2025-02-27', '2025-02-28', '2025-03-01', '2025-03-02', '2025-03-03'] },
+])('inclusive calendar preserves ordinary month/year/leap boundary ending $anchor', ({ anchor, days }) => {
+  expect(selectOverviewProjection({ runs: [], generatedAt: `${anchor}T00:00:00Z` }, filters, { range: '1W' }).dayKeys).toEqual(days);
+});
+
+// Independent reference uses numeric UTC-midnight ticks, never projection helpers.
+function referenceUtcDays(start, end) {
+  const first = Date.parse(`${start}T00:00:00Z`);
+  const last = Date.parse(`${end}T00:00:00Z`);
+  return Array.from({ length: (last - first) / 86_400_000 + 1 }, (_, index) =>
+    new Date(first + index * 86_400_000).toISOString().split('T')[0]);
+}
+
+const offsetBoundaries = [
+  { label: 'upper', generatedAt: '9999-12-31T23:30:00-01:00', anchor: '+010000-01-01', yearStart: '+010000-01-01',
+    populatedAt: '9999-12-31T22:45:00-02:00', earliest: '9999-12-31',
+    timestamps: ['9999-12-31T12:00:00Z', '9999-12-31T23:30:00-01:00', '9999-12-31T22:45:00-02:00'] },
+  { label: 'lower', generatedAt: '0000-01-01T00:30:00+01:00', anchor: '-000001-12-31', yearStart: '-000001-01-01',
+    populatedAt: '0000-01-01T01:15:00+01:00', populatedAnchor: '0000-01-01', populatedYearStart: '0000-01-01', earliest: '-000001-12-31',
+    timestamps: ['0000-01-01T00:30:00+01:00', '0000-01-01T00:00:00Z', '0000-01-01T01:15:00+01:00'] },
+];
+const offsetCases = offsetBoundaries.flatMap((boundary) => ['empty', 'populated'].flatMap((kind) =>
+  ['ALL', '1W', '1M', '3M', '1D', '6M', 'YTD'].map((range) => ({ ...boundary, kind, range }))));
+
+test.each(offsetCases)('bounded offset calendar: $label $kind $range preserves UTC identities and chronological membership', async (input) => {
+  const populated = input.kind === 'populated';
+  const generatedAt = populated ? input.populatedAt : input.generatedAt;
+  const anchor = populated ? input.populatedAnchor ?? input.anchor : input.anchor;
+  const rangeDays = { '1W': 7, '1M': 30, '3M': 90, '1D': 1, '6M': 180 };
+  const start = input.range === 'ALL' ? populated ? input.earliest : anchor
+    : input.range === 'YTD' ? populated ? input.populatedYearStart ?? input.yearStart : input.yearStart
+      : new Date(Date.parse(`${anchor}T00:00:00Z`) - (rangeDays[input.range] - 1) * 86_400_000).toISOString().split('T')[0];
+  const days = referenceUtcDays(start, anchor);
+  const evidence = await boundedEmptyCalendar(generatedAt, input.range, populated ? input.label : 'empty');
+  expect(evidence.events[0]).toEqual({ stage: 'validated-before-projection', generatedAt, runs: populated ? 3 : 0, range: input.range });
+  expect(evidence.spawnError).toBeNull();
+  expect(evidence.stderr).toBe('');
+  expect(evidence.closed).toBe(true);
+  expect(evidence.reaped).toBe(true);
+  expect(evidence.timeoutStage).toBeNull();
+  expect([evidence.code, evidence.signal]).toEqual([0, null]);
+  const result = evidence.events[1];
+  expect({ anchorDay: result.anchorDay, startDay: result.startDay, dayKeys: result.dayKeys })
+    .toEqual({ anchorDay: anchor, startDay: start, dayKeys: days });
+  expect(result.dayKeys).toHaveLength(days.length);
+  expect(new Set(result.dayKeys).size).toBe(days.length);
+  if (input.label === 'upper' && input.range === '1W') {
+    expect(result.dayKeys).toEqual(['9999-12-26', '9999-12-27', '9999-12-28', '9999-12-29', '9999-12-30', '9999-12-31', '+010000-01-01']);
+  }
+  if (populated) {
+    const indexes = input.range === '1W' ? [0, 1, 2] : input.range === '1D' ? [1, 2] : input.range === 'YTD' ? [2] : [0, 2];
+    const identities = indexes.map((index) => ({ id: `synthetic-run-000${index}`, dayKey: index === 0 ? input.earliest : anchor }));
+    expect(result.populated.attempts).toEqual(identities.map((identity) => ({ ...identity, eligible: true })));
+    expect(result.populated.slots).toEqual(identities);
+    expect(result.populated.cohort).toEqual(['gemm-bf16-4096', 'gemm-f16-1024']);
+    expect(result.populated.points).toEqual(identities.map((identity, position) => ({ ...identity, durationSeconds: [3, 3.002, 3.004][indexes[position]] })));
+    expect(result.populated.timestamps).toEqual(input.timestamps);
+    expect(result.populated.originalInputsUnchanged).toBe(true);
+    expect(result.populated.sourceLeavesRetained).toBe(true);
+    expect(result.populated.independentWrappers).toBe(true);
+  }
+}, 8_000);
 
 const filters = { targets: ['gfx950', 'gfx1250'], modes: ['single'], suites: ['gemm'] };
 const catalog = (id, configurations) => ({ id, configurations, tests: ['a', 'b', 'c'].map((id) => ({ id, suite: id === 'c' ? 'fft' : 'gemm' })) });
