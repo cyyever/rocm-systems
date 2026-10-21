@@ -180,10 +180,9 @@ def add_general_group(
         default=False,
         help=(
             "Enable experimental feature(s):\n"
-            "   Torch trace (--torch-trace, --list-torch-operators, --torch-operator)\n"
-            "   Triton trace (--triton-trace, --list-triton-operators, "
-            "--triton-operator)\n"
-            "   ML API trace (--ml-api-trace)\n"
+            "   ML API trace (--trace-ml-api)\n"
+            "   Torch operators (--list-torch-operators, --torch-operator)\n"
+            "   Triton operators (--list-triton-operators, --triton-operator)\n"
             "   Memory Bandwidth Analysis (--membw-analysis)\n"
             "   PC Sampling (--pc-sampling, --pc-sampling-method, "
             "--pc-sampling-interval)\n"
@@ -325,23 +324,6 @@ Examples:
             "\t\t\tWithout it, profiling into a non-empty directory fails\n"
             "\t\t\tinstead of mixing runs. Use a fresh directory per run;\n"
             "\t\t\tpass this flag only to re-profile in place."
-        ),
-    )
-    profile_group.add_argument(
-        "--torch-trace",
-        dest="torch_trace",
-        required=False,
-        default=False,
-        const=True,
-        nargs=0,
-        base_action="store_true",
-        action=ExperimentalAction,
-        experimental_enabled=experimental_enabled,
-        feature_label="Torch trace",
-        help=(
-            "\t\t\tTorch Trace, maps PyTorch operators to performance counters.\n"
-            "\t\t\tNative tracing on PyTorch 2.13/2.14 when the collector loads;\n"
-            "\t\t\totherwise a warning and TorchDispatchMode."
         ),
     )
     profile_group.add_argument(
@@ -527,38 +509,22 @@ Examples:
     ## ----------------------------
 
     profile_group.add_argument(
-        "--triton-trace",
-        dest="triton_trace",
+        "--trace-ml-api",
+        dest="trace_ml_api",
         required=False,
-        default=False,
-        const=True,
-        nargs=0,
-        base_action="store_true",
-        action=ExperimentalAction,
-        experimental_enabled=experimental_enabled,
-        feature_label="Triton trace",
-        help=(
-            "\t\t\tTriton Trace, maps Triton kernels to performance counters.\n"
-            "\t\t\tUse when profiling Triton kernels launched through Triton's\n"
-            "\t\t\tPython runtime. torch.compile / Inductor static launches are\n"
-            "\t\t\tnot covered; use --torch-trace.\n"
-            "\t\t\tCan be combined with --torch-trace."
-        ),
-    )
-    profile_group.add_argument(
-        "--ml-api-trace",
-        dest="ml_api_trace",
-        required=False,
-        default=False,
-        const=True,
-        nargs=0,
-        base_action="store_true",
+        default=None,
+        nargs="*",
+        metavar="",
+        base_action="store",
         action=ExperimentalAction,
         experimental_enabled=experimental_enabled,
         feature_label="ML API trace",
         help=(
-            "\t\t\tML API Trace, enables tracing for all supported machine\n"
-            "\t\t\tlearning framework backends (e.g. PyTorch, Triton)."
+            "\t\t\tTrace ML APIs [frameworks]... User-defined regions are\n"
+            "\t\t\tincluded. user is not a value.\n"
+            "\t\t\tWith no arguments, traces torch, triton, and jax.\n"
+            "\t\t\tJAX is not collected yet.\n"
+            "\t\t\tValues: torch, triton, jax."
         ),
     )
     profile_group.add_argument(
