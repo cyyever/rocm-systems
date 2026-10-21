@@ -60,9 +60,11 @@ _NATIVE_F32_GATE = (
 # The single source of truth for environment ownership: a functor naming one of
 # these cores leaves its guest FP environment to the probe, so every emission
 # consults this table and no route can adopt a core without also taking its
-# environment. Host-float functors (the DX9 and legacy multiplies, MAD, min/max,
-# DIV_FIXUP) are absent on purpose: scoping them buys nothing and perturbs the
-# host NaN selection they rely on.
+# environment. The VOP3P packed-F32 ternary helper always installs F32 MODE
+# rounding for the instruction itself, so its functor uses an unscoped core
+# without consulting this table. Host-float functors (the DX9 and legacy
+# multiplies, MAD, min/max, DIV_FIXUP) are absent on purpose: scoping them buys
+# nothing and perturbs the host NaN selection they rely on.
 _ARITHMETIC_CORES: dict[str, ArithmeticCore] = {
     'amdgpu::binary_f32_simd_unscoped<': ArithmeticCore('wf.fp_round_mode_f32()', None),
     'amdgpu::fma_f32_simd_unscoped(': ArithmeticCore('wf.fp_round_mode_f32()', None),
@@ -1351,9 +1353,12 @@ SIMD_VOP3P_PK_BINARY_F32: dict[str, str] = {
 }
 
 # pk_fma_f32 — 3-source FMA per half, with independent source-half selection.
-# Scalar and SIMD execution share hardware NaN selection.
+# Scalar and SIMD execution share hardware NaN selection. The glue installs one
+# guest FP environment for the instruction, so the functor uses the unscoped core.
 SIMD_VOP3P_PK_TERNARY_F32: dict[str, str] = {
-    'v_pk_fma_f32_vop3p': '[&wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd(a, b, c, wf); }',
+    'v_pk_fma_f32_vop3p': (
+        '[&wf](auto a, auto b, auto c) { return amdgpu::fma_f32_simd_unscoped(a, b, c, wf); }'
+    ),
 }
 
 # v_pk_mov_b32 — each src is a 64-bit SGPR or VGPR pair. op_sel[0] selects the
