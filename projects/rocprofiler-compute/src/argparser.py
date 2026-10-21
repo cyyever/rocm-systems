@@ -180,9 +180,7 @@ def add_general_group(
         default=False,
         help=(
             "Enable experimental feature(s):\n"
-            "   ML API trace (--trace-ml-api)\n"
-            "   Torch operators (--list-torch-operators, --torch-operator)\n"
-            "   Triton operators (--list-triton-operators, --triton-operator)\n"
+            "   ML API trace (--trace-ml-api, --list-operators, --operator)\n"
             "   Memory Bandwidth Analysis (--membw-analysis)\n"
             "   PC Sampling (--pc-sampling, --pc-sampling-method, "
             "--pc-sampling-interval)\n"
@@ -646,7 +644,7 @@ Examples:
         help=(
             "\t\tList all detected kernels and kernel dispatches.\n"
             "\t\tCannot be used with --output-format csv or db.\n"
-            "\t\tWith --*-operator, shows that operator's kernels and dispatches."
+            "\t\tWith --operator, shows that operator's kernels and dispatches."
         ),
     )
     analyze_group.add_argument(
@@ -656,92 +654,43 @@ Examples:
         action="store_true",
     )
     analyze_group.add_argument(
-        "--list-torch-operators",
-        dest="list_torch_operators",
-        default=False,
-        const=True,
-        nargs=0,
-        base_action="store_true",
-        action=ExperimentalAction,
-        experimental_enabled=experimental_enabled,
-        feature_label="List torch operators",
-        help=(
-            "\t\tList PyTorch operators as a unified call tree with kernel "
-            "launch stats.\n"
-            "\t\tRequires --output-format stdout. Ignores --*-operator if both "
-            "are given."
-        ),
-    )
-    analyze_group.add_argument(
-        "--torch-operator",
-        metavar="",
-        type=str,
-        dest="torch_operator",
+        "--list-operators",
+        dest="list_operators",
+        default=None,
         nargs="*",
+        metavar="",
         base_action="store",
         action=ExperimentalAction,
         experimental_enabled=experimental_enabled,
-        feature_label="Torch operator filter",
+        feature_label="List operators",
         help=(
-            "\t\tFilter operators using shell-style glob patterns (fnmatch),\n"
-            "\t\t\tkeep launches on the matched subtree, and display metrics.\n"
-            "\t\t\tWith no arguments, matches all operators.\n"
-            "\t\t\t/ in patterns is the reconstructed call path.\n"
-            "\t\t\tExamples:\n"
-            "\t\t\t  *relu*              contains relu\n"
-            "\t\t\t  */aten::addmm       addmm leaf on the reconstructed path\n"
-            "\t\t\t  all  or  '*'        match every operator\n"
-            "\t\t\tMultiple patterns (space or comma-separated):\n"
-            "\t\t\t  --torch-operator *relu*,*/aten::addmm\n"
-            "\t\t\tWith -k, ids index that operator's kernel table.\n"
-            "\t\t\tRequires --output-format stdout.\n"
-            "\t\t\tIgnored when --list-*-operators is set.\n"
-            "\t\t\t(Default: **)"
+            "\t\tList collected operators as a unified call tree [frameworks]...\n"
+            "\t\tWith no arguments, lists every collected ML API and user region.\n"
+            "\t\tRequires --output-format stdout. Ignores --operator if both "
+            "are given.\n"
+            "\t\tValues: torch, triton, jax, user."
         ),
     )
     analyze_group.add_argument(
-        "--list-triton-operators",
-        dest="list_triton_operators",
-        default=False,
-        const=True,
-        nargs=0,
-        base_action="store_true",
-        action=ExperimentalAction,
-        experimental_enabled=experimental_enabled,
-        feature_label="List triton operators",
-        help=(
-            "\t\tList Triton kernels as a unified call tree with kernel launch "
-            "stats.\n"
-            "\t\tRequires --output-format stdout. Ignores --*-operator if both "
-            "are given."
-        ),
-    )
-    analyze_group.add_argument(
-        "--triton-operator",
+        "--operator",
         metavar="",
         type=str,
-        dest="triton_operator",
+        dest="operator",
         nargs="*",
+        default=None,
         base_action="store",
         action=ExperimentalAction,
         experimental_enabled=experimental_enabled,
-        feature_label="Triton operator filter",
+        feature_label="Operator filter",
         help=(
-            "\t\tFilter Triton kernels using shell-style glob patterns\n"
-            "\t\t\t(fnmatch), keep launches on the matched subtree, and display\n"
-            "\t\t\tmetrics.\n"
-            "\t\t\tWith no arguments, matches all kernels.\n"
-            "\t\t\t/ in patterns is the reconstructed call path.\n"
-            "\t\t\tExamples:\n"
-            "\t\t\t  *rmsnorm_kernel*    matches rmsnorm nodes on the tree\n"
-            "\t\t\t  *matmul*            contains matmul\n"
-            "\t\t\t  all  or  '*'        match every kernel\n"
-            "\t\t\tMultiple patterns (space or comma-separated):\n"
-            "\t\t\t  --triton-operator *matmul*,*rmsnorm_kernel*\n"
-            "\t\t\tWith -k, ids index that operator's kernel table.\n"
-            "\t\t\tRequires --output-format stdout.\n"
-            "\t\t\tIgnored when --list-*-operators is set.\n"
-            "\t\t\t(Default: **)"
+            "\t\tFilter operators with glob patterns [selectors]...\n"
+            "\t\tForm: FW:PATTERN[,PATTERN]. FW is optional.\n"
+            "\t\tExample: --operator torch:*conv* triton:*matmul*\n"
+            "\t\tWith no arguments, matches the collected stack.\n"
+            "\t\tRequires --output-format stdout.\n"
+            "\t\tIgnored when --list-operators is set.\n"
+            "\t\tValues: torch, triton, jax, user.\n"
+            "\t\t(Default: **)"
         ),
     )
     analyze_group.add_argument(
