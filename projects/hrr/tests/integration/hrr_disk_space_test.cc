@@ -720,6 +720,38 @@ TEST_CASE("Unit_HRR_CaptureLimit_StopsAtSize_Direct", "[.][hrr-direct]") {
   HRR_HIP_CHECK(hipFree(dev));
 }
 
+// Run with HIP_HRR_CAPTURE_MAX_MB set to kLimitMiB: the parent reaches it, then
+// forks a child that records once.
+TEST_CASE("Unit_HRR_CaptureLimit_ForkAfterStop_Direct", "[.][hrr-direct]") {
+  if (getenv("HIP_HRR_CAPTURE_MAX_MB") == nullptr)
+    HRR_SKIP("started by Unit_HRR_CaptureLimit_ForkAfterStop");
+  begin_workload();
+  const fs::path root = fake_root();
+  void* dev = nullptr;
+  HRR_HIP_CHECK(hipMalloc(&dev, kLimitCopy));
+  for (int i = 0; i < kLimitCopies; ++i) copy_to_device(dev, 1800 + i, kLimitCopy);
+
+  fflush(stdout);
+  fflush(stderr);
+  const pid_t child = fork();
+  if (child == 0) {
+    g_quick_exit_pid.store(getpid());
+    record_in_child();
+    std::exit(0);
+  }
+  REQUIRE(child > 0);
+  const int status = wait_child(child);
+  REQUIRE(status != -1);
+  REQUIRE(WIFEXITED(status));
+  REQUIRE(WEXITSTATUS(status) == 0);
+
+  // The limit is per archive: the child opened and finalized its own.
+  const fs::path child_dir = root / ("pid-" + std::to_string(child));
+  CHECK(fs::exists(child_dir / "events.bin"));
+  CHECK(fs::exists(child_dir / "manifest.json"));
+  HRR_HIP_CHECK(hipFree(dev));
+}
+
 // Run with HIP_HRR_CAPTURE_MAX_BLOB_MB set to 1: two copies over it, then one
 // under it and its read back.
 TEST_CASE("Unit_HRR_CaptureLimit_SkipsLargeBlob_Direct", "[.][hrr-direct]") {
@@ -1073,6 +1105,19 @@ HRR_TEST_CASE(Unit_HRR_CaptureLimit_StopsAtSize) {
   INFO("archive holds " << held << " bytes");
   CHECK(held <= kLimitMiB << 20);
   CHECK(held > (kLimitMiB << 20) - 2 * kLimitCopy);
+}
+
+// Unlike a stop for space, a stop at the limit is the parent archive's alone: a
+// child forked after it still captures, into an archive of its own.
+HRR_TEST_CASE(Unit_HRR_CaptureLimit_ForkAfterStop) {
+  ScopedDir cap(cap_dir("limit_fork"));
+  const WorkloadRun run =
+      run_workload("Unit_HRR_CaptureLimit_ForkAfterStop_Direct", cap.path, kTotal64M, 0,
+                   {{"HIP_HRR_CAPTURE_MAX_MB", std::to_string(kLimitMiB)}});
+  INFO("Capture output:\n" << run.out);
+  REQUIRE(run.rc == 0);
+  CHECK(count_of(run.out, kStopped) == 1);
+  CHECK(count_processes(cap.path) == 2);
 }
 
 // A copy over the per-blob limit is recorded without its contents and the

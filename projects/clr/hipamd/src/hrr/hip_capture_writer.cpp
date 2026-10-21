@@ -247,6 +247,12 @@ static std::condition_variable g_blob_writes_done;
 static std::atomic<bool> g_reopen_after_fork{false};
 static std::mutex        g_reopen_mu;
 
+// Set when capture stops early, for space or at the size limit; see
+// stop_capture_locked(). A forked child keeps a stop for space, as the file
+// system is shared, but not one at HIP_HRR_CAPTURE_MAX_MB, which is per archive.
+static std::atomic<bool> g_capture_stopped{false};
+static bool              g_stopped_at_limit = false;  // under g_file_mu
+
 // Keys of the blobs and code objects written to this archive, so repeated bytes
 // (common for weight tensors) are written once.
 // Protected by g_blob_mu (separate from g_file_mu to avoid head-of-line blocking).
@@ -664,6 +670,13 @@ static void atfork_child() {
   // parent's archive. reopen_after_fork() opens the child's.
   const bool parent_open = g_events_fd >= 0;
   const bool parent_finalized = g_events_finalized;
+  // The child's archive starts with a fresh HIP_HRR_CAPTURE_MAX_MB budget.
+  const bool parent_at_limit = g_capture_stopped.load(std::memory_order_relaxed) &&
+                               g_stopped_at_limit;
+  if (parent_at_limit) {
+    g_capture_stopped.store(false, std::memory_order_relaxed);
+    g_stopped_at_limit = false;
+  }
   if (parent_open) {
     HRR_CLOSE(g_events_fd);
     g_events_fd = -1;
@@ -681,7 +694,7 @@ static void atfork_child() {
   // until close(), but the shutdown that runs both is on the parent's exiting
   // thread and no longer pending in the child. A parent that is itself a child
   // yet to open its archive passes its flag on unchanged.
-  if (parent_open && !parent_finalized)
+  if ((parent_open || parent_at_limit) && !parent_finalized)
     g_reopen_after_fork.store(true, std::memory_order_relaxed);
 }
 
@@ -875,8 +888,6 @@ static uint64_t g_bytes_since_space_check = 0;
 // Bytes already accepted by reserve_space and not yet finished writing. Concurrent
 // writers all count against the free-space check until they release.
 static std::atomic<uint64_t> g_bytes_reserved{0};
-// Set when capture stops early, for space or at the size limit.
-static std::atomic<bool>     g_capture_stopped{false};
 
 // The file system holding `dir`: on POSIX the directory `dir_fd`, or `dir` when
 // there is none.
@@ -915,7 +926,7 @@ static bool fs_space(int dir_fd, const std::string& dir, uint64_t* avail, uint64
 // pid-<pid>/active tells producers outside the runtime that this process's
 // capture is on. open() removes a stale one before any step that can fail and
 // creates it as its last step. flush() removes it at shutdown, and
-// stop_capture() when the capture stops early. events.bin cannot carry that
+// stop_capture_locked() when the capture stops early. events.bin cannot carry that
 // signal: a capture refused after creating it leaves the file in place. The
 // marker holds one line naming the process instance (see process_instance()). A
 // killed process cannot remove its marker, and a producer in a later process
@@ -928,11 +939,13 @@ static constexpr const char* kActiveMarker = "active";
 // are raised under g_file_mu, so a writer that sees the stop flag and then takes
 // the mutex finds events.bin already closed, and flush() cannot find it closed
 // without also seeing the archive marked incomplete. `why` completes "Capture
-// stopped: ". Caller holds a BufWriteGuard.
-static void stop_capture_locked(const char* why) {
-  char reason[kPathMax + 256];
+// stopped: " and names no path; only stderr names the archive. Caller holds a
+// BufWriteGuard.
+static void stop_capture_locked(const char* why, bool at_limit) {
+  char reason[256];
   snprintf(reason, sizeof(reason), "stopped writing: %s", why);
   if (g_capture_stopped.exchange(true)) return;
+  g_stopped_at_limit = at_limit;
   if (g_events_fd >= 0) {
     flush_buffer_locked();
     HRR_FSYNC(g_events_fd);
@@ -944,20 +957,17 @@ static void stop_capture_locked(const char* why) {
   remove_in_archive(g_dir_fd.load(), g_output_dir, kActiveMarker);
   mark_incomplete(reason);
   // Not gated on AMD_LOG_LEVEL, like the refusal in open().
-  fprintf(stderr, "[HRR capture] Capture stopped: %s. The archive is incomplete.\n", why);
-}
-
-static void stop_capture(const char* why) {
-  BufWriteGuard lk;
-  stop_capture_locked(why);
+  fprintf(stderr, "[HRR capture] Capture stopped: %s. The archive at %s is incomplete.\n", why,
+          g_output_dir.c_str());
 }
 
 static void stop_for_space(uint64_t keep_free) {
-  char why[kPathMax + 128];
+  char why[128];
   snprintf(why, sizeof(why),
-           "less than %llu MiB would stay free on the file system holding %s",
-           static_cast<unsigned long long>(keep_free >> 20), g_output_dir.c_str());
-  stop_capture(why);
+           "less than %llu MiB would stay free on the file system holding the archive",
+           static_cast<unsigned long long>(keep_free >> 20));
+  BufWriteGuard lk;
+  stop_capture_locked(why, /*at_limit=*/false);
 }
 
 // Size the reserve for the file system holding `dir`, the archive open() is
@@ -1011,9 +1021,10 @@ static uint64_t file_bytes(uint64_t len) {
 // HIP_HRR_CAPTURE_MAX_MB caps what a process archive holds: events.bin, and every
 // blob and code object counted in whole blocks as for the reserve. Manifests and
 // the trailer aside, the archive never goes past it: a write that would is not
-// made, and capture stops as it does for space. HIP_HRR_CAPTURE_MAX_BLOB_MB caps
-// one blob: a larger copy is not stored, its event records no blob, the archive
-// is marked incomplete and capture goes on. Code objects and fat binaries are not
+// made, and capture stops as it does for space. A child forked after that stop
+// still opens an archive of its own, held to the same limit.
+// HIP_HRR_CAPTURE_MAX_BLOB_MB caps one blob: a larger copy is not stored, its
+// event records no blob, the archive is marked incomplete and capture goes on. Code objects and fat binaries are not
 // held to it, as replay needs every one. 0, the default, sets no limit. Both
 // apply with or without the reserve.
 //
@@ -1045,7 +1056,7 @@ static void stop_at_limit_locked() {
   char why[128];
   snprintf(why, sizeof(why), "the archive reached its HIP_HRR_CAPTURE_MAX_MB limit of %llu MiB",
            static_cast<unsigned long long>(g_max_archive_bytes >> 20));
-  stop_capture_locked(why);
+  stop_capture_locked(why, /*at_limit=*/true);
 }
 
 // Leave out a blob over HIP_HRR_CAPTURE_MAX_BLOB_MB, saying so once per archive.
@@ -1356,7 +1367,7 @@ static void mark_incomplete_locked(const char* reason) {
 // recorded anyway, and flipping the flag then would leave the trailer and the
 // manifest disagreeing. flush() sets g_events_finalized under g_blob_mu, so
 // taking it here puts the check on the same side of that cut-off as the writes.
-// stop_capture() calls this with g_file_mu held, so it must not take that
+// stop_capture_locked() calls this with g_file_mu held, so it must not take that
 // mutex; g_blob_mu comes after g_file_mu, as in flush().
 void mark_incomplete(const char* reason) {
   std::lock_guard<std::mutex> lk(g_blob_mu);
@@ -1415,7 +1426,7 @@ void flush(const char* /*output_dir*/) {
   int dir_fd;
   {
     BufWriteGuard lk;
-    // Must be read under the lock, see stop_capture().
+    // Must be read under the lock, see stop_capture_locked().
     incomplete = g_capture_incomplete.load(std::memory_order_relaxed);
     out_dir = g_output_dir;
     dir_fd = g_dir_fd.load();
