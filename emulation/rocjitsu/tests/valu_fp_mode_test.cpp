@@ -141,17 +141,6 @@ const std::vector<ArithmeticCase> kCases{
      {{6, 0x3f800001u}, {7, 0x3f800001u}},
      241u,
      FE_TONEAREST},
-    // A VOPD pair mixing arithmetic with MAX: the RDNA3 MIN/MAX slot computes on
-    // host floats, whose comparison and fmax both raise invalid on a signaling
-    // NaN. mxcsr_mask makes the harness assert the caller's flags survive.
-    {"gfx1100VopdMixedMaxSignalingNanKeepsHostFlags",
-     ROCJITSU_CODE_ARCH_RDNA3,
-     {0xc9140300u, 0x06060702u},
-     {{0, 0x3f800000u}, {1, 0x3f800000u}, {2, 0x7f800001u}, {3, 0x3f800000u}},
-     {{6, 0x40000000u}, {7, 0x3f800000u}},
-     240u,
-     FE_TONEAREST,
-     _MM_EXCEPT_MASK},
     {"gfx1150VopdDenormFlush",
      ROCJITSU_CODE_ARCH_RDNA3_5,
      {0xc9080300u, 0x06060702u},
@@ -3786,6 +3775,27 @@ struct ForceScalarGuard {
   bool original = util::force_scalar();
   ~ForceScalarGuard() { util::set_force_scalar_for_testing(original); }
 };
+
+// A VOPD pair mixing arithmetic with MAX: the RDNA3 MIN/MAX SIMD slot computes on
+// host floats, whose comparison and fmax both raise invalid on a signaling NaN,
+// and scopes them so the caller's flags survive. The scalar VOPD slot calls
+// std::fmax unscoped, like the other scalar host min/max bodies, so this checks
+// the SIMD route only. mxcsr_mask makes the harness assert the flags survive.
+TEST(ValuFpModeHelpers, VopdMixedMaxSimdKeepsHostFlags) {
+  if (!util::has_stdx_simd)
+    GTEST_SKIP() << "std::experimental::simd unavailable";
+  ForceScalarGuard guard;
+  util::set_force_scalar_for_testing(false);
+  expect_arithmetic_case({"gfx1100VopdMixedMaxSignalingNanKeepsHostFlags",
+                          ROCJITSU_CODE_ARCH_RDNA3,
+                          {0xc9140300u, 0x06060702u},
+                          {{0, 0x3f800000u}, {1, 0x3f800000u}, {2, 0x7f800001u}, {3, 0x3f800000u}},
+                          {{6, 0x40000000u}, {7, 0x3f800000u}},
+                          240u,
+                          FE_TONEAREST,
+                          _MM_EXCEPT_MASK},
+                         expect_simd_path(amdgpu::SimdFastPath::VOPD));
+}
 
 class ValuMinmaxFpModeTest : public testing::TestWithParam<ArithmeticCase> {};
 
