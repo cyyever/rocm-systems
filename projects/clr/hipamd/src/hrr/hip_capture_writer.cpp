@@ -928,11 +928,10 @@ static constexpr const char* kActiveMarker = "active";
 // are raised under g_file_mu, so a writer that sees the stop flag and then takes
 // the mutex finds events.bin already closed, and flush() cannot find it closed
 // without also seeing the archive marked incomplete. `why` completes "Capture
-// stopped: ".
-static void stop_capture(const char* why) {
+// stopped: ". Caller holds a BufWriteGuard.
+static void stop_capture_locked(const char* why) {
   char reason[kPathMax + 256];
   snprintf(reason, sizeof(reason), "stopped writing: %s", why);
-  BufWriteGuard lk;
   if (g_capture_stopped.exchange(true)) return;
   if (g_events_fd >= 0) {
     flush_buffer_locked();
@@ -946,6 +945,11 @@ static void stop_capture(const char* why) {
   mark_incomplete(reason);
   // Not gated on AMD_LOG_LEVEL, like the refusal in open().
   fprintf(stderr, "[HRR capture] Capture stopped: %s. The archive is incomplete.\n", why);
+}
+
+static void stop_capture(const char* why) {
+  BufWriteGuard lk;
+  stop_capture_locked(why);
 }
 
 static void stop_for_space(uint64_t keep_free) {
@@ -1009,9 +1013,13 @@ static uint64_t file_bytes(uint64_t len) {
 // the trailer aside, the archive never goes past it: a write that would is not
 // made, and capture stops as it does for space. HIP_HRR_CAPTURE_MAX_BLOB_MB caps
 // one blob: a larger copy is not stored, its event records no blob, the archive
-// is marked incomplete and capture goes on. Code objects are not held to it, as
-// replay needs every one. 0, the default, sets no limit. Both apply with or
-// without the reserve.
+// is marked incomplete and capture goes on. Code objects and fat binaries are not
+// held to it, as replay needs every one. 0, the default, sets no limit. Both
+// apply with or without the reserve.
+//
+// A write over the archive limit is refused and capture stopped under the same
+// hold of g_file_mu, which flush() takes to decide on the trailer: an archive
+// that dropped a write is never finalized as complete.
 // ---------------------------------------------------------------------------
 
 static uint64_t              g_max_archive_bytes = 0;  // set by open()
@@ -1024,19 +1032,20 @@ static uint64_t mib_to_bytes(size_t mib) {
 }
 
 // Count `len` bytes toward the archive limit. False when they would take the
-// archive past it; the caller then drops the write and calls stop_at_limit().
+// archive past it; the caller then drops the write and calls
+// stop_at_limit_locked(). Caller holds g_file_mu.
 static bool charge_archive(uint64_t len) {
   if (g_max_archive_bytes == 0) return true;
   return g_archive_bytes.fetch_add(len, std::memory_order_relaxed) + len <=
          g_max_archive_bytes;
 }
 
-// Must not be called with g_file_mu held.
-static void stop_at_limit() {
+// Caller holds a BufWriteGuard.
+static void stop_at_limit_locked() {
   char why[128];
   snprintf(why, sizeof(why), "the archive reached its HIP_HRR_CAPTURE_MAX_MB limit of %llu MiB",
            static_cast<unsigned long long>(g_max_archive_bytes >> 20));
-  stop_capture(why);
+  stop_capture_locked(why);
 }
 
 // Leave out a blob over HIP_HRR_CAPTURE_MAX_BLOB_MB, saying so once per archive.
@@ -1056,9 +1065,14 @@ static void skip_oversized_blob(size_t len) {
 static bool reserve_space(uint64_t len) {
   if (g_capture_stopped.load(std::memory_order_relaxed)) return false;
   len = file_bytes(len);
-  if (!charge_archive(len)) {
-    stop_at_limit();
-    return false;
+  if (g_max_archive_bytes != 0) {
+    BufWriteGuard lk;
+    // Past the trailer the write is dropped anyway, and the archive stays complete.
+    if (g_events_finalized) return false;
+    if (!charge_archive(len)) {
+      stop_at_limit_locked();
+      return false;
+    }
   }
   if (g_keep_free == 0) return true;
   const uint64_t reserved =
@@ -1628,19 +1642,18 @@ void write_event_raw(uint16_t api_id, hrr_event_header* hdr, uint32_t payload_le
   // A record is counted toward the next free-space check before it is written. When
   // it makes a check due, the check runs first, so it covers the record, as for a
   // blob: the bytes written between two checks stay under one interval.
-  bool due, over;
+  bool due;
   {
     BufWriteGuard lk;
     // Shims stay reachable during shutdown through slots another component wrapped,
     // and the reader would replay a record after the trailer as part of the archive.
     if (g_events_fd < 0 || g_events_finalized) return;
-    over = !charge_archive(payload_len);
-    due = !over && g_keep_free != 0 && space_check_due_locked(payload_len);
-    if (!over && !due) append_event_locked(hdr, payload_len, staged, fresh);
-  }
-  if (over) {
-    stop_at_limit();
-    return;
+    if (!charge_archive(payload_len)) {
+      stop_at_limit_locked();
+      return;
+    }
+    due = g_keep_free != 0 && space_check_due_locked(payload_len);
+    if (!due) append_event_locked(hdr, payload_len, staged, fresh);
   }
   if (due) {
     // Outside g_file_mu, since check_space may take it to stop the capture. The
@@ -1776,13 +1789,14 @@ class BlobClaim {
 // write_blob
 // ---------------------------------------------------------------------------
 
-Hash128 write_blob(const void* data, size_t len) {
+// `capped`: held to HIP_HRR_CAPTURE_MAX_BLOB_MB.
+static Hash128 store_blob(const void* data, size_t len, bool capped) {
   reopen_after_fork();
   {
     std::lock_guard<std::mutex> lk(g_file_mu);
     if (g_events_fd < 0 || g_events_finalized) return {};  // not open, or past the trailer
   }
-  if (g_max_blob_bytes != 0 && len > g_max_blob_bytes) {
+  if (capped && g_max_blob_bytes != 0 && len > g_max_blob_bytes) {
     skip_oversized_blob(len);
     return {};
   }
@@ -1836,6 +1850,10 @@ Hash128 write_blob(const void* data, size_t len) {
   claim.done(ok);
   return h;
 }
+
+Hash128 write_blob(const void* data, size_t len) { return store_blob(data, len, true); }
+
+Hash128 write_fat_binary(const void* data, size_t len) { return store_blob(data, len, false); }
 
 // ---------------------------------------------------------------------------
 // write_code_object

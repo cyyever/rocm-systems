@@ -97,6 +97,10 @@ void note_unreplayable(const char* api, const char* reason);
 // Thread-safe. Skips the write when the same bytes are already in this archive.
 Hash128 write_blob(const void* data, size_t len);
 
+// As write_blob(), for a fat binary, which HIP_HRR_CAPTURE_MAX_BLOB_MB does not
+// limit: replay loads it to run its kernels and resolve its device globals.
+Hash128 write_fat_binary(const void* data, size_t len);
+
 // Write a code object (.hsaco) blob. Returns hash, or {} as write_blob() does.
 Hash128 write_code_object(const void* image, size_t image_size);
 

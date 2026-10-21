@@ -46,6 +46,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <string>
 #include <thread>
 #include <utility>
@@ -1107,8 +1108,16 @@ HRR_TEST_CASE(Unit_HRR_CaptureLimit_SkipsLargeBlob) {
   }
   CHECK(big == 2);
   CHECK(small == 2);  // the copy in and its read back
-  for (const auto& ent : fs::recursive_directory_iterator(proc_dir / "blobs"))
-    if (ent.is_regular_file()) CHECK(ent.file_size() <= (1u << 20));
+  // Fat binaries, which replay needs, are the only blobs over the limit.
+  std::set<std::string> fat_binaries;
+  for (const auto& ev : arc.events) {
+    if (ev.header().event_type != HRR_API_HIPREGISTERFATBINARY) continue;
+    const auto* a =
+        reinterpret_cast<const hrr_args___hipRegisterFatBinary*>(ev.raw_payload.data());
+    fat_binaries.insert(hrr::hash_hex(a->blob_hash_lo, a->blob_hash_hi));
+  }
+  for (const auto& [hash, path] : arc.blobs)
+    if (fat_binaries.count(hash) == 0) CHECK(fs::file_size(path) <= (1u << 20));
 }
 
 #endif  // !_WIN32 && HRR_TEST_EXE
