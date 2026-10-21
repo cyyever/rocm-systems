@@ -13,6 +13,8 @@ from utils.inject_roctx._backends import torch as torch_backend
 from utils.inject_roctx._backends.torch import (
     DEEP_TENSOR_METHOD_WRAPS,
     TENSOR_METHOD_WRAPS,
+    _selected_tensor_method_wraps,
+    dispatcher_marker_name_for,
 )
 
 
@@ -103,16 +105,12 @@ def test_format_wrap_args_renders_tensors_and_skips_non_tensors():
 
 
 def test_dispatcher_marker_name_for_aten_packet():
-    from utils.inject_roctx._backends.torch import dispatcher_marker_name_for
-
     packet = SimpleNamespace(_qualified_op_name="aten::addmm")
     func = SimpleNamespace(overloadpacket=packet)
     assert dispatcher_marker_name_for(func) == "torch.ops.aten.addmm"
 
 
 def test_roctx_wrapper_idempotent_and_push_pop(monkeypatch):
-    from utils.inject_roctx._backends import torch as torch_backend
-
     pushes = []
     pops = []
     monkeypatch.setattr(
@@ -129,9 +127,6 @@ def test_roctx_wrapper_idempotent_and_push_pop(monkeypatch):
 
 
 def test_inject_roctx_into_model_pushes_class_forward(monkeypatch):
-    from tests.integration.common import require_torch
-    from utils.inject_roctx._backends import torch as torch_backend
-
     require_torch()
     import torch
 
@@ -153,8 +148,6 @@ def test_inject_roctx_into_model_pushes_class_forward(monkeypatch):
 
 
 def test_torch_backend_install_skips_dispatcher_when_collector_loads(monkeypatch):
-    from utils.inject_roctx._backends import torch as torch_backend
-
     noop_torch_structural_wraps(monkeypatch, torch_backend)
     monkeypatch.setattr(torch_backend.torch_trace_collector, "install", lambda: True)
     hook_calls = []
@@ -170,8 +163,6 @@ def test_torch_backend_install_skips_dispatcher_when_collector_loads(monkeypatch
 
 
 def test_torch_backend_install_falls_back_to_dispatch_mode(monkeypatch):
-    from utils.inject_roctx._backends import torch as torch_backend
-
     noop_torch_structural_wraps(monkeypatch, torch_backend)
     monkeypatch.setattr(torch_backend.torch_trace_collector, "install", lambda: False)
     hook_calls = []
@@ -187,19 +178,11 @@ def test_torch_backend_install_falls_back_to_dispatch_mode(monkeypatch):
 
 
 def test_deep_tensor_method_wraps_disabled_by_env(monkeypatch):
-    from utils.inject_roctx._backends.torch import (
-        TENSOR_METHOD_WRAPS,
-        _selected_tensor_method_wraps,
-    )
-
     monkeypatch.setenv("ROCPROFCOMPUTE_ROCTX_DEEP_TENSOR_WRAPS", "0")
     assert _selected_tensor_method_wraps() == TENSOR_METHOD_WRAPS
 
 
 def test_lazy_linear_to_under_tensor_wraps(monkeypatch):
-    from tests.integration.common import require_torch
-    from utils.inject_roctx._backends import torch as torch_backend
-
     require_torch()
     import torch
     from torch.nn.parameter import UninitializedParameter
@@ -224,9 +207,6 @@ def test_lazy_linear_to_under_tensor_wraps(monkeypatch):
 
 
 def test_uninitialized_tensor_item_still_raises(monkeypatch):
-    from tests.integration.common import require_torch
-    from utils.inject_roctx._backends import torch as torch_backend
-
     require_torch()
     import torch
     from torch.nn.parameter import UninitializedParameter
@@ -252,9 +232,6 @@ def test_uninitialized_tensor_item_still_raises(monkeypatch):
 
 
 def test_lazy_batch_norm_to_dtype_keeps_uninitialized_buffer(monkeypatch):
-    from tests.integration.common import require_torch
-    from utils.inject_roctx._backends import torch as torch_backend
-
     require_torch()
     import torch
     from torch.nn.parameter import UninitializedBuffer
@@ -274,9 +251,6 @@ def test_lazy_batch_norm_to_dtype_keeps_uninitialized_buffer(monkeypatch):
 
 
 def test_uninitialized_buffer_keeps_persistent_on_to(monkeypatch):
-    from tests.integration.common import require_torch
-    from utils.inject_roctx._backends import torch as torch_backend
-
     require_torch()
     import torch
     from torch.nn.parameter import UninitializedBuffer

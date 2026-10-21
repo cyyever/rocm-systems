@@ -1,12 +1,11 @@
 # Copyright (c) Advanced Micro Devices, Inc.
 # SPDX-License-Identifier:  MIT
 
-import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -105,6 +104,51 @@ _KERNEL_ID_KEYS = ["Kernel_Name", "Grid_Size", "Workgroup_Size", "LDS_Per_Workgr
 ARGS_DISPLAY_MAX_ITEMS = 8
 ARGS_DISPLAY_MAX_CHARS = 160
 ARGS_DISPLAY_MAX_VARIANTS = 5
+_STACKED_MARKER_WIRE = re.compile(r":#\d+@")
+_FATAL_ML_API_TRACE_ERRORS = (
+    KernelSequenceLengthMismatchError,
+    MarkerNotNestedError,
+    OverlappingMarkerRangeError,
+    PassMarkerMismatchError,
+)
+_REQUIRED_MARKER_COLUMNS = (
+    "Function",
+    "Thread_Id",
+    "Correlation_ID",
+    "GUID",
+    "Start_Timestamp",
+    "End_Timestamp",
+)
+_REQUIRED_COUNTER_COLUMNS = (
+    "Correlation_ID",
+    "GUID",
+    "Dispatch_ID",
+    "Kernel_Name",
+    "Grid_Size",
+    "Workgroup_Size",
+    "LDS_Per_Workgroup",
+    "Start_Timestamp",
+    "End_Timestamp",
+)
+_MARKER_DISPATCH_JOIN_KEYS = ("Correlation_ID", "GUID")
+_PASS_DROP_COLUMNS = (
+    "Correlation_ID",
+    "GUID",
+    "stitch_key",
+    "function_ordinal",
+    "_pass_id",
+    "_marker_order",
+)
+_COLLAPSED_MARKER_COLUMNS = (
+    "Function",
+    "Thread_Id",
+    "Start_Timestamp",
+    "End_Timestamp",
+    "Kernel_Names",
+    "Kernel_Start_Timestamps",
+    "Kernel_End_Timestamps",
+    "Kernel_Pmc_Group_Keys",
+)
 
 
 def get_bw_scale_and_unit(value: float) -> tuple[float, str]:
@@ -278,6 +322,16 @@ def rollup_node_stats(node: CallTreeNode) -> NodeRollup:
     )
 
 
+def iter_call_tree_paths(
+    nodes: List[CallTreeNode], parent_path: Tuple[str, ...] = ()
+) -> Iterator[Tuple[CallTreeNode, Tuple[str, ...]]]:
+    """Yield each node depth-first with its operator path from the root."""
+    for node in nodes:
+        path = parent_path + (node.name,)
+        yield node, path
+        yield from iter_call_tree_paths(node.children, path)
+
+
 def decode_marker_name(name: str) -> str:
     """Decode a percent-encoded marker segment ('%2F' -> '/', '%25' -> '%')."""
     return name.replace("%2F", "/").replace("%25", "%")
@@ -406,9 +460,6 @@ def parse_marker_function(function_value: object) -> dict[str, Any]:
         "launcher_thread_id": launcher_thread_id,
         "args": parsed_keys["args"],
     }
-
-
-_STACKED_MARKER_WIRE = re.compile(r":#\d+@")
 
 
 def _stacked_marker_function_cell(function_value: object) -> Optional[str]:
@@ -572,14 +623,6 @@ def _call_tree_node_from_marker_row(
     node.invocation_ids.add(invocation_id)
     _record_operator_args(node, getattr(row, "args", ""), invocation_id)
     return node
-
-
-_FATAL_ML_API_TRACE_ERRORS = (
-    KernelSequenceLengthMismatchError,
-    MarkerNotNestedError,
-    OverlappingMarkerRangeError,
-    PassMarkerMismatchError,
-)
 
 
 def _record_ml_api_trace_error(
@@ -803,19 +846,12 @@ def _nested_invocation_keys(
     forest: dict[str, list[CallTreeNode]],
 ) -> set[tuple[str, str]]:
     """Return (Thread_Id, marker-start) pairs present in the forest."""
-    keys: set[tuple[str, str]] = set()
-
-    def walk(node: CallTreeNode) -> None:
-        thread_id = node.thread_id or ""
-        for invocation_id in node.invocation_ids:
-            keys.add((thread_id, invocation_id))
-        for child in node.children:
-            walk(child)
-
-    for roots in forest.values():
-        for root in roots:
-            walk(root)
-    return keys
+    return {
+        (node.thread_id or "", invocation_id)
+        for roots in forest.values()
+        for node, _path in iter_call_tree_paths(roots)
+        for invocation_id in node.invocation_ids
+    }
 
 
 def _validate_all_markers_nested(
@@ -996,31 +1032,35 @@ def filter_forest_by_backends(
     if not backends:
         return forest
 
-    def copy_matching_view(node: CallTreeNode) -> Optional[CallTreeNode]:
-        kept_children: list[CallTreeNode] = []
-        for child in node.children:
-            copied_child = copy_matching_view(child)
-            if copied_child is not None:
-                kept_children.append(copied_child)
-        if node.backend not in backends and not kept_children:
-            return None
-        copied_node = clone_call_tree_node(node)
-        copied_node.children = kept_children
-        if node.backend not in backends:
-            copied_node.kernels = {}
-        rollup_node_stats(copied_node)
-        return copied_node
-
     filtered: dict[str, list[CallTreeNode]] = {}
     for thread_id, roots in forest.items():
         kept_roots: list[CallTreeNode] = []
         for root in roots:
-            copied_root = copy_matching_view(root)
+            copied_root = _copy_backend_view(root, backends)
             if copied_root is not None:
                 kept_roots.append(copied_root)
         if kept_roots:
             filtered[thread_id] = kept_roots
     return filtered
+
+
+def _copy_backend_view(
+    node: CallTreeNode, backends: List[str]
+) -> Optional[CallTreeNode]:
+    """Copy one node for filter_forest_by_backends, or None when nothing is kept."""
+    kept_children: list[CallTreeNode] = []
+    for child in node.children:
+        copied_child = _copy_backend_view(child, backends)
+        if copied_child is not None:
+            kept_children.append(copied_child)
+    if node.backend not in backends and not kept_children:
+        return None
+    copied_node = clone_call_tree_node(node)
+    copied_node.children = kept_children
+    if node.backend not in backends:
+        copied_node.kernels = {}
+    rollup_node_stats(copied_node)
+    return copied_node
 
 
 def _copy_scoped_operator_node(
@@ -1083,7 +1123,7 @@ def _node_source_location(node: CallTreeNode) -> str:
 
 
 def _is_nan(value: object) -> bool:
-    return isinstance(value, float) and math.isnan(value)
+    return isinstance(value, float) and pd.isna(value)
 
 
 def _aggregate_operator_summary_rows(
@@ -1164,49 +1204,12 @@ def build_operator_summary(
         "Min_Dispatch",
         "Max_Dispatch",
     ]
-    rows: list[dict[str, Any]] = []
-
-    def walk(node: CallTreeNode, location: str, path_parts: list[str]) -> None:
-        if node.kernel_launches > 0:
-            has_calls = len(node.invocation_ids) > 0
-            calls = len(node.invocation_ids) if has_calls else float("nan")
-            dispatches = node.kernel_launches
-            total_gpu_ms = node.total_duration_ms
-            rows.append({
-                "Operator": "/".join(path_parts),
-                "Location": location,
-                "Calls": calls,
-                "Dispatches": dispatches,
-                "Dispatches_Per_Call": (
-                    dispatches / calls if has_calls else float("nan")
-                ),
-                "Total_GPU": total_gpu_ms,
-                "Pct_Total_GPU": float("nan"),
-                "Mean_Per_Call": (total_gpu_ms / calls if has_calls else float("nan")),
-                "Mean_Per_Dispatch": (
-                    node.mean_dispatch_ns * NS_TO_MS
-                    if node.mean_dispatch_ns is not None
-                    else float("nan")
-                ),
-                "Min_Dispatch": (
-                    node.min_dispatch_ns * NS_TO_MS
-                    if node.min_dispatch_ns is not None
-                    else float("nan")
-                ),
-                "Max_Dispatch": (
-                    node.max_dispatch_ns * NS_TO_MS
-                    if node.max_dispatch_ns is not None
-                    else float("nan")
-                ),
-            })
-        for child in node.children:
-            walk(child, _node_source_location(child), path_parts + [child.name])
-
-    all_roots: list[CallTreeNode] = []
-    for roots in call_trees.values():
-        all_roots.extend(roots)
-        for root in roots:
-            walk(root, _node_source_location(root), [root.name])
+    all_roots = [root for roots in call_trees.values() for root in roots]
+    rows = [
+        _operator_summary_row(node, path)
+        for node, path in iter_call_tree_paths(all_roots)
+        if node.kernel_launches > 0
+    ]
 
     if not rows:
         return pd.DataFrame(columns=columns)
@@ -1225,13 +1228,37 @@ def build_operator_summary(
     )
 
 
-_REQUIRED_MARKER_COLUMNS = (
-    "Function",
-    "Thread_Id",
-    "Correlation_ID",
-    "Start_Timestamp",
-    "End_Timestamp",
-)
+def _operator_summary_row(node: CallTreeNode, path: Tuple[str, ...]) -> Dict[str, Any]:
+    """Build the build_operator_summary row for one node that launched GPU work."""
+    has_calls = len(node.invocation_ids) > 0
+    calls = len(node.invocation_ids) if has_calls else float("nan")
+    dispatches = node.kernel_launches
+    total_gpu_ms = node.total_duration_ms
+    return {
+        "Operator": "/".join(path),
+        "Location": _node_source_location(node),
+        "Calls": calls,
+        "Dispatches": dispatches,
+        "Dispatches_Per_Call": (dispatches / calls if has_calls else float("nan")),
+        "Total_GPU": total_gpu_ms,
+        "Pct_Total_GPU": float("nan"),
+        "Mean_Per_Call": (total_gpu_ms / calls if has_calls else float("nan")),
+        "Mean_Per_Dispatch": (
+            node.mean_dispatch_ns * NS_TO_MS
+            if node.mean_dispatch_ns is not None
+            else float("nan")
+        ),
+        "Min_Dispatch": (
+            node.min_dispatch_ns * NS_TO_MS
+            if node.min_dispatch_ns is not None
+            else float("nan")
+        ),
+        "Max_Dispatch": (
+            node.max_dispatch_ns * NS_TO_MS
+            if node.max_dispatch_ns is not None
+            else float("nan")
+        ),
+    }
 
 
 def _find_ml_api_trace_csv_pairs(workload_dir: Path) -> list[tuple[Path, Path]]:
@@ -1278,8 +1305,6 @@ def _load_marker_trace_dataframe(marker_path: Path) -> pd.DataFrame:
             f"Marker CSV {marker_path} is missing required columns {missing_columns}",
         )
     kept_columns = list(_REQUIRED_MARKER_COLUMNS)
-    if "GUID" in marker_df.columns:
-        kept_columns.append("GUID")
     null_columns = [column for column in kept_columns if marker_df[column].isna().any()]
     if null_columns:
         console_error(
@@ -1287,29 +1312,6 @@ def _load_marker_trace_dataframe(marker_path: Path) -> pd.DataFrame:
             f"Marker CSV {marker_path} has null values in {null_columns}",
         )
     return marker_df[kept_columns].copy()
-
-
-_REQUIRED_COUNTER_COLUMNS = (
-    "Correlation_ID",
-    "Dispatch_ID",
-    "Kernel_Name",
-    "Grid_Size",
-    "Workgroup_Size",
-    "LDS_Per_Workgroup",
-    "Start_Timestamp",
-    "End_Timestamp",
-)
-_DISPATCH_KEEP_COLUMNS = (
-    "Kernel_Name",
-    "Start_Timestamp",
-    "End_Timestamp",
-    "Correlation_ID",
-    "Dispatch_ID",
-    "GUID",
-    "Grid_Size",
-    "Workgroup_Size",
-    "LDS_Per_Workgroup",
-)
 
 
 def _collapse_counter_dispatches(
@@ -1336,18 +1338,9 @@ def _collapse_counter_dispatches(
             "analysis",
             f"Counter CSV {counter_path} has null values in {null_columns}",
         )
-    group_keys = ["Dispatch_ID"]
-    if "GUID" in counter_df.columns:
-        group_keys.append("GUID")
-    keep_columns = [
-        column for column in _DISPATCH_KEEP_COLUMNS if column in counter_df.columns
-    ]
-    for group_key in group_keys:
-        if group_key not in keep_columns:
-            keep_columns.append(group_key)
     collapsed = (
-        counter_df[keep_columns]
-        .groupby(group_keys, sort=False, dropna=False)
+        counter_df[list(_REQUIRED_COUNTER_COLUMNS)]
+        .groupby(["Dispatch_ID", "GUID"], sort=False, dropna=False)
         .first()
         .reset_index()
     )
@@ -1357,17 +1350,6 @@ def _collapse_counter_dispatches(
             "End_Timestamp": "Kernel_End_Timestamp",
         }
     )
-
-
-def _join_keys_for_marker_and_dispatch(
-    marker_df: pd.DataFrame,
-    dispatch_df: pd.DataFrame,
-) -> list[str]:
-    """Correlation_ID and GUID."""
-    join_keys = ["Correlation_ID"]
-    if "GUID" in marker_df.columns and "GUID" in dispatch_df.columns:
-        join_keys.append("GUID")
-    return join_keys
 
 
 def _outer_join_dispatches_and_markers(
@@ -1380,7 +1362,7 @@ def _outer_join_dispatches_and_markers(
     return pd.merge(
         dispatch_df,
         marker_ordered,
-        on=_join_keys_for_marker_and_dispatch(marker_df, dispatch_df),
+        on=list(_MARKER_DISPATCH_JOIN_KEYS),
         how="outer",
     )
 
@@ -1430,26 +1412,6 @@ def _add_stitch_key_and_ordinal(pass_frame: pd.DataFrame) -> pd.DataFrame:
     result["stitch_key"] = result["Function"].map(_marker_stitch_key)
     result["function_ordinal"] = result.groupby("stitch_key", sort=False).cumcount()
     return result
-
-
-_PASS_DROP_COLUMNS = (
-    "Correlation_ID",
-    "GUID",
-    "stitch_key",
-    "function_ordinal",
-    "_pass_id",
-    "_marker_order",
-)
-_COLLAPSED_MARKER_COLUMNS = (
-    "Function",
-    "Thread_Id",
-    "Start_Timestamp",
-    "End_Timestamp",
-    "Kernel_Names",
-    "Kernel_Start_Timestamps",
-    "Kernel_End_Timestamps",
-    "Kernel_Pmc_Group_Keys",
-)
 
 
 def _kernel_names_as_set(names: object) -> frozenset[str]:
@@ -1600,13 +1562,12 @@ def _group_kernels_onto_markers(joined_df: pd.DataFrame) -> pd.DataFrame:
             "Start_Timestamp": first["Start_Timestamp"],
             "End_Timestamp": first["End_Timestamp"],
             "Correlation_ID": first["Correlation_ID"],
+            "GUID": first["GUID"],
             "Kernel_Names": kernel_names,
             "Kernel_Start_Timestamps": kernel_starts,
             "Kernel_End_Timestamps": kernel_ends,
             "Kernel_Pmc_Group_Keys": pmc_group_keys,
         }
-        if "GUID" in group.columns:
-            record["GUID"] = first["GUID"]
         if "_marker_order" in group.columns:
             record["_marker_order"] = first["_marker_order"]
         records.append(record)

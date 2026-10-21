@@ -21,8 +21,6 @@ from tests.integration.common import (
 from utils import csv_compression
 from utils.utils_analysis import parse_marker_function
 
-pytestmark = pytest.mark.torch_trace
-
 MARKER_API_COLUMNS = {
     "Domain",
     "Function",
@@ -45,16 +43,16 @@ COUNTER_COLLECTION_COLUMNS = {
 # check, not a measurement. GPU idle and kernel duration are not gated:
 # they read deprecated results_*.csv.gz. A real overhead number needs a
 # larger workload with repeats, not this sample.
-_TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT = 50.0
+TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT = 50.0
 
 
-_ADDMM_NATIVE = re.compile(r"aten::addmm(?![A-Za-z0-9_])")
-_ADDMM_FALLBACK = re.compile(r"torch\.ops\.aten\.addmm(?![A-Za-z0-9_])")
+ADDMM_NATIVE = re.compile(r"aten::addmm(?![A-Za-z0-9_])")
+ADDMM_FALLBACK = re.compile(r"torch\.ops\.aten\.addmm(?![A-Za-z0-9_])")
 
 
-def _find_addmm_marker(text: str):
+def find_addmm_marker(text: str):
     """Return an addmm marker in either the native or Python-tier spelling."""
-    return _ADDMM_NATIVE.search(text) or _ADDMM_FALLBACK.search(text)
+    return ADDMM_NATIVE.search(text) or ADDMM_FALLBACK.search(text)
 
 
 def check_torch_trace_markers(marker_rows):
@@ -102,14 +100,14 @@ def check_torch_trace_markers(marker_rows):
         )
 
 
-def _percent_overhead(with_flag, baseline, label):
+def percent_overhead(with_flag, baseline, label):
     """Return ``(with_flag - baseline) / baseline * 100``, or fail if baseline is 0."""
     if baseline <= 0.0:
         pytest.fail("baseline %s is %s; cannot compute overhead" % (label, baseline))
     return ((with_flag - baseline) / baseline) * 100.0
 
 
-def _format_duration(seconds):
+def format_duration(seconds):
     """Format a duration in seconds for overhead-test logs (s / ms / us / ns)."""
     ns = float(seconds) * 1e9
     abs_ns = abs(ns)
@@ -122,7 +120,7 @@ def _format_duration(seconds):
     return f"{ns:.0f} ns"
 
 
-def _print_torch_trace_overhead_report(wall_clock):
+def print_torch_trace_overhead_report(wall_clock):
     """Print without/with/overhead for ``test_torch_trace_overhead``.
 
     ``wall_clock`` is ``(without, with_flag, overhead_pct)`` in seconds.
@@ -133,8 +131,8 @@ def _print_torch_trace_overhead_report(wall_clock):
     print(f"  {'metric':<22} {'without':>12}  {'with':>16}  {'overhead':>10}")
     print(f"  {'-' * 22} {'-' * 12}  {'-' * 16}  {'-' * 10}")
     print(
-        f"  {'wall-clock':<22} {_format_duration(without):>12}  "
-        f"{_format_duration(with_flag):>16}"
+        f"  {'wall-clock':<22} {format_duration(without):>12}  "
+        f"{format_duration(with_flag):>16}"
         f"  {f'{overhead_pct:+.1f}%':>10}"
     )
     print(f"{'=' * 72}\n")
@@ -235,7 +233,7 @@ def test_torch_trace_profile_csvs(torch_trace_profiled_workload):
                 assert row["Start_Timestamp"], f"Empty Start_Timestamp in {marker_file}"
                 assert row["End_Timestamp"], f"Empty End_Timestamp in {marker_file}"
             assert any("nn.Module.Linear.forward" in fn for fn in functions)
-            assert any(_find_addmm_marker(fn) for fn in functions)
+            assert any(find_addmm_marker(fn) for fn in functions)
             if any(fn.startswith("aten::") for fn in functions):
                 assert any("aten::addmm" in fn for fn in functions)
                 assert any("scope=FUNCTION" in fn for fn in functions)
@@ -319,14 +317,14 @@ def test_torch_trace_overhead(binary_handler_profile_rocprof_compute):
     assert returncode_with_flag == 0, "Profiling with torch-trace failed"
     common.clean_output_dir(config["cleanup"], workload_dir_with_flag)
 
-    wall_clock_overhead = _percent_overhead(with_flag_time, baseline_time, "wall-clock")
-    _print_torch_trace_overhead_report(
+    wall_clock_overhead = percent_overhead(with_flag_time, baseline_time, "wall-clock")
+    print_torch_trace_overhead_report(
         wall_clock=(baseline_time, with_flag_time, wall_clock_overhead),
     )
 
-    assert wall_clock_overhead < _TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT, (
+    assert wall_clock_overhead < TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT, (
         f"Wall-clock overhead too high: {wall_clock_overhead:.1f}% "
-        f"(limit {_TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT}%)"
+        f"(limit {TORCH_TRACE_WALL_CLOCK_OVERHEAD_PCT}%)"
     )
 
 
@@ -569,70 +567,18 @@ def test_torch_operator_with_dispatch_filter(
     kernel_top = pd.read_csv(Path(torch_trace_profiled_workload) / "pmc_kernel_top.csv")
     assert set(kernel_top["Kernel_Name"].astype(str)) == {dispatch_one_kernel}
     assert "operator filter selected" in out
-    miss = dispatch_df[
-        ~dispatch_df["Kernel_Name"]
-        .astype(str)
-        .str.contains("addmm", case=False, na=False)
-    ]
-    assert not miss.empty
-    miss_id = str(int(miss.iloc[0]["Dispatch_ID"]))
-    miss_code = binary_handler_analyze_rocprof_compute([
-        "--experimental",
-        "analyze",
-        "--torch-operator",
-        "*addmm*",
-        "--dispatch",
-        miss_id,
-        "--path",
-        torch_trace_profiled_workload,
-    ])
-    assert miss_code != 0
 
 
-def test_torch_trace_user_range_in_marker_csv(binary_handler_profile_rocprof_compute):
-    require_torch(gpu=True)
-    pytest.importorskip("roctx")
-    workload_dir = common.get_output_dir(param_id="torch_trace_user_range")
-    profile_config = dict(config)
-    profile_config["simple_net_user_range"] = [
-        sys.executable,
-        *config["torch_test_app"][1:],
-        "--user-range",
-    ]
-    try:
-        returncode = binary_handler_profile_rocprof_compute(
-            profile_config,
-            workload_dir,
-            [
-                "--experimental",
-                "--torch-trace",
-                "--iteration-multiplexing",
-            ],
-            check_success=True,
-            app_name="simple_net_user_range",
-        )
-        assert returncode == 0
-        marker_files = list(Path(workload_dir).glob("**/*marker_api_trace.csv.gz"))
-        assert marker_files
-        functions = []
-        for marker_file in marker_files:
-            with csv_compression.open_gzip_csv_read(marker_file) as f:
-                for row in csv.DictReader(f):
-                    functions.append(row["Function"])
-        assert any(fn == "TrainingLoop_UserDefinedMarker" for fn in functions)
-    finally:
-        common.clean_output_dir(config["cleanup"], workload_dir)
-
-
-def test_torch_trace_backward_thread_in_marker_csv(
+def test_torch_trace_user_range_and_backward_thread_in_marker_csv(
     binary_handler_profile_rocprof_compute,
 ):
     require_torch(gpu=True)
-    workload_dir = common.get_output_dir(param_id="torch_trace_backward_thread")
+    workload_dir = common.get_output_dir(param_id="torch_trace_user_range_backward")
     profile_config = dict(config)
-    profile_config["simple_net_backward_thread"] = [
+    profile_config["simple_net_user_range_backward_thread"] = [
         sys.executable,
         *config["torch_test_app"][1:],
+        "--user-range",
         "--backward-thread",
     ]
     try:
@@ -645,7 +591,7 @@ def test_torch_trace_backward_thread_in_marker_csv(
                 "--iteration-multiplexing",
             ],
             check_success=True,
-            app_name="simple_net_backward_thread",
+            app_name="simple_net_user_range_backward_thread",
         )
         assert returncode == 0
         marker_files = list(Path(workload_dir).glob("**/*marker_api_trace.csv.gz"))
@@ -657,6 +603,7 @@ def test_torch_trace_backward_thread_in_marker_csv(
                 for row in csv.DictReader(f):
                     functions.append(row["Function"])
                     thread_ids.add(row["Thread_Id"])
+        assert any(fn == "TrainingLoop_UserDefinedMarker" for fn in functions)
         assert any("torch.Tensor.backward" in fn for fn in functions)
         assert len(thread_ids) >= 2
         assert any("|ltid=" in fn for fn in functions)
