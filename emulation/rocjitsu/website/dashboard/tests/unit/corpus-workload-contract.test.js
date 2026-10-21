@@ -1,25 +1,21 @@
 import { expect, test } from 'vitest';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectBenchmarkSeries } from '../../src/data/selectors.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 function publication() {
   const source = createMaintainedPublication();
-  for (const catalog of Object.values(source.catalogs)) {
-    for (const test of Object.values(catalog.benchmark_definitions)) test.operation = 'Matrix multiplication followed by reduction';
-  }
+  for (const run of source.runs) for (const row of run.benchmark_results) row.operation = 'Matrix multiplication followed by reduction';
   return source;
 }
 
 test('preserves literal workload IDs, operation, ordered samples and sparse target/policy configurations', () => {
   const source = publication();
   const run = source.runs[12];
-  for (const configuration of run.configurations) {
-    for (const result of configuration.benchmark_results) Object.assign(result, { timing_results_s: [0.03, 0.01, 0.02] });
-  }
+  for (const row of run.benchmark_results) row.timing_results_s = [0.03, 0.01, 0.02];
   const before = structuredClone(source);
-  const { data, sourceData } = validatePublishedDashboardData(source);
-  const normalized = data.runs.find(({ runId }) => runId === run.id);
+  const { data, sourceData } = adaptPublishedDashboardData(source);
+  const normalized = data.runs.find(({ runId }) => runId === run.publication.id);
   expect(normalized.configurations).toHaveLength(3);
   expect(normalized.tests.every((result) => result.operation === 'Matrix multiplication followed by reduction'
     && result.logicalTestId === result.id && result.testId === `${result.target}/${result.mode}:${result.id}`
@@ -30,22 +26,4 @@ test('preserves literal workload IDs, operation, ordered samples and sparse targ
   expect(series.series[1].points[12]).toBeNull();
   expect(sourceData.runs).toEqual(before.runs);
   expect(source).toEqual(before);
-});
-
-test.each(['', ' ', null, 7, {}, []].map((operation) => ({ operation })))('rejects an explicitly invalid operation $operation', ({ operation }) => {
-  const source = publication();
-  Object.values(Object.values(source.catalogs)[0].benchmark_definitions)[0].operation = operation;
-  expect(() => validatePublishedDashboardData(source)).toThrow(/invalid.*definition/);
-});
-
-test('rejects conflicting operations for the same corpus workload ID', () => {
-  const source = publication();
-  Object.values(source.catalogs['test-catalogs/fictional-current.json'].benchmark_definitions)[0].operation = 'Different computation';
-  expect(() => validatePublishedDashboardData(source)).toThrow(/defined differently/);
-});
-
-test('maintained catalogs require operation instead of inventing missing metadata', () => {
-  const source = publication();
-  for (const test of Object.values(source.catalogs['test-catalogs/fictional-old.json'].benchmark_definitions)) delete test.operation;
-  expect(() => validatePublishedDashboardData(source)).toThrow(/invalid.*definition/);
 });

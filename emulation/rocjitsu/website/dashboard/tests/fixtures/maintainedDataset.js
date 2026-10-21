@@ -25,44 +25,43 @@ const catalogFor = (current) => fixtureCatalog(current ? 'fictional-current' : '
 export function createMaintainedPublication() {
   const catalogs = Object.fromEntries([false, true].map((current) => {
     const catalog = catalogFor(current);
-    return [`test-catalogs/${catalog.benchmark_suite}.json`, catalog];
+    return [catalog.benchmark_suite, catalog];
   }));
   const canonical = Array.from({ length: 24 }, (_, index) => {
     const current = index >= 8;
-    const testCatalog = `test-catalogs/fictional-${current ? 'current' : 'old'}.json`;
+    const testCatalog = `fictional-${current ? 'current' : 'old'}`;
     const id = `fictional-develop-${String(index).padStart(2, '0')}`;
     return {
-      schemaVersion: 1, id, benchmark_catalog: testCatalog,
+      schema_version: 1, publication: { id, workflow_commit_sha: 'a'.repeat(40), tensile_commit_sha: 'b'.repeat(40),
       source: { branch: 'develop', message: `FICTIONAL develop measurement ${index}` },
+      trigger: index === 21 ? 'manual' : 'auto', machine_label: index < 16 ? 'fictional-node-a' : 'fictional-node-b' },
       execution_summary: fixtureSummary(catalogs[testCatalog].benchmark_suite, iso(index, 5), index === 21 ? '2026-10-05T10:00:00.000Z' : iso(index)),
-      execution: { trigger: index === 21 ? 'manual' : 'auto', machine_label: index < 16 ? 'fictional-node-a' : 'fictional-node-b' },
       provenance: fixtureProvenance(sha(index + 1), iso(index, 4), index < 16 ? 'test-a' : 'test-b'),
-      configurations: CONFIGURATION_KEYS.filter((key) => !(index === 12 && key === 'gfx950/default')).map((key, configIndex) => {
+      benchmark_results: CONFIGURATION_KEYS.filter((key) => !(index === 12 && key === 'gfx950/default')).flatMap((key, configIndex) => {
         const [target, policy] = key.split('/');
-        return { target, thread_policy: policy,
-          benchmark_results: catalogs[testCatalog].membership[target][policy].map((testId, testIndex) => {
+        return catalogs[testCatalog].membership[target][policy].map((testId, testIndex) => {
             const status = (index === 8 && policy === 'single' && testId === 'd') || (index === 9 && policy === 'single' && testId === 'e') ? 'failed'
               : index === 8 && testId === 'e' ? 'timeout' : 'completed';
             const durationSeconds = status !== 'completed' ? null : Number((20 + testIndex * 10 + configIndex * 5 - index * 0.2).toFixed(2));
-            return { id: testId, status, timing_results_s: status === 'completed' ? [durationSeconds] : [], error: status === 'completed' ? null : 'Fictional diagnostic' };
-          }) };
+            return { ...catalogs[testCatalog].benchmark_definitions[testId], id: testId, target, thread_policy: policy, exit_code: status === 'completed' ? 0 : 1, status, timing_results_s: status === 'completed' ? [durationSeconds] : [], error: status === 'completed' ? null : 'Fictional diagnostic' };
+          });
       }),
     };
   });
   const branches = Array.from({ length: 20 }, (_, index) => {
     const run = structuredClone(canonical[23]);
-    run.id = `fictional-branch-${String(index + 1).padStart(2, '0')}`;
-    run.source = { branch: `fictional/optimization-${String(index + 1).padStart(2, '0')}`, message: `FICTIONAL branch ${index + 1}`,
-      ...(index % 2 === 0 ? { base: { branch: 'develop', commit: canonical[20].provenance.rocjitsu.rocjitsu_commit_sha }, pullRequest: { number: 1000 + index } } : {}),
+    run.publication.id = `fictional-branch-${String(index + 1).padStart(2, '0')}`;
+    run.publication.source = { branch: `fictional/optimization-${String(index + 1).padStart(2, '0')}`, message: `FICTIONAL branch ${index + 1}`,
+      ...(index % 2 === 0 ? { base: { branch: 'develop', commit: canonical[20].provenance.rocjitsu.rocjitsu_commit_sha }, pull_request: { number: 1000 + index } } : {}),
     };
     run.execution_summary.finished_at = `2026-10-05T11:${String(index).padStart(2, '0')}:00.000Z`;
-    run.execution.trigger = 'manual';
-    run.execution.machine_label = 'fictional-branch-node';
+    run.publication.trigger = 'manual';
+    run.publication.machine_label = 'fictional-branch-node';
     run.provenance = fixtureProvenance(sha(100 + index), '2026-10-05T09:00:00.000Z', 'test-branch');
     run.execution_summary.timestamp = '2026-10-05T10:00:00.000Z';
-    if (index === 1) run.configurations = run.configurations.filter(({ thread_policy }) => thread_policy === 'single');
-    if (index === 2) Object.assign(run.configurations[0].benchmark_results[0], { status: 'failed', timing_results_s: [], error: 'Fictional branch failure' });
-    for (const config of run.configurations) for (const result of config.benchmark_results) {
+    if (index === 1) run.benchmark_results = run.benchmark_results.filter(({ thread_policy }) => thread_policy === 'single');
+    if (index === 2) Object.assign(run.benchmark_results[0], { status: 'failed', timing_results_s: [], error: 'Fictional branch failure' });
+    for (const result of run.benchmark_results) {
       if (result.status === 'completed') {
         result.timing_results_s = [Number((result.timing_results_s[0] * (0.9 + index / 100)).toFixed(2))];
       }
@@ -70,25 +69,9 @@ export function createMaintainedPublication() {
     return run;
   });
   const runs = [...canonical, ...branches];
-  // Configuration absence requires an equally sparse catalog, not one-sided
-  // group omission. Preserve the base catalogs for fully populated attempts.
-  for (const run of runs) {
-    const original = catalogs[run.benchmark_catalog];
-    if (run.configurations.length === Object.values(original.membership).reduce((count, policies) => count + Object.keys(policies).length, 0)) continue;
-    const catalog = structuredClone(original);
-    catalog.benchmark_suite = `${original.benchmark_suite}-${run.id}`;
-    catalog.membership = {};
-    for (const { target, thread_policy } of run.configurations) {
-      catalog.membership[target] ??= {};
-      catalog.membership[target][thread_policy] = original.membership[target][thread_policy];
-    }
-    run.benchmark_catalog = `test-catalogs/${catalog.benchmark_suite}.json`;
-    catalogs[run.benchmark_catalog] = catalog;
-  }
-  for (const run of runs) run.execution_summary.benchmark_suite = catalogs[run.benchmark_catalog].benchmark_suite;
   return {
     index: { generatedAt: '2026-10-05T12:00:00.000Z', runFiles: runs.map(fixtureRunPath) },
-    catalogs, runs,
+    runs,
   };
 }
 
@@ -100,7 +83,7 @@ export async function writeFixturePublication(directory, publication) {
   await mkdir(directory, { recursive: true });
   // This function deliberately targets test data only; never point it at published data.
   for (const entry of await readdir(directory)) await rm(path.join(directory, entry), { recursive: true, force: true });
-  const files = { 'index.json': publication.index, ...publication.catalogs,
+  const files = { 'index.json': publication.index,
     ...Object.fromEntries(publication.runs.map((run, index) => [publication.index.runFiles[index], run])), };
   for (const [name, value] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(directory, name)), { recursive: true });

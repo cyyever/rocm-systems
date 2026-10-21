@@ -23,7 +23,7 @@ test.each(['light', 'dark'])('%s baseline metric reads purple from the shared pa
     colorTokens[mode].purpleText = original;
   }
 });
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 const captured = vi.hoisted(() => ({ chart: null, selectors: [], swap: null, pair: null }));
@@ -75,16 +75,16 @@ test.each(['baseline', 'candidate'])('single-only %s reports unpublished default
   const source = createMaintainedPublication();
   // Different catalogs also exercise genuinely absent single workloads.
   const stOnly = source.runs[0];
-  setFixtureConfigurations(source, stOnly, stOnly.configurations.filter(({ thread_policy }) => thread_policy === 'single'));
+  setFixtureConfigurations(source, stOnly, stOnly.benchmark_results.filter(({ thread_policy }) => thread_policy === 'single'));
   const both = source.runs[8];
   source.runs = [stOnly, both];
   source.index.runFiles = source.runs.map(fixtureRunPath);
-  const normalized = validatePublishedDashboardData(source).data;
+  const normalized = adaptPublishedDashboardData(source).data;
   const props = {
     data: normalized,
     filters: { targets: ['gfx1250'], suites: ['Triton', 'Llama'], modes: ['single', 'default'] },
-    selectedBaselineId: side === 'baseline' ? stOnly.id : both.id,
-    selectedCandidateId: side === 'candidate' ? stOnly.id : both.id,
+    selectedBaselineId: side === 'baseline' ? stOnly.publication.id : both.publication.id,
+    selectedCandidateId: side === 'candidate' ? stOnly.publication.id : both.publication.id,
   };
   const rows = render(props).match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g);
   const cellsFor = (name, mode) => rows.find((row) => row.includes(name) && row.includes(`gfx1250 · ${mode}`))
@@ -134,11 +134,11 @@ test.each([
 ])('validated $baselineSeconds baseline retains all finite results when the chart domain is unrepresentable', ({ baselineSeconds, delta, limit }) => {
   const source = createMaintainedPublication();
   for (const [id, seconds] of [['fictional-develop-14', baselineSeconds], ['fictional-branch-01', 4e15]]) {
-    for (const config of source.runs.find((item) => item.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    for (const result of source.runs.find((item) => item.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
     }
   }
-  const normalized = validatePublishedDashboardData(source).data;
+  const normalized = adaptPublishedDashboardData(source).data;
   const props = { data: normalized, filters: { ...filters, suites: ['Triton', 'Llama'] }, selectedBaselineId: 'fictional-develop-14', selectedCandidateId: 'fictional-branch-01' };
   const model = selectRunComparison(normalized.allRuns.find((r) => r.runId === props.selectedCandidateId), normalized.allRuns.find((r) => r.runId === props.selectedBaselineId), props.filters);
   expect(model.comparable).toHaveLength(4);
@@ -168,11 +168,11 @@ test.each([
 ])('validated representable domain $baselineSeconds/$candidateSeconds preserves exact linear bounds', ({ baselineSeconds, candidateSeconds, expectedLimit }) => {
   const source = createMaintainedPublication();
   for (const [id, seconds] of [['fictional-develop-14', baselineSeconds], ['fictional-branch-01', candidateSeconds]]) {
-    for (const config of source.runs.find((item) => item.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    for (const result of source.runs.find((item) => item.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
     }
   }
-  const normalized = validatePublishedDashboardData(source).data;
+  const normalized = adaptPublishedDashboardData(source).data;
   render({ data: normalized, selectedBaselineId: 'fictional-develop-14', selectedCandidateId: 'fictional-branch-01' });
   const { xAxis, series } = captured.chart.option;
   expect(xAxis.min).toBe(-expectedLimit);
@@ -188,11 +188,11 @@ test.each([
 test('validated positive ratio overflow uses generic no-ratio copy and keeps measured rows without a Chart', () => {
   const source = createMaintainedPublication();
   for (const [id, seconds] of [['fictional-develop-14', 1e-300], ['fictional-branch-01', 4e15]]) {
-    for (const config of source.runs.find((item) => item.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    for (const result of source.runs.find((item) => item.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
     }
   }
-  const normalized = validatePublishedDashboardData(source).data;
+  const normalized = adaptPublishedDashboardData(source).data;
   const html = render({ data: normalized, selectedBaselineId: 'fictional-develop-14', selectedCandidateId: 'fictional-branch-01' });
   expect(captured.chart).toBeNull();
   expect(html).toContain('No percentage changes available. Measured results remain in the results table below.');

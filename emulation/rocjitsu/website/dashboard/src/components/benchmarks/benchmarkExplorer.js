@@ -1,5 +1,5 @@
 import { formatDuration, formatFullDate, shortSha } from '../../utils/formatters';
-import { commitTimestampFor } from '../../data/runOrdering';
+import { commitTimestampFor, hasCommitTimestamp } from '../../data/runOrdering';
 import { resolveHistoryRange } from '../../config/historyRanges';
 
 export function benchmarkResultChoices(viewModel) {
@@ -29,7 +29,8 @@ export function filterBenchmarkOptions(options, query) {
 export function benchmarkRangeData(data, range = 'ALL') {
   const { days } = resolveHistoryRange(range);
   if (!days || !data.runs.length) return data;
-  const latest = Math.max(...data.runs.map((run) => Date.parse(commitTimestampFor(run))));
+  const latest = Math.max(...data.runs.filter(hasCommitTimestamp).map((run) => Date.parse(commitTimestampFor(run))));
+  if (!Number.isFinite(latest)) return { ...data, runs: [] };
   const anchor = new Date(latest);
   anchor.setUTCHours(0, 0, 0, 0);
   const cutoff = anchor.getTime() - (days - 1) * 86400000;

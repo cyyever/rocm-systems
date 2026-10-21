@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { readChart } from './helpers/chart.js';
@@ -14,7 +14,7 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   const publication = createMaintainedPublication();
   await installPublication(page, { publication });
   await openDashboard(page, '/?campaign=kept#scope');
-  const data = validatePublishedDashboardData(publication).data;
+  const data = adaptPublishedDashboardData(publication).data;
   const model = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: data.modes }, { range: '1W' });
   expect(new URL(page.url()).searchParams.get('range')).toBe('1W');
   const cards = page.getByTestId('metric-strip');
@@ -77,9 +77,9 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   await page.mouse.move(0, 0);
   await expect(trend.getByTestId('point-hover-guide')).not.toBeVisible();
   await trend.locator('summary').click();
-  await expect(trend.getByRole('columnheader').nth(1)).toHaveText('Shared across catalogs');
+  await expect(trend.getByRole('columnheader').nth(1)).toHaveText('Shared across benchmark sets');
   await trend.getByRole('button', { name: 'Trailing 30 days' }).click();
-  await trend.getByRole('combobox', { name: 'Catalog', exact: true }).click();
+  await trend.getByRole('combobox', { name: 'Benchmark set', exact: true }).click();
   await page.getByRole('option', { name: /fictional-old/ }).click();
   const catalogId = new URL(page.url()).searchParams.get('catalog');
   expect(catalogId).toBeTruthy();
@@ -110,8 +110,8 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
 
 test('Largest Changes Shared excludes a larger nonshared delta and catalog switching restores eligible entries', async ({ page }) => {
   const publication = createMaintainedPublication();
-  const latest = publication.runs.find(({ id }) => id === 'fictional-develop-23');
-  const added = latest.configurations.find(({ target, thread_policy }) => target === 'gfx1250' && thread_policy === 'single').benchmark_results.find(({ id }) => id === 'd');
+  const latest = publication.runs.find(({ publication: { id } }) => id === 'fictional-develop-23');
+  const added = latest.benchmark_results.find(({ target, thread_policy, id }) => target === 'gfx1250' && thread_policy === 'single' && id === 'd');
   added.timing_results_s = [2000];
   await installPublication(page, { publication });
   await openDashboard(page, '/?targets=gfx1250&modes=single&range=1W');
@@ -122,7 +122,7 @@ test('Largest Changes Shared excludes a larger nonshared delta and catalog switc
     for (const id of ['c', 'd', 'e']) await expect(panel.locator(`[data-workload="${id}"]`)).toHaveCount(0);
   };
   await shared();
-  const catalog = page.getByRole('combobox', { name: 'Catalog', exact: true });
+  const catalog = page.getByRole('combobox', { name: 'Benchmark set', exact: true });
   await catalog.click();
   await page.locator('[role="option"][data-value="fictional-current"]').click();
   await expect(panel.locator('[data-change-state]')).toHaveCount(4);

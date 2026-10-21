@@ -5,9 +5,9 @@ import { installPublication, openDashboard } from './helpers/dashboard.js';
 
 test('daily gaps hide tooltip and latest failures never fall back to earlier success', async ({ page }) => {
   const publication = createMaintainedPublication();
-  const latest = publication.runs.find((r) => r.id === 'fictional-develop-23');
-  for (const config of latest.configurations) {
-    config.benchmark_results[0].status = 'failed'; config.benchmark_results[0].error = 'Fictional latest failure';
+  const latest = publication.runs.find((r) => r.publication.id === 'fictional-develop-23');
+  for (const config of latest.benchmark_results.filter(({ id }) => id === 'a')) {
+    config.status = 'failed'; config.error = 'Fictional latest failure';
   }
   await installPublication(page, { publication });
   await openDashboard(page, '/?range=1M');
@@ -32,8 +32,8 @@ test('daily gaps hide tooltip and latest failures never fall back to earlier suc
 
 test('weekly repeated attempts preserve collision-safe inspection and touch disclosure', async ({ page }) => {
   const publication = createMaintainedPublication();
-  const attempt = structuredClone(publication.runs.find((r) => r.id === 'fictional-develop-23'));
-  attempt.id = 'fictional-repeat'; attempt.execution_summary.finished_at = '2026-10-04T07:00:00.000Z';
+  const attempt = structuredClone(publication.runs.find((r) => r.publication.id === 'fictional-develop-23'));
+  attempt.publication.id = 'fictional-repeat'; attempt.execution_summary.finished_at = '2026-10-04T07:00:00.000Z';
   publication.runs.push(attempt); publication.index.runFiles.push('runs/default-branch/fictional-repeat.json');
   await installPublication(page, { publication }); await openDashboard(page);
   const trend = page.getByTestId('performance-trend'); const group = trend.getByRole('group', { name: 'Inspect performance trend' });

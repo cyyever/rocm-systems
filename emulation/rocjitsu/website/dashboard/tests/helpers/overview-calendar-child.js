@@ -1,17 +1,16 @@
 // Run the real synchronous projection outside the test runner's event loop.
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { createSyntheticDataset } from '../fixtures/syntheticDataset.js';
 
 const [generatedAt, range, scenario = 'empty'] = process.argv.slice(2);
-const publication = { index: { generatedAt, runFiles: [] }, catalogs: {}, runs: [] };
+const publication = { index: { generatedAt, runFiles: [] }, runs: [] };
 if (scenario !== 'empty') {
   const fixture = createSyntheticDataset(3);
   const timestamps = scenario === 'upper'
     ? ['9999-12-31T12:00:00Z', '9999-12-31T23:30:00-01:00', '9999-12-31T22:45:00-02:00']
     : ['0000-01-01T00:30:00+01:00', '0000-01-01T00:00:00Z', '0000-01-01T01:15:00+01:00'];
   publication.index.runFiles = fixture.runFiles;
-  publication.catalogs[fixture.catalogPath] = structuredClone(fixture.bodies.get(`https://dashboard.test/data/${fixture.catalogPath}`));
   publication.runs = fixture.runFiles.map((file, index) => {
     const run = structuredClone(fixture.bodies.get(`https://dashboard.test/data/${file}`));
     run.provenance.rocjitsu.rocjitsu_commit_timestamp = timestamps[index];
@@ -22,7 +21,7 @@ if (scenario !== 'empty') {
   });
 }
 const originalPublication = JSON.stringify(publication);
-const { data } = validatePublishedDashboardData(publication);
+const { data } = adaptPublishedDashboardData(publication);
 const originalData = JSON.stringify(data);
 process.send({ stage: 'validated-before-projection', generatedAt: data.generatedAt, runs: data.runs.length, range }, () => {
   const filters = scenario === 'empty' ? { targets: [], modes: [], suites: [] }

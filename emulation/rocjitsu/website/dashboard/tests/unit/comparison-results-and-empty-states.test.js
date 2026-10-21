@@ -23,7 +23,7 @@ test('metadata aligns the arbitrary key union baseline-left and candidate-right'
   expect(html).toContain('data-testid="metadata-row-onlyBase"');
   expect(html).toContain('data-testid="metadata-row-onlyCandidate"');
   const row = html.slice(html.indexOf('data-testid="metadata-row-onlyBase"')).split('</tr>')[0];
-  expect(row.indexOf('old-tool')).toBeLessThan(row.indexOf('Not provided'));
+  expect(row.indexOf('old-tool')).toBeLessThan(row.indexOf('>-</td>'));
   expect(html.indexOf('Baseline run')).toBeLessThan(html.indexOf('Candidate run'));
 });
 

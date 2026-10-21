@@ -13,10 +13,10 @@ export function fixtureCatalog(benchmark_suite, definitions, lanes) {
 
 export function fixtureProvenance(commit, committedAt, sdk = 'test-only') {
   return {
-    auxiliary: { sdk, enabled: true, cores: 32, tensile_commit_sha: fixtureSha(901) },
+    auxiliary: { sdk, enabled: true, cores: 32 },
     corpus: { corpus_commit_sha: fixtureSha(900), corpus_commit_timestamp: '2025-01-01T00:00:00.000Z' },
     machine: { hostname: 'fictional-host', cpu: 'fictional-cpu', platform: 'fictional-platform', kernel: 'fictional-kernel' },
-    rocjitsu: { rocjitsu_commit_sha: commit, rocjitsu_commit_timestamp: committedAt, rocm_sdk_version: 'fictional-sdk', workflow_commit_sha: fixtureSha(902) },
+    rocjitsu: { rocjitsu_commit_sha: commit, rocjitsu_commit_timestamp: committedAt, rocm_sdk_version: 'fictional-sdk' },
   };
 }
 

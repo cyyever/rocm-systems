@@ -24,8 +24,7 @@ When Chromium's system libraries are already present, `npx playwright install ch
 | `npm test` | Unit tests, then the fixture browser suite |
 | `npm run verify` | Lint, unit tests, fixture browsers, then the production suite |
 | `npm run build` | Write application assets to `dist/`. Does not publish benchmark JSON |
-| `npm run validate:data -- <data-directory>` | Validate every indexed run and referenced catalog |
-| `npm run process:data -- <data-directory>` | Validate, then print normalized data and the unchanged source envelopes |
+| `npm run process:data -- <data-directory>` | Load/adapt, then print normalized data and the unchanged source envelopes |
 | `npm run process:data -- <data-directory> --output <new-file-outside-input>` | Write a local processed snapshot. Refuses overwrite and any output inside the input directory |
 
 The fixture server writes `.test-dist/`. The production server writes `dist/`, so `verify` does not need a separate build. The three-repeat command reruns a case already in the fixture suite. Those extra repetitions are outside `verify`.
@@ -45,8 +44,7 @@ For an acceptance run, clear `DASHBOARD_DATA_DIR`, `VITE_DASHBOARD_DATA_BASE_URL
 ## Dashboard-data Python tests
 
 Use a Python 3.12 environment with Node.js (as above), Bash, Git, jq, and coreutils
-(including `realpath`) on `PATH`. Publication tests use the real dashboard
-validator; no npm dependencies are required. From `emulation/rocjitsu/website/dashboard`:
+(including `realpath`) on `PATH`. Publication tests exercise workflow JSON/shell operations; no npm dependencies are required. From `emulation/rocjitsu/website/dashboard`:
 
 ```bash
 python -m pip install -r scripts/dashboard-data/requirements-test.txt

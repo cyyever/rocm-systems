@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectRecentRunAttempts, selectRecentRunSummaries, selectBenchmarkSeries, selectBenchmarkCatalog, selectRunComparison } from '../../src/data/selectors.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
-const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
 const filters = { targets: ['gfx1250', 'gfx950'], suites: data.suites, modes: ['single', 'default'] };
 const run = (id) => data.runs.find(({ runId }) => runId === `fictional-develop-${id}`);
 

@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import * as selectors from '../../src/data/branchSelectors.js';
 
-const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
 
 test('published branches use the inclusive publication-relative 30-day window and searchable branch/PR/SHA', () => {
   const branches = selectors.selectPublishedBranches(data);

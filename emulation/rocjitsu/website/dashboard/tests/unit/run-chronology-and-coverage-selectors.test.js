@@ -1,10 +1,10 @@
 import { expect, test } from 'vitest';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { compareRunExecution, compareCommitPosition, sortRunsByCommit } from '../../src/data/runOrdering.js';
 import { selectBenchmarkSeries, periodKey } from '../../src/data/selectors.js';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
 const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single'] };
 
 // Keep chronology/coverage behaviors, without tying tests to historical production-like SHAs.
@@ -55,9 +55,9 @@ test.each([
   });
   publication.runs.reverse();
   publication.index = { generatedAt: input.finished,
-    runFiles: publication.runs.map((run) => `runs/default-branch/${run.id}.json`) };
+    runFiles: publication.runs.map((run) => `runs/default-branch/${run.publication.id}.json`) };
   const originalPublication = JSON.stringify(publication);
-  const { data: normalized } = validatePublishedDashboardData(publication);
+  const { data: normalized } = adaptPublishedDashboardData(publication);
   const originalData = JSON.stringify(normalized);
   const chosen = { targets: ['gfx1250'], suites: ['Triton'], modes: ['single'] };
   const result = selectBenchmarkSeries(normalized, chosen, 'a');

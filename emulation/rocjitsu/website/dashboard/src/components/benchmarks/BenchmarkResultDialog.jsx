@@ -18,7 +18,7 @@ import StatusChip from '../shared/StatusChip';
 import { commitTimestampFor } from '../../data/runOrdering';
 import { problemDetails } from '../../data/problemDetails';
 import { runEnvironmentDetails } from '../../data/provenance';
-import { formatDuration, formatFullDate, shortSha } from '../../utils/formatters';
+import { formatDuration, formatFullDate, formatMetadataValue, shortSha } from '../../utils/formatters';
 import { hasDisplayValue } from '../../utils/values';
 import { commitUrl } from '../../utils/commitUrl';
 
@@ -66,7 +66,7 @@ export default function BenchmarkResultDialog({ record, repository, onClose }) {
             {environmentDetails.length > 0 ? (
               <DetailGrid>
                 {environmentDetails.map((detail) => (
-                  <DetailItem key={detail.key} label={detail.label}>{String(detail.value)}</DetailItem>
+                  <DetailItem key={detail.key} label={detail.label}>{formatMetadataValue(detail.value)}</DetailItem>
                 ))}
               </DetailGrid>
             ) : (
@@ -78,9 +78,9 @@ export default function BenchmarkResultDialog({ record, repository, onClose }) {
             <DetailGrid>
               <DetailItem label="Run identity">{run.runId}</DetailItem>
               <DetailItem label="Run time">{formatFullDate(run.timestamp)}</DetailItem>
-              <DetailItem label="Run type">{run.trigger === 'manual' ? 'Manual' : 'Auto'}</DetailItem>
-              {hasDisplayValue(run.machineId) && <DetailItem label="Machine">{run.machineId}</DetailItem>}
-              <DetailItem label="Rocjitsu commit">{commitSha}</DetailItem>
+              <DetailItem label="Run type">{run.trigger == null ? '-' : run.trigger === 'manual' ? 'Manual' : run.trigger === 'auto' ? 'Auto' : run.trigger}</DetailItem>
+              <DetailItem label="Machine">{formatMetadataValue(run.machineId)}</DetailItem>
+              <DetailItem label="Rocjitsu commit">{formatMetadataValue(commitSha)}</DetailItem>
               <DetailItem label="Commit time">{formatFullDate(commitTimestampFor(run))}</DetailItem>
               {hasDisplayValue(provenance.commitMessage) && <DetailItem label="Commit message">{provenance.commitMessage}</DetailItem>}
             </DetailGrid>

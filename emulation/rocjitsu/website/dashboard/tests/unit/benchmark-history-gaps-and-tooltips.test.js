@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 import BenchmarkHistoryChart from '../../src/components/benchmarks/BenchmarkHistoryChart.jsx';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
@@ -15,9 +15,9 @@ vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
 function chartOptions() {
   const publication = createMaintainedPublication();
   // A valid partial publication: this interior attempt has no gfx1250 default result.
-  const missing = publication.runs.find((run) => run.id === 'fictional-develop-10');
-  setFixtureConfigurations(publication, missing, missing.configurations.filter((config) => config.target !== 'gfx1250' || config.thread_policy !== 'default'));
-  const data = validatePublishedDashboardData(publication).data;
+  const missing = publication.runs.find((run) => run.publication.id === 'fictional-develop-10');
+  setFixtureConfigurations(publication, missing, missing.benchmark_results.filter((config) => config.target !== 'gfx1250' || config.thread_policy !== 'default'));
+  const data = adaptPublishedDashboardData(publication).data;
   renderToStaticMarkup(createElement(BenchmarkHistoryChart, {
     data,
     filters: { targets: ['gfx1250', 'gfx950'], suites: ['Triton', 'Llama'], modes: ['single', 'default'] },

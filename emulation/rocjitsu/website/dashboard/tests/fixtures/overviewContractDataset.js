@@ -27,7 +27,7 @@ export function createOverviewContractPublication() {
   const catalogs = Object.fromEntries(Object.entries(memberships).map(([period, configurations]) => {
     const id = `fictional-contract-${period}`;
     const members = new Set(Object.values(configurations).flat());
-    return [`test-catalogs/${id}.json`, fixtureCatalog(id, definitions.filter((test) => members.has(test.id)), configurations)];
+    return [id, fixtureCatalog(id, definitions.filter((test) => members.has(test.id)), configurations)];
   }));
   const attempts = [
     ['old-1', 'old', 1, 6, 10], ['old-2', 'old', 2, 6, 9],
@@ -37,25 +37,25 @@ export function createOverviewContractPublication() {
   ];
   const runs = attempts.map(([attempt, period, day, hour, seconds]) => {
     const id = `fictional-contract-${attempt}`;
-    const testCatalog = `test-catalogs/fictional-contract-${period}.json`;
+    const testCatalog = `fictional-contract-${period}`;
     const stamp = (time) => `2026-10-${String(day).padStart(2, '0')}T${String(time).padStart(2, '0')}:00:00.000Z`;
     return {
-      schemaVersion: 1, id, benchmark_catalog: testCatalog,
+      schema_version: 1, publication: { id, workflow_commit_sha: 'a'.repeat(40), tensile_commit_sha: 'b'.repeat(40),
       source: { branch: 'develop', message: `FICTIONAL contract commit ${day}` },
-      execution: { trigger: 'manual', machine_label: 'fictional-contract-node' },
+      trigger: 'manual', machine_label: 'fictional-contract-node' },
       execution_summary: fixtureSummary(catalogs[testCatalog].benchmark_suite, stamp(5), stamp(hour)),
       provenance: fixtureProvenance(String(day).repeat(40), stamp(4)),
-      configurations: Object.entries(memberships[period]).map(([key, members]) => {
+      benchmark_results: Object.entries(memberships[period]).flatMap(([key, members]) => {
         const [target, thread_policy] = key.split('/');
-        return { target, thread_policy, benchmark_results: members.map((testId) => {
+        return members.map((testId) => {
           const failed = attempt === 'current-failed' && key === 'gfx1250/single' && testId === 'b';
           const durationSeconds = failed ? null : testId === 'a' ? seconds : { b: 100, c: 200, d: 300 }[testId];
-          return { id: testId, status: failed ? 'failed' : 'completed',
+          return { ...definitions.find(({ id }) => id === testId), id: testId, target, thread_policy, exit_code: failed ? 1 : 0, status: failed ? 'failed' : 'completed',
             timing_results_s: failed ? [] : [durationSeconds],
             error: failed ? 'Fictional required decode failed' : null };
-        }) };
+        });
       }),
     };
   });
-  return { index: { generatedAt: '2026-10-06T12:00:00.000Z', runFiles: runs.map(fixtureRunPath) }, catalogs, runs };
+  return { index: { generatedAt: '2026-10-06T12:00:00.000Z', runFiles: runs.map(fixtureRunPath) }, runs };
 }

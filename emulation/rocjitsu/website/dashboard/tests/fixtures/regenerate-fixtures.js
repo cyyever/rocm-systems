@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createFeedbackPublication } from './feedback-publication.js';
 import { createOverviewContractPublication } from './overviewContractDataset.js';
 import { writeFixturePublication } from './maintainedDataset.js';
 
 export async function regenerateFixtureDirectory(directory, { overviewContract = false } = {}) {
   const publication = overviewContract ? createOverviewContractPublication() : createFeedbackPublication();
-  validatePublishedDashboardData(publication);
+  adaptPublishedDashboardData(publication);
   return writeFixturePublication(directory, publication);
 }
 

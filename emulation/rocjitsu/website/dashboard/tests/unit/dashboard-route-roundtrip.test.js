@@ -1,24 +1,24 @@
 import { fixtureRunPath } from '../fixtures/runPath.js';
 import { describe, expect, it } from 'vitest';
 import * as dashboardState from '../../src/hooks/useDashboardState.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 it('UI-002 round-trips exact long validated attempt and branch identities', () => {
   const source = createMaintainedPublication();
-  const run = source.runs.find(({ id }) => id === 'fictional-branch-01');
-  run.id = `fictional-${'x'.repeat(192)}`;
-  run.source.branch = `fictional/${'b'.repeat(192)}`;
+  const run = source.runs.find(({ publication: { id } }) => id === 'fictional-branch-01');
+  run.publication.id = `fictional-${'x'.repeat(192)}`;
+  run.publication.source.branch = `fictional/${'b'.repeat(192)}`;
   source.index.runFiles = source.runs.map(fixtureRunPath);
-  const { data } = validatePublishedDashboardData(source);
-  expect(data.allRuns.some(({ runId }) => runId === run.id)).toBe(true);
+  const { data } = adaptPublishedDashboardData(source);
+  expect(data.allRuns.some(({ runId }) => runId === run.publication.id)).toBe(true);
   const route = dashboardState.readDashboardRoute('https://example.test/app/?view=branch');
-  const selection = { ...route, branchSelection: { ...route.branchSelection, branch: run.source.branch, candidateId: run.id, referenceId: run.id, manual: true }, comparisonCandidateId: run.id, comparisonBaselineId: run.id };
+  const selection = { ...route, branchSelection: { ...route.branchSelection, branch: run.publication.source.branch, candidateId: run.publication.id, referenceId: run.publication.id, manual: true }, comparisonCandidateId: run.publication.id, comparisonBaselineId: run.publication.id };
   const restored = dashboardState.readDashboardRoute(dashboardState.buildDashboardUrl('https://example.test/app/', selection));
   expect(restored).toEqual(selection);
   expect(restored.routeError).toBe('');
   for (const id of [restored.branchSelection.candidateId, restored.branchSelection.referenceId, restored.comparisonCandidateId, restored.comparisonBaselineId]) {
-    expect(data.allRuns.find(({ runId }) => runId === id)?.runId).toBe(run.id);
+    expect(data.allRuns.find(({ runId }) => runId === id)?.runId).toBe(run.publication.id);
   }
 });
 
@@ -26,22 +26,15 @@ it.each(['targets', 'suites'])('round-trips validated long %s through URL serial
   const source = createMaintainedPublication();
   const longTarget = `gfx${'9'.repeat(240)}`;
   const longSuite = `Suite ${'workload '.repeat(30)}& details + / test`;
-  for (const catalog of Object.values(source.catalogs)) {
-    if (key === 'suites') {
-      for (const test of Object.values(catalog.benchmark_definitions)) if (test.suite === 'Triton') test.suite = longSuite;
-    } else {
-      catalog.membership = Object.fromEntries(Object.entries(catalog.membership)
-        .map(([target, policies]) => [target === 'gfx1250' ? longTarget : target, policies]));
-    }
-  }
+  if (key === 'suites') for (const run of source.runs) for (const row of run.benchmark_results) if (row.suite === 'Triton') row.suite = longSuite;
   if (key === 'targets') {
     for (const run of source.runs) {
-      for (const configuration of run.configurations) {
+      for (const configuration of run.benchmark_results) {
         if (configuration.target === 'gfx1250') configuration.target = longTarget;
       }
     }
   }
-  const { data } = validatePublishedDashboardData(source);
+  const { data } = adaptPublishedDashboardData(source);
   const value = key === 'targets' ? longTarget : longSuite;
   expect(value.length).toBeGreaterThan(200);
   expect(data[key]).toContain(value);

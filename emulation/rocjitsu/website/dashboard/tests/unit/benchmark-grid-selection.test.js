@@ -31,7 +31,7 @@ test('grid selections deduplicate, cap at eight, and allow removal and re-additi
 });
 
 test('accessible choices retain failures, timeouts, unavailable cells and immutable run identity', () => {
-  const runs = ['completed', 'failed', 'timeout', 'missing'].map((status, i) => ({ runId: `run-${i}`, timestamp: `2026-01-0${i + 1}T00:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' }, tests: status === 'missing' ? [] : [{ target: 'gfx950', mode: 'single', suite: 'A', logicalTestId: 'a', status, durationSeconds: status === 'completed' ? 2 : null }] }));
+  const runs = ['completed', 'failed', 'timeout', 'missing'].map((status, i) => ({ runId: `run-${i}`, timestamp: `2026-01-0${i + 1}T00:00:00Z`, commitTimestamp: `2026-01-0${i + 1}T00:00:00Z`, provenance: { rocjitsuCommitSha: 'abcdef123456' }, tests: status === 'missing' ? [] : [{ target: 'gfx950', mode: 'single', suite: 'A', logicalTestId: 'a', status, durationSeconds: status === 'completed' ? 2 : null }] }));
   const vm = selectBenchmarkSeries({ runs }, { targets: ['gfx950'], suites: ['A'], modes: ['single'] }, 'a');
   const choices = model.benchmarkResultChoices?.(vm);
   expect(choices?.map((o) => o.status)).toEqual(['unavailable', 'timeout', 'failed', 'completed']);

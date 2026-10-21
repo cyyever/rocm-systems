@@ -18,7 +18,7 @@ export default function BranchEnvironment({ candidate, reference, selection, rep
     ['baseBranch', 'Recorded base branch', (run) => run?.sourceBase?.branch], ['baseCommit', 'Recorded base SHA', (run) => run?.sourceBase?.commit],
     ['committedAt', 'Commit time (UTC)', (run) => run?.commitTimestamp], ['completedAt', 'Execution completed (UTC)', (run) => run?.timestamp],
     ['machine', 'Machine', (run) => run?.machineId], ['trigger', 'Trigger', (run) => run?.trigger],
-    ['catalog', 'Test catalog', (run) => run?.catalogId], ['environment', 'Environment identity', (run) => run?.environmentId],
+    ['catalog', 'Benchmark set', (run) => run?.catalogId], ['environment', 'Environment identity', (run) => run?.environmentId],
     ['configuration', 'Selected configuration', (run) => run ? configuration(run) ? `${selection.target} · ${selection.mode}` : 'Not published' : null],
   ].map(([key, label, value]) => ({ key, label, baseline: value(reference), candidate: value(candidate) }));
   const rows = (items, prefix) => items.map((fact) => {

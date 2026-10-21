@@ -1,283 +1,288 @@
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
-"""Publication controls: fictional data and stubbed network command boundaries."""
+"""Run the actual workflow shell against fictional data and local Git only."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
-import tempfile
-import unittest
+from types import SimpleNamespace
+
+import pytest
+import yaml
 
 HERE = Path(__file__).resolve().parent
+DASHBOARD = HERE.parents[2]
 WORKFLOW = HERE.parents[6] / '.github/workflows/rocjitsu-benchmarks.yml'
 
 
-class GuardTests(unittest.TestCase):
-    def test_manual_publication_is_explicit_opt_in_at_job_boundary(self):
-        text = WORKFLOW.read_text()
-        self.assertIn('publish_results:\n', text)
-        self.assertIn('type: boolean\n        default: false', text)
-        publish = text.split('\n  publish:', 1)[1]
-        condition = publish.split('    if: ', 1)[1].splitlines()[0]
-        self.assertIn("github.event_name != 'workflow_dispatch' || inputs.publish_results == true", condition)
-        self.assertIn("!cancelled() && needs.benchmark.outputs.ran == 'true'", condition)
-        # Execute the authored expression, not a separate model of the guard.
-        expression = condition.removeprefix('${{ ').removesuffix(' }}')
-        for event in ('push', 'workflow_dispatch'):
-            for opt_in in (True, False):
-                for ran in ('true', 'false'):
-                    for cancelled in (True, False):
-                        actual = expression.replace('!cancelled()', str(not cancelled))
-                        actual = actual.replace('github.event_name', repr(event))
-                        actual = actual.replace('needs.benchmark.outputs.ran', repr(ran))
-                        actual = actual.replace('inputs.publish_results', str(opt_in))
-                        actual = actual.replace('== true', '== True').replace('&&', 'and').replace('||', 'or')
-                        expected = not cancelled and ran == 'true' and (event != 'workflow_dispatch' or opt_in)
-                        self.assertEqual(eval(actual, {'__builtins__': {}}), expected)
-        diagnostics = text.split('      - name: Upload benchmark diagnostics', 1)[1].split('\n  publish:', 1)[0]
-        self.assertIn('if: always()', diagnostics)
-        self.assertNotIn('publish_results', diagnostics)
+def workflow_step(name):
+    steps = yaml.safe_load(WORKFLOW.read_text())['jobs']['publish']['steps']
+    return next(step['run'] for step in steps if step['name'] == name)
 
 
-class RecoveryTests(unittest.TestCase):
-    def setUp(self):
-        import json
-        import shutil
-        import sys
-        from test_prepare_dashboard_data import raw, SHA
-        from manifest_fixture import declare_fixture
-
-        self.json = json
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
-        self.repo = self.root / 'publication'
-        self.repo.mkdir()
-        self.data = self.repo / 'rocjitsu-dashboard/data'
-        self.data.mkdir(parents=True)
-        (self.data / 'index.json').write_text(json.dumps({
-            'generatedAt': '2026-01-01T00:00:00Z', 'runFiles': [],
-        }))
-        self.real_git = shutil.which('git')
-        assert self.real_git is not None, 'Git is required for local publication tests'
-        self.git('init', '-q')
-        self.git('config', 'user.name', 'Publication fixture')
-        self.git('config', 'user.email', 'fixture@example.invalid')
-        self.git('config', 'commit.gpgsign', 'false')
-        self.commit()
-        self.base = self.git('rev-parse', 'HEAD').stdout.strip()
-        self.built = self.root / 'built'
-        self.run_path = 'runs/default-branch/attempt-1.json'
-        raw_path = self.root / 'raw.json'
-        value = raw()
-        corpus, corpus_sha = declare_fixture(self.root, [value])
-        value['provenance']['corpus']['corpus_commit_sha'] = corpus_sha
-        raw_path.write_text(json.dumps(value))
-        prepared = subprocess.run([
-            sys.executable, str(HERE.parent / 'prepare-dashboard-data.py'),
-            '--raw-run', str(raw_path), '--data-dir', str(self.built),
-            '--run-id', 'attempt-1', '--expected-sha', SHA,
-            '--workflow-commit-sha', 'c' * 40, '--tensile-commit-sha', 'd' * 40,
-            '--expected-corpus-sha', corpus_sha, '--corpus-dir', str(corpus),
-            '--manifest', 'suite.toml', '--machine-id', 'fixture',
-            '--trigger', 'auto', '--branch', 'develop', '--commit-message', 'Fictional fixture',
-        ], capture_output=True, text=True)
-        self.assertEqual(prepared.returncode, 0, prepared.stderr)
-        self.catalog = next((self.built / 'test-catalogs').glob('*.json')).relative_to(self.built).as_posix()
-        self.bin = self.root / 'bin'
-        self.bin.mkdir()
-        # Only the network boundaries are simulated. No push command reaches Git.
-        stub = self.bin / 'git'
-        stub.write_text('''#!/usr/bin/env python3
-import json, os, subprocess, sys
-from pathlib import Path
-args = sys.argv[1:]
-with open(os.environ['COMMAND_LOG'], 'a') as log:
-    log.write(json.dumps(args) + '\\n')
-if args[0] == 'push':
-    state = Path(os.environ['PUSH_STATE'])
-    attempt = int(state.read_text()) if state.exists() else 0
-    state.write_text(str(attempt + 1))
-    outcome = json.loads(os.environ['PUSH_OUTCOMES'])[attempt]
-    if outcome != 'ok':
-        reason = {'conflict': 'fetch first', 'non-fast-forward': 'non-fast-forward',
-                  'denied': 'remote rejected', 'network': 'connection refused'}[outcome]
-        flag = '[rejected]' if outcome in ('conflict', 'non-fast-forward') else '[remote rejected]'
-        if outcome == 'network':
-            print('fatal: connection refused')
-        else:
-            print('!\\tHEAD:refs/heads/gh-pages-rocjitsu\\t' + flag + ' (' + reason + ')')
-        sys.exit(1)
-    print('*\\tHEAD:refs/heads/gh-pages-rocjitsu\\t[new branch]')
-    sys.exit(0)
-if args[0] == 'fetch':
-    sys.exit(subprocess.call([os.environ['REAL_GIT'], 'update-ref', 'FETCH_HEAD', os.environ['REMOTE_HEAD']]))
-sys.exit(subprocess.call([os.environ['REAL_GIT'], *args]))
-''')
-        stub.chmod(0o755)
-        self.log = self.root / 'commands.jsonl'
-        self.env = {**os.environ, 'PATH': f'{self.bin}:{os.environ["PATH"]}',
-                    'REAL_GIT': self.real_git, 'COMMAND_LOG': str(self.log),
-                    'PUSH_STATE': str(self.root / 'push-state'), 'LC_ALL': 'C'}
-        self.helper = HERE.parent / 'publish-dashboard-run.sh'
-
-    def git(self, *args):
-        return subprocess.run([self.real_git, *args], cwd=self.repo,
-                              capture_output=True, text=True, check=True)
-
-    def commit(self):
-        self.git('add', '.')
-        self.git('commit', '-qm', 'Fictional publication fixture')
-
-    def peer(self, identity='attempt-2', conflict=False):
-        import shutil
-        run = self.json.loads((self.built / self.run_path).read_text())
-        run['id'] = identity
-        if conflict:
-            run['source']['message'] = 'Conflicting immutable content'
-        peer_path = f'runs/default-branch/{identity}.json'
-        (self.data / peer_path).parent.mkdir(parents=True, exist_ok=True)
-        (self.data / peer_path).write_text(self.json.dumps(run) + '\n')
-        if identity == 'attempt-1' and not conflict:
-            shutil.copyfile(self.built / self.run_path, self.data / peer_path)
-        (self.data / self.catalog).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(self.built / self.catalog, self.data / self.catalog)
-        result = subprocess.run(['python', str(HERE.parent / 'update-dashboard-index.py'),
-                                 '--data-dir', str(self.data), '--run-path', peer_path],
-                                capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.commit()
-        remote = self.git('rev-parse', 'HEAD').stdout.strip()
-        self.git('reset', '--hard', self.base)
-        return remote
-
-    def publish(self, outcomes, remote=None):
-        self.assertTrue(self.helper.exists(), 'Bounded publication helper is missing')
-        return subprocess.run([
-            'bash', str(self.helper), str(self.built), self.run_path, self.catalog,
-            'gh-pages-rocjitsu', 'Publish fictional fixture', str(HERE.parents[1]),
-            str(self.root / 'diagnostics'),
-        ], cwd=self.repo, env={**self.env, 'PUSH_OUTCOMES': self.json.dumps(outcomes),
-                              'REMOTE_HEAD': remote or self.base},
-            capture_output=True, text=True)
-
-    def commands(self, command):
-        return [row for line in self.log.read_text().splitlines()
-                if (row := self.json.loads(line))[0] == command]
-
-    def test_distinct_concurrent_publication_is_preserved(self):
-        remote = self.peer()
-        result = self.publish(['conflict', 'ok'], remote)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        index = self.json.loads((self.data / 'index.json').read_text())
-        self.assertEqual(set(index['runFiles']), {self.run_path, 'runs/default-branch/attempt-2.json'})
-        self.assertEqual(len(self.commands('push')), 2)
-        self.assertEqual(len(self.commands('fetch')), 1)
-        self.assertEqual((self.data / self.run_path).read_bytes(), (self.built / self.run_path).read_bytes())
-
-    def test_identical_concurrent_publication_is_idempotent(self):
-        remote = self.peer('attempt-1')
-        result = self.publish(['non-fast-forward'], remote)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(len(self.commands('push')), 1)
-        self.assertEqual(len(self.commands('commit')), 1)
-        self.assertEqual(self.git('rev-parse', 'HEAD').stdout.strip(), remote)
-        self.assertIn('already published', result.stdout)
-
-    def test_conflicting_run_fails_without_another_push(self):
-        remote = self.peer('attempt-1', conflict=True)
-        result = self.publish(['conflict'], remote)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Immutable publication conflict', result.stdout)
-        self.assertEqual(len(self.commands('push')), 1)
-        self.assertEqual(self.git('rev-parse', 'HEAD').stdout.strip(), remote)
-        self.assertIn('Conflicting immutable content', (self.data / self.run_path).read_text())
-
-    def test_remote_rejection_does_not_retry(self):
-        result = self.publish(['denied'])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.commands('push')), 1)
-        self.assertEqual(len(self.commands('fetch')), 0)
-
-    def test_network_failure_does_not_retry(self):
-        result = self.publish(['network'])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.commands('push')), 1)
-        self.assertEqual(len(self.commands('fetch')), 0)
-
-    def test_validation_failure_does_not_commit_or_push(self):
-        (self.built / self.run_path).write_text('{}')
-        result = self.publish([])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.commands('push')), 0)
-        self.assertEqual(len(self.commands('commit')), 0)
-        self.assertTrue((self.root / 'diagnostics/validation-1.log').exists())
-
-    def test_prepared_catalog_reference_must_match_publication_argument(self):
-        run = self.json.loads((self.built / self.run_path).read_text())
-        run['benchmark_catalog'] = 'test-catalogs/other.json'
-        (self.built / self.run_path).write_text(self.json.dumps(run))
-        result = self.publish([])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Prepared benchmark_catalog must match publication path', result.stdout)
-        self.assertFalse((self.data / self.run_path).exists())
-        self.assertEqual(len(self.commands('commit')), 0)
-        self.assertEqual(len(self.commands('push')), 0)
-
-    def test_recovery_validates_entire_index(self):
-        remote = self.peer()
-        self.git('reset', '--hard', remote)
-        (self.data / 'runs/default-branch/attempt-2.json').write_text('{}')
-        self.commit()
-        invalid_remote = self.git('rev-parse', 'HEAD').stdout.strip()
-        self.git('reset', '--hard', self.base)
-        result = self.publish(['conflict'], invalid_remote)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('attempt-2.json', result.stdout)
-        self.assertEqual(len(self.commands('push')), 1)
-        self.assertEqual(len(self.commands('commit')), 1)
-
-    def test_exhaustion_is_three_pushes_and_retains_diagnostics(self):
-        result = self.publish(['conflict', 'non-fast-forward', 'conflict'], self.peer())
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('exhausted three push attempts', result.stdout)
-        self.assertEqual(len(self.commands('push')), 3)
-        self.assertEqual(len(self.commands('fetch')), 2)
-        for attempt in (1, 2, 3):
-            self.assertTrue((self.root / f'diagnostics/push-{attempt}.log').exists())
-            self.assertTrue((self.root / f'diagnostics/validation-{attempt}.log').exists())
-        index = self.json.loads((self.data / 'index.json').read_text())
-        self.assertEqual(set(index['runFiles']), {self.run_path, 'runs/default-branch/attempt-2.json'})
-
-    def test_second_conflict_can_succeed_on_third_attempt(self):
-        result = self.publish(['conflict', 'non-fast-forward', 'ok'], self.peer())
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(len(self.commands('push')), 3)
-        self.assertEqual(len(self.commands('fetch')), 2)
-
-    def test_conflicting_catalog_fails_before_push(self):
-        remote = self.peer()
-        self.git('reset', '--hard', remote)
-        (self.data / self.catalog).write_text('{}')
-        self.commit()
-        remote = self.git('rev-parse', 'HEAD').stdout.strip()
-        self.git('reset', '--hard', self.base)
-        result = self.publish(['conflict'], remote)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Immutable publication conflict: test-catalogs/', result.stdout)
-        self.assertEqual(len(self.commands('push')), 1)
-
-    def test_symlink_index_is_rejected(self):
-        target = self.root / 'outside-index.json'
-        target.write_text((self.data / 'index.json').read_text())
-        (self.data / 'index.json').unlink()
-        (self.data / 'index.json').symlink_to(target)
-        self.commit()
-        result = self.publish([])
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('symbolic link', result.stdout)
-        self.assertEqual(len(self.commands('push')), 0)
+def execute(names, ctx):
+    # Resolve the small set of Actions contexts used by the authored shared env.
+    job = yaml.safe_load(WORKFLOW.read_text())['jobs']['publish']
+    contexts = {'github.workspace': str(ctx.repo.parent),
+                'github.run_id': ctx.env['GITHUB_RUN_ID'],
+                'github.run_attempt': ctx.env['GITHUB_RUN_ATTEMPT']}
+    for key in ('RUN_ID', 'DATA_DIR'):
+        value = job['env'][key]
+        for context, replacement in contexts.items():
+            value = value.replace('${{ ' + context + ' }}', replacement)
+        assert '${{' not in value
+        ctx.env[key] = value
+    result = None
+    for name in (names,) if isinstance(names, str) else names:
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', workflow_step(name)],
+                                cwd=ctx.repo, env=ctx.env, capture_output=True, text=True)
+        if result.returncode != 0:
+            return result
+        # Actions exports GITHUB_ENV values to subsequent steps, not the current shell.
+        env_file = Path(ctx.env['GITHUB_ENV'])
+        if env_file.exists():
+            ctx.env.update(line.split('=', 1) for line in env_file.read_text().splitlines())
+    assert result is not None, 'At least one actual workflow step is required'
+    return result
 
 
-if __name__ == '__main__':
-    unittest.main()
+PUBLICATION_STEPS = ('Store immutable run', 'Update run index', 'Commit and push publication')
+
+
+def git(repo, *args, check=True):
+    return subprocess.run(['git', *args], cwd=repo, capture_output=True, text=True, check=check)
+
+
+@pytest.fixture
+def publication(tmp_path):
+    raw = json.loads((DASHBOARD / 'tests/fixtures/fictional-producer-run.json').read_text())
+    raw['benchmark_results'][0]['timing_results_s'] = [3e-9, 1e-9, 2e-9]
+    raw['benchmark_results'][1].update(status='failed', exit_code=7,
+                                       timing_results_s=[], error='Fictional failure')
+    raw['extra'] = {'zero': 0, 'false': False, 'null': None}
+    results = tmp_path / 'results'
+    results.mkdir()
+    (results / 'run.json').write_text(json.dumps(raw))
+    repo = tmp_path / 'publication'
+    repo.mkdir()
+    scratch = tmp_path / 'scratch'
+    scratch.mkdir()
+    env = {**os.environ, 'RESULTS_DOWNLOAD_DIR': str(results), 'RUNNER_TEMP': str(scratch),
+           'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_EVENT_NAME': 'push',
+           'BENCHMARK_BRANCH': 'develop', 'BENCHMARK_COMMIT_MESSAGE': 'Measured "subject" $(false)\nbody',
+           'BENCHMARK_MACHINE': 'fictional-machine',
+           'WORKFLOW_COMMIT_SHA': raw['provenance']['rocjitsu']['rocjitsu_commit_sha'],
+           'TENSILE_COMMIT_SHA': 'd' * 40, 'SOURCE_BASE_BRANCH': '', 'SOURCE_BASE_SHA': '',
+           'SOURCE_PULL_REQUEST_NUMBER': '', 'SOURCE_PULL_REQUEST_URL': '',
+           'RESULTS_BRANCH': 'gh-pages-rocjitsu', 'GITHUB_ENV': str(tmp_path / 'github-env')}
+    return SimpleNamespace(raw=raw, repo=repo, env=env,
+                           candidate=scratch / 'dashboard-publication-diagnostics/candidate.json',
+                           data=repo / 'rocjitsu-dashboard/data')
+
+
+def test_enrichment_preserves_raw_and_types_optional_metadata(publication):
+    ctx = publication
+    ctx.env.update(BENCHMARK_BRANCH='feature/quoted', GITHUB_EVENT_NAME='workflow_dispatch',
+                   SOURCE_BASE_BRANCH='develop', SOURCE_BASE_SHA='b' * 40,
+                   SOURCE_PULL_REQUEST_NUMBER='42', SOURCE_PULL_REQUEST_URL='https://example.invalid/pull/42')
+    result = execute('Fill publication metadata', ctx)
+    assert result.returncode == 0, result.stdout + result.stderr
+    candidate = json.loads(ctx.candidate.read_text())
+    assert {k: v for k, v in candidate.items() if k != 'publication'} == {
+        k: v for k, v in ctx.raw.items() if k != 'publication'
+    }
+    assert candidate['publication'] == {
+        'id': 'github-123-attempt-1', 'machine_label': 'fictional-machine', 'trigger': 'manual',
+        'workflow_commit_sha': ctx.env['WORKFLOW_COMMIT_SHA'], 'tensile_commit_sha': 'd' * 40,
+        'source': {'branch': 'feature/quoted', 'message': ctx.env['BENCHMARK_COMMIT_MESSAGE'],
+                   'base': {'branch': 'develop', 'commit': 'b' * 40},
+                   'pull_request': {'number': 42, 'url': 'https://example.invalid/pull/42'}},
+    }
+
+
+def initialize_results(ctx, tmp_path):
+    remote = tmp_path / 'results.git'
+    git(tmp_path, 'init', '--bare', str(remote))
+    git(ctx.repo, 'init', '--initial-branch=gh-pages-rocjitsu')
+    git(ctx.repo, 'config', 'user.name', 'Fictional publication')
+    git(ctx.repo, 'config', 'user.email', 'fixture@example.invalid')
+    git(ctx.repo, 'config', 'commit.gpgsign', 'false')
+    (ctx.repo / 'unrelated.txt').write_text('keep me\n')
+    git(ctx.repo, 'add', 'unrelated.txt')
+    git(ctx.repo, 'commit', '-m', 'Seed local fixture')
+    git(ctx.repo, 'remote', 'add', 'origin', str(remote))
+    git(ctx.repo, 'push', 'origin', 'HEAD:refs/heads/gh-pages-rocjitsu')
+    return remote
+
+
+def test_publication_places_new_run_and_refuses_repeat(publication, tmp_path):
+    ctx = publication
+    remote = initialize_results(ctx, tmp_path)
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode == 0, result.stdout + result.stderr
+    path = 'runs/default-branch/github-123-attempt-1.json'
+    assert (ctx.data / path).read_bytes() == ctx.candidate.read_bytes()
+    index = ctx.data / 'index.json'
+    before = index.read_bytes()
+    assert json.loads(before)['runFiles'] == [path]
+    head = git(ctx.repo, 'rev-parse', 'HEAD').stdout.strip()
+    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout.strip() == head
+    assert execute(PUBLICATION_STEPS, ctx).returncode != 0
+    assert index.read_bytes() == before
+    assert git(ctx.repo, 'rev-parse', 'HEAD').stdout.strip() == head
+    assert (ctx.repo / 'unrelated.txt').read_text() == 'keep me\n'
+    assert git(ctx.repo, 'status', '--porcelain').stdout == ''
+    original_run = (ctx.data / path).read_bytes()
+    ctx.env['GITHUB_RUN_ATTEMPT'] = '2'
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode == 0, result.stdout + result.stderr
+    next_path = 'runs/default-branch/github-123-attempt-2.json'
+    assert json.loads(index.read_text())['runFiles'] == [path, next_path]
+    assert (ctx.data / next_path).read_bytes() == ctx.candidate.read_bytes()
+    assert (ctx.data / path).read_bytes() == original_run
+    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == git(ctx.repo, 'rev-parse', 'HEAD').stdout
+
+
+def test_unknown_metadata_and_unaligned_message_stay_null(publication):
+    ctx = publication
+    ctx.env.update(BENCHMARK_MACHINE='', WORKFLOW_COMMIT_SHA='c' * 40,
+                   TENSILE_COMMIT_SHA='', GITHUB_EVENT_NAME='unknown')
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    pub = json.loads(ctx.candidate.read_text())['publication']
+    assert pub['source'] == {'branch': 'develop', 'message': None, 'base': None, 'pull_request': None}
+    assert pub['trigger'] is pub['machine_label'] is pub['tensile_commit_sha'] is None
+    ctx.env.update(SOURCE_PULL_REQUEST_NUMBER='42', WORKFLOW_COMMIT_SHA='')
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    pub = json.loads(ctx.candidate.read_text())['publication']
+    assert pub['source']['pull_request'] == {'number': 42}
+    assert pub['workflow_commit_sha'] is None
+    raw_path = Path(ctx.env['RESULTS_DOWNLOAD_DIR']) / 'run.json'
+    raw = json.loads(raw_path.read_text())
+    raw['provenance']['rocjitsu']['rocjitsu_commit_sha'] = None
+    raw_path.write_text(json.dumps(raw))
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    assert json.loads(ctx.candidate.read_text())['publication']['source']['message'] is None
+
+
+@pytest.mark.parametrize('identical', [False, True])
+def test_existing_run_is_never_overwritten(publication, tmp_path, identical):
+    ctx = publication
+    remote = initialize_results(ctx, tmp_path)
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    existing = ctx.data / 'runs/default-branch/github-123-attempt-1.json'
+    existing.parent.mkdir(parents=True)
+    existing.write_bytes(ctx.candidate.read_bytes() if identical else b'existing conflicting run\n')
+    git(ctx.repo, 'add', 'rocjitsu-dashboard')
+    git(ctx.repo, 'commit', '-m', 'Seed conflict')
+    before = existing.read_bytes()
+    remote_head = git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode != 0
+    assert existing.read_bytes() == before
+    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == remote_head
+
+
+@pytest.mark.parametrize('component', ['rocjitsu-dashboard', 'rocjitsu-dashboard/data/runs',
+                                      'rocjitsu-dashboard/data/runs/default-branch',
+                                      'rocjitsu-dashboard/data/index.json',
+                                      'rocjitsu-dashboard/data/runs/default-branch/github-123-attempt-1.json'])
+def test_publication_rejects_symbolic_paths(publication, tmp_path, component):
+    ctx = publication
+    initialize_results(ctx, tmp_path)
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    marker = outside / 'keep'
+    marker.write_bytes(b'keep\n')
+    link = ctx.repo / component
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside)
+    git(ctx.repo, 'add', 'rocjitsu-dashboard')
+    git(ctx.repo, 'commit', '-m', 'Seed symbolic path')
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode != 0
+    assert sorted(p.name for p in outside.iterdir()) == ['keep']
+    assert marker.read_bytes() == b'keep\n'
+
+
+def test_index_append_preserves_history_and_stages_only_run_and_index(publication, tmp_path):
+    ctx = publication
+    initialize_results(ctx, tmp_path)
+    ctx.env['BENCHMARK_BRANCH'] = 'feature/side'
+    ctx.data.mkdir(parents=True)
+    index = ctx.data / 'index.json'
+    index.write_text(json.dumps({'generatedAt': '2026-01-01T00:00:00Z',
+                                 'runFiles': ['runs/default-branch/old.json']}))
+    git(ctx.repo, 'add', 'rocjitsu-dashboard/data/index.json')
+    git(ctx.repo, 'commit', '-m', 'Seed index')
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(index.read_text())['runFiles'] == [
+        'runs/default-branch/old.json', 'runs/side-branches/github-123-attempt-1.json',
+    ]
+    assert set(git(ctx.repo, 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').stdout.splitlines()) == {
+        'rocjitsu-dashboard/data/index.json',
+        'rocjitsu-dashboard/data/runs/side-branches/github-123-attempt-1.json',
+    }
+    before = index.read_bytes()
+    assert execute('Update run index', ctx).returncode == 0
+    assert index.read_bytes() == before
+
+
+@pytest.mark.parametrize('paths', [['../escape.json'], ['runs/default-branch/old.json'] * 2, None])
+def test_unusable_index_is_not_rewritten(publication, tmp_path, paths):
+    ctx = publication
+    initialize_results(ctx, tmp_path)
+    ctx.data.mkdir(parents=True)
+    index = ctx.data / 'index.json'
+    before = json.dumps({'generatedAt': 'unchanged', 'runFiles': paths}).encode()
+    index.write_bytes(before)
+    git(ctx.repo, 'add', 'rocjitsu-dashboard')
+    git(ctx.repo, 'commit', '-m', 'Seed invalid index')
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    assert execute(PUBLICATION_STEPS, ctx).returncode != 0
+    assert index.read_bytes() == before
+
+
+def test_non_fast_forward_push_fails_without_overwriting_peer(publication, tmp_path):
+    ctx = publication
+    remote = initialize_results(ctx, tmp_path)
+    peer = tmp_path / 'peer'
+    git(tmp_path, 'clone', '--branch', 'gh-pages-rocjitsu', str(remote), str(peer))
+    git(peer, 'config', 'user.name', 'Fictional peer')
+    git(peer, 'config', 'user.email', 'peer@example.invalid')
+    git(peer, 'config', 'commit.gpgsign', 'false')
+    (peer / 'peer.txt').write_text('preserve peer\n')
+    git(peer, 'add', 'peer.txt')
+    git(peer, 'commit', '-m', 'Concurrent local update')
+    git(peer, 'push', 'origin', 'HEAD:refs/heads/gh-pages-rocjitsu')
+    remote_head = git(peer, 'rev-parse', 'HEAD').stdout
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode != 0
+    assert 'rejected' in result.stdout + result.stderr
+    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == remote_head
+    assert (ctx.candidate.parent / 'push.log').is_file()
+
+
+def test_commit_failure_is_visible_and_never_pushes(publication, tmp_path):
+    ctx = publication
+    remote = initialize_results(ctx, tmp_path)
+    before = git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout
+    hooks = tmp_path / 'hooks'
+    hooks.mkdir()
+    hook = hooks / 'pre-commit'
+    hook.write_text('#!/bin/sh\nprintf "deliberate local commit failure\\n" >&2\nexit 1\n')
+    hook.chmod(0o755)
+    git(ctx.repo, 'config', 'core.hooksPath', str(hooks))
+    assert execute('Fill publication metadata', ctx).returncode == 0
+    result = execute(PUBLICATION_STEPS, ctx)
+    assert result.returncode != 0
+    assert 'deliberate local commit failure' in result.stdout + result.stderr
+    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == before
+    assert not (ctx.candidate.parent / 'push.log').exists()

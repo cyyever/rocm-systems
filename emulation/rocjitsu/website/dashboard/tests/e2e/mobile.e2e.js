@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { clickLastCompletedChartPoint, readChart, selectedRunIds } from './helpers/chart.js';
@@ -39,7 +39,7 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   });
   await trend.tap({ position: { x: pixel[0], y: pixel[1] } });
   await trend.dispatchEvent('pointerleave', { pointerType: 'touch' });
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const projection = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: ['single'] }, { range: '1W' });
   const index = projection.slots.findIndex((slot) => slot.run?.runId === 'fictional-develop-23');
   const status = page.getByTestId('performance-trend').getByRole('status');

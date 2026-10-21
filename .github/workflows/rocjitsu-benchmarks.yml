@@ -27,7 +27,7 @@ defaults:
     shell: bash
 
 env:
-  CORPUS_SHA: e191fc247b8c04f984f41cf2b2a83ff89d6a0854
+  CORPUS_SHA: b95ea549e1f500ce4ce83ae511ae5e4434930374
   ROCJITSU_SOURCE_DIR: ${{ github.workspace }}/rocm-systems/emulation/rocjitsu
   CORPUS_SOURCE_DIR: ${{ github.workspace }}/rocjitsu-test-corpus
   TENSILE_SOURCE: ${{ github.workspace }}/tensile-source
@@ -313,9 +313,10 @@ jobs:
     permissions:
       contents: write
     env:
+      RUN_ID: github-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+      DATA_DIR: ${{ github.workspace }}/publication/rocjitsu-dashboard/data
       BENCHMARK_MACHINE: ${{ needs.benchmark.outputs.machine }}
       BENCHMARK_BRANCH: ${{ github.ref_name }}
-      BENCHMARK_SHA: ${{ github.sha }}
       BENCHMARK_COMMIT_MESSAGE: ${{ needs.benchmark.outputs.source_commit_message }}
       WORKFLOW_COMMIT_SHA: ${{ needs.benchmark.outputs.workflow_commit_sha }}
       TENSILE_COMMIT_SHA: ${{ needs.benchmark.outputs.tensile_commit_sha }}
@@ -337,105 +338,133 @@ jobs:
           path: publication
           ref: ${{ env.RESULTS_BRANCH }}
 
-      - name: Checkout dashboard scripts and validator
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: ROCm/rocm-systems
-          path: dashboard
-          ref: ${{ github.sha }}
-          persist-credentials: false
-          sparse-checkout: emulation/rocjitsu/website/dashboard
+      - name: Fill publication metadata
+        run: |
+          set -euo pipefail
+          DIAGNOSTICS_DIR="${RUNNER_TEMP}/dashboard-publication-diagnostics"
+          CANDIDATE_FILE="${DIAGNOSTICS_DIR}/candidate.json"
+          printf 'DIAGNOSTICS_DIR=%s\nCANDIDATE_FILE=%s\n' \
+            "${DIAGNOSTICS_DIR}" "${CANDIDATE_FILE}" >> "${GITHUB_ENV}"
+          mkdir -p "${DIAGNOSTICS_DIR}"
+          TRIGGER=
+          case "${GITHUB_EVENT_NAME}" in
+            push) TRIGGER=auto ;;
+            workflow_dispatch) TRIGGER=manual ;;
+          esac
+          jq \
+            --arg id "${RUN_ID}" \
+            --arg branch "${BENCHMARK_BRANCH}" \
+            --arg message "${BENCHMARK_COMMIT_MESSAGE}" \
+            --arg machine "${BENCHMARK_MACHINE}" --arg trigger "${TRIGGER}" \
+            --arg workflow_sha "${WORKFLOW_COMMIT_SHA}" \
+            --arg tensile_sha "${TENSILE_COMMIT_SHA}" \
+            --arg base_branch "${SOURCE_BASE_BRANCH}" --arg base_sha "${SOURCE_BASE_SHA}" \
+            --arg pr_number "${SOURCE_PULL_REQUEST_NUMBER}" --arg pr_url "${SOURCE_PULL_REQUEST_URL}" '
+              def known: if . == "" then null else . end;
 
-      - name: Checkout pinned publication manifest
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: ROCm/rocjitsu-test-corpus
-          ref: ${{ env.CORPUS_SHA }}
-          path: publication-corpus
-          persist-credentials: false
-          sparse-checkout: benchmarks/suites
+              # A checkout message describes the measurement only at the same SHA.
+              (if .provenance.rocjitsu.rocjitsu_commit_sha == $workflow_sha
+               then ($message | known) else null end) as $source_message |
+              (if $base_branch != "" and $base_sha != ""
+               then {branch: $base_branch, commit: $base_sha} else null end) as $source_base |
+              (if $pr_number == "" then null
+               elif $pr_url == "" then {number: ($pr_number | tonumber)}
+               else {number: ($pr_number | tonumber), url: $pr_url} end) as $pull_request |
 
-      - name: Set up publisher Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.12"
+              .publication.id = $id |
+              .publication.source.branch = ($branch | known) |
+              .publication.source.message = $source_message |
+              .publication.source.base = $source_base |
+              .publication.source.pull_request = $pull_request |
+              .publication.trigger = ($trigger | known) |
+              .publication.machine_label = ($machine | known) |
+              .publication.workflow_commit_sha = ($workflow_sha | known) |
+              .publication.tensile_commit_sha = ($tensile_sha | known)
+            ' "${RESULTS_DOWNLOAD_DIR}/run.json" > "${CANDIDATE_FILE}"
 
-      - name: Set up dashboard validator Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-
-      - name: Publish dashboard-ready result
+      - name: Store immutable run
         working-directory: publication
         run: |
+          set -euo pipefail
+          if [[ "${BENCHMARK_BRANCH}" == develop ]]; then
+            RUN_GROUP=default-branch
+          else
+            RUN_GROUP=side-branches
+          fi
+          RUN_PATH="runs/${RUN_GROUP}/${RUN_ID}.json"
+          RUN_FILE="${DATA_DIR}/${RUN_PATH}"
+          INDEX_FILE="${DATA_DIR}/index.json"
+
+          # Check before writing so publication cannot follow a link outside data.
+          for PATH_COMPONENT in \
+            "${PWD}/rocjitsu-dashboard" "${DATA_DIR}" "${INDEX_FILE}" "${DATA_DIR}/runs" \
+            "${DATA_DIR}/runs/${RUN_GROUP}" "${RUN_FILE}"; do
+            if [[ -L "${PATH_COMPONENT}" ]]; then
+              echo "::error::Publication path is a symbolic link: ${PATH_COMPONENT}"
+              exit 1
+            fi
+          done
+
+          # Refuse unsafe or conflicting index entries before placing any new run.
+          if [[ -e "${INDEX_FILE}" ]]; then
+            if ! jq -e '
+              type == "object" and (.runFiles | type == "array") and
+              all(.runFiles[]; type == "string" and
+                test("^runs/(default-branch|side-branches)/[A-Za-z0-9][A-Za-z0-9._-]*\\.json$")) and
+              ((.runFiles | unique | length) == (.runFiles | length))
+            ' "${INDEX_FILE}" > /dev/null; then
+              echo "::error::Invalid publication index: ${INDEX_FILE}"
+              exit 1
+            fi
+          fi
+          # Each Actions attempt has a new ID; refuse any unexpected existing file.
+          mkdir -p "${DATA_DIR}/runs/${RUN_GROUP}"
+          (set -o noclobber; cat "${CANDIDATE_FILE}" > "${RUN_FILE}")
+          printf 'RUN_PATH=%s\nRUN_FILE=%s\nINDEX_FILE=%s\n' \
+            "${RUN_PATH}" "${RUN_FILE}" "${INDEX_FILE}" >> "${GITHUB_ENV}"
+
+      - name: Update run index
+        working-directory: publication
+        run: |
+          set -euo pipefail
+          if [[ -e "${INDEX_FILE}" ]]; then
+            # An indexed retry must preserve both generatedAt and existing formatting.
+            if jq -e --arg path "${RUN_PATH}" '.runFiles | index($path) != null' \
+              "${INDEX_FILE}" > /dev/null; then
+              echo "Run is already indexed: ${RUN_PATH}"
+              exit 0
+            fi
+          fi
+          INDEX_TEMP="$(mktemp "${DATA_DIR}/.index.XXXXXX")"
+          trap 'rm -f -- "${INDEX_TEMP}"' EXIT
+          GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ -e "${INDEX_FILE}" ]]; then
+            jq --arg path "${RUN_PATH}" --arg now "${GENERATED_AT}" \
+              '.runFiles += [$path] | .generatedAt = $now' "${INDEX_FILE}" > "${INDEX_TEMP}"
+          else
+            jq -n --arg path "${RUN_PATH}" --arg now "${GENERATED_AT}" \
+              '{generatedAt: $now, runFiles: [$path]}' > "${INDEX_TEMP}"
+          fi
+          mv "${INDEX_TEMP}" "${INDEX_FILE}"
+
+      - name: Commit and push publication
+        working-directory: publication
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          RUN_ID="github-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
-          if [[ "${BENCHMARK_BRANCH}" == "develop" ]]; then
-            RUN_PATH="runs/default-branch/${RUN_ID}.json"
-          else
-            RUN_PATH="runs/side-branches/${RUN_ID}.json"
-          fi
-          TRIGGER=auto
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            TRIGGER=manual
-          fi
-
-          BUILD_DIR="${RUNNER_TEMP}/dashboard-built"
-          SCRIPTS_DIR="${GITHUB_WORKSPACE}/dashboard/emulation/rocjitsu/website/dashboard/scripts"
-          # Provenance names the actual checked tool source, not a latest branch.
-          [[ "$(git -C "${GITHUB_WORKSPACE}/dashboard" rev-parse --verify HEAD^{commit})" == "${WORKFLOW_COMMIT_SHA}" ]]
-          PREPARE_ARGS=(
-            --raw-run "${RESULTS_DOWNLOAD_DIR}/run.json"
-            --data-dir "${BUILD_DIR}"
-            --run-id "${RUN_ID}"
-            --expected-sha "${BENCHMARK_SHA}"
-            --expected-corpus-sha "${CORPUS_SHA}"
-            --workflow-commit-sha "${WORKFLOW_COMMIT_SHA}"
-            --tensile-commit-sha "${TENSILE_COMMIT_SHA}"
-            --corpus-dir "${GITHUB_WORKSPACE}/publication-corpus"
-            --manifest benchmarks/suites/performance-v1.toml
-            --machine-id "${BENCHMARK_MACHINE}"
-            --trigger "${TRIGGER}"
-            --branch "${BENCHMARK_BRANCH}"
-            --commit-message "${BENCHMARK_COMMIT_MESSAGE}"
-          )
-          if [[ -n "${SOURCE_BASE_SHA}" ]]; then
-            PREPARE_ARGS+=(
-              --base-branch "${SOURCE_BASE_BRANCH}"
-              --base-sha "${SOURCE_BASE_SHA}"
-            )
-          fi
-          if [[ -n "${SOURCE_PULL_REQUEST_NUMBER}" ]]; then
-            PREPARE_ARGS+=(
-              --pull-request-number "${SOURCE_PULL_REQUEST_NUMBER}"
-              --pull-request-url "${SOURCE_PULL_REQUEST_URL}"
-            )
-          fi
-          python "${SCRIPTS_DIR}/dashboard-data/prepare-dashboard-data.py" \
-            "${PREPARE_ARGS[@]}"
-
-          shopt -s dotglob
-          CATALOGS=("${BUILD_DIR}"/test-catalogs/*.json)
-          shopt -u dotglob
-          if [[ ${#CATALOGS[@]} -ne 1 || ! -f "${CATALOGS[0]}" ]]; then
-            echo "::error::Expected exactly one prepared test catalog."
-            exit 1
-          fi
-          CATALOG_PATH="test-catalogs/$(basename "${CATALOGS[0]}")"
-          # Publisher checks benchmark_catalog and execution_summary.benchmark_suite.
-
-          bash "${SCRIPTS_DIR}/dashboard-data/publish-dashboard-run.sh" \
-            "${BUILD_DIR}" "${RUN_PATH}" "${CATALOG_PATH}" "${RESULTS_BRANCH}" \
-            "Publish rocjitsu benchmark run ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" \
-            "${SCRIPTS_DIR}" "${RUNNER_TEMP}/dashboard-publication-diagnostics"
+          # The immutable run and its index entry belong in the same commit.
+          git add -- "${RUN_FILE}" "${INDEX_FILE}"
+          git commit --signoff -m "Publish rocjitsu benchmark run ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" \
+            2>&1 | tee "${DIAGNOSTICS_DIR}/commit.log"
+          git push origin "HEAD:refs/heads/${RESULTS_BRANCH}" 2>&1 | tee "${DIAGNOSTICS_DIR}/push.log"
 
       - name: Upload publication diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rocjitsu-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          # This also resolves if metadata fails before exporting its environment.
           path: ${{ runner.temp }}/dashboard-publication-diagnostics
           if-no-files-found: warn
           retention-days: 14

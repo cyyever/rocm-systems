@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
-import { validateDashboardDataDirectory } from '../../scripts/validate-dashboard-data.mjs';
+import { loadDashboardDataDirectory } from '../../scripts/process-dashboard-data.mjs';
 import { selectOverviewProjection } from '../../src/data/overviewProjection.js';
 
 const checkedIn = fileURLToPath(new URL('../fixtures/data/', import.meta.url));
@@ -22,7 +22,7 @@ test('one regeneration command reproduces the complete checked-in publication', 
     for (const name of files) {
       expect(await readFile(path.join(directory, name), 'utf8'), name).toBe(await readFile(path.join(checkedIn, name), 'utf8'));
     }
-    const validated = await validateDashboardDataDirectory(directory);
+    const validated = await loadDashboardDataDirectory(directory);
     expect(validated.sourceData.runs).toHaveLength(45);
     expect(validated.data.runs).toHaveLength(24);
     expect(validated.data.allRuns).toHaveLength(45);
@@ -36,18 +36,17 @@ async function withOverviewFixture(assertions) {
   try {
     const result = spawnSync(process.execPath, [generator, directory, '--overview-contract'], { encoding: 'utf8' });
     expect(result.status, result.stderr).toBe(0);
-    const validated = await validateDashboardDataDirectory(directory);
-    const { index, catalogs, runs } = validated.sourceData;
-    expect(runs.map(({ id }) => id)).toEqual([
+    const validated = await loadDashboardDataDirectory(directory);
+    const { index, runs } = validated.sourceData;
+    expect(runs.map(({ publication }) => publication.id)).toEqual([
       'fictional-contract-old-1', 'fictional-contract-old-2',
       'fictional-contract-middle-4', 'fictional-contract-middle-5',
       'fictional-contract-current-first', 'fictional-contract-current-retry',
       'fictional-contract-current-failed',
     ]);
     expect(index.runFiles).toHaveLength(7);
-    expect(Object.keys(catalogs)).toHaveLength(3);
+    expect(Object.keys(validated.data.catalogs)).toHaveLength(3);
     expect(runs).toEqual(await Promise.all(index.runFiles.map(async (name) => JSON.parse(await readFile(path.join(directory, name), 'utf8')))));
-    for (const [name, catalog] of Object.entries(catalogs)) expect(catalog).toEqual(JSON.parse(await readFile(path.join(directory, name), 'utf8')));
     await assertions(validated);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -74,16 +73,10 @@ test('contract fixture preserves typed definitions and exact target/policy membe
   await withOverviewFixture(({ data, sourceData }) => {
     expect(data.runs).toHaveLength(7);
     expect(data.modes).toEqual(['single', 'default']);
-    const definitions = sourceData.catalogs['test-catalogs/fictional-contract-current.json'].benchmark_definitions;
+    const definitions = Object.fromEntries(data.catalogs['fictional-contract-current'].tests.map((row) => [row.id, row]));
     expect(definitions.a.problem).toEqual({ shape: [16, 32], tuning: { enabled: true, tile: null } });
     expect(definitions.c.problem).toEqual({ shape: '[16,32]' });
-    expect(sourceData.runs.every((run) => run.source.message.startsWith('FICTIONAL'))).toBe(true);
-    for (const run of sourceData.runs) {
-      const catalog = sourceData.catalogs[run.benchmark_catalog];
-      expect(run.execution_summary.benchmark_suite).toBe(catalog.benchmark_suite);
-      expect(run.configurations.map(({ target, thread_policy }) => `${target}/${thread_policy}`).sort()).toEqual(Object.entries(catalog.membership).flatMap(([target, policies]) => Object.keys(policies).map((policy) => `${target}/${policy}`)).sort());
-      for (const config of run.configurations) expect(config.benchmark_results.map(({ id }) => id).sort()).toEqual([...catalog.membership[config.target][config.thread_policy]].sort());
-    }
+    expect(sourceData.runs.every((run) => run.publication.source.message.startsWith('FICTIONAL'))).toBe(true);
   });
 });
 

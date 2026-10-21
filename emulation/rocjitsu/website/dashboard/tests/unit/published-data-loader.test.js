@@ -53,7 +53,7 @@ function loadSynthetic(fetchImpl, overrides = {}) {
 test('rejects an unsupported run version after loading the unversioned manifest', async () => {
   dataset = createSyntheticDataset(2);
   const runUrl = `https://dashboard.test/data/${dataset.runFiles[0]}`;
-  dataset.bodies.get(runUrl).schemaVersion = 99;
+  dataset.bodies.get(runUrl).schema_version = 99;
   const { fetchImpl, state } = createFetchDouble();
   const onManifest = vi.fn();
   await expect(loadSynthetic(fetchImpl, { onManifest })).rejects.toThrow(/schema.*99/i);
@@ -87,7 +87,7 @@ test('loads 500 runs in index order with at most eight run requests in flight', 
     dataset.runFiles.map((runFile) => runFile.split('/').at(-1).replace(/\.json$/, '')),
   );
   expect(state.peak).toBeLessThanOrEqual(MAX_CONCURRENT_RUN_REQUESTS);
-  expect(state.urls).toHaveLength(dataset.runCount + 2);
+  expect(state.urls).toHaveLength(dataset.runCount + 1);
 });
 
 test('honors a caller-supplied concurrency limit', async () => {
@@ -105,7 +105,7 @@ test('revalidates mutable documents and reuses cached immutable files', async ()
 
   expect(state.options.get(dataset.indexUrl).cache).toBe('no-store');
   expect(state.options.get(`https://dashboard.test/data/${dataset.runFiles[0]}`).cache).toBe('force-cache');
-  expect(state.options.get(`https://dashboard.test/data/${dataset.catalogPath}`).cache).toBe('force-cache');
+  expect(state.urls.some((url) => url.includes('test-catalogs'))).toBe(false);
 });
 
 test('mutable fixture loads bypass retained run/catalog HTTP cache without changing URLs', async () => {

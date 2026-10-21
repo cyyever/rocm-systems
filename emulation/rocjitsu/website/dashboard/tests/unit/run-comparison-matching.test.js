@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
 import { compareRuns, selectRunComparison } from '../../src/data/selectors.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
 const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single'] };
 const older = data.runs.find(({ catalogId }) => catalogId === 'fictional-old');
 const current = data.latestCommitRun;

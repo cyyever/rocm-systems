@@ -14,7 +14,7 @@ test('keyboard gap status identifies the actual slot and reason without borrowin
 });
 test('empty comparison copy separates scope, candidates, shared cohort and weekly eligibility', () => {
   expect(trendEmptyMessage({ ...comparison, rows: [] })).toContain('Select targets');
-  expect(trendEmptyMessage({ ...comparison, attempts: [] })).toBe('No develop runs in the selected range/catalog.');
+  expect(trendEmptyMessage({ ...comparison, attempts: [] })).toBe('No develop runs in the selected range/benchmark set.');
   expect(trendEmptyMessage({ ...comparison, rows: [{ ...comparison.rows[0], cohortIds: [] }] })).toContain('No shared workloads');
   expect(trendEmptyMessage({ ...comparison, range: '1W' })).toBe('No complete runs for selected comparison in this week.');
   expect(trendEmptyMessage(comparison)).toContain('no positive valid reference');

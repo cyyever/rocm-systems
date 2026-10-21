@@ -60,14 +60,14 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw ma
   const source = await downloadSource(page);
   expect(source).toEqual(publication);
   expect(source.index).not.toHaveProperty('schemaVersion');
-  expect(source.runs.every((run) => run.schemaVersion === 1)).toBe(true);
+  expect(source.runs.every((run) => run.schema_version === 1)).toBe(true);
   expect(source).not.toHaveProperty('metadata');
   expect(source).not.toHaveProperty('siteConfig');
   expect(source.runs.every((run) => !('plugin' in run) && !('comparisonId' in run))).toBe(true);
-  expect(source.runs.some((run) => run.source.branch.startsWith('fictional/'))).toBe(true);
+  expect(source.runs.some((run) => run.publication.source.branch.startsWith('fictional/'))).toBe(true);
   const policies = await fetchPolicies(page);
   const initialImmutable = policies.filter(({ url }) => /\/(runs|test-catalogs)\//.test(url));
-  expect(initialImmutable).toHaveLength(publication.runs.length + Object.keys(publication.catalogs).length);
+  expect(initialImmutable).toHaveLength(publication.runs.length);
   expect(policies.filter(({ url }) => /\/index\.json/.test(url)).every(({ cache }) => cache === 'no-store')).toBe(true);
   expect(initialImmutable.every(({ cache }) => cache === 'no-store')).toBe(true);
 
@@ -101,7 +101,7 @@ test('fatal load and failed refresh discard stale exports; Retry restores raw ma
 
 test('one invalid indexed run fails the entire publication instead of exposing partial measurements', async ({ page }) => {
   const publication = createMaintainedPublication();
-  publication.runs.find((run) => run.id === 'fictional-develop-23').configurations[0].benchmark_results[0].timing_results_s = [-1];
+  publication.runs.find((run) => run.publication.id === 'fictional-develop-23').publication.id = 'fictional-develop-23-mismatch';
   await installPublication(page, { publication });
   await page.goto('/');
   await expect(page.getByTestId('dashboard-data-error')).toContainText('fictional-develop-23');
@@ -126,5 +126,5 @@ test('optional storage failure cannot discard a successfully refreshed publicati
   await ready(page);
   const source = await downloadSource(page);
   expect(source.index).not.toHaveProperty('schemaVersion');
-  expect(source.runs.every((run) => run.schemaVersion === 1)).toBe(true);
+  expect(source.runs.every((run) => run.schema_version === 1)).toBe(true);
 });

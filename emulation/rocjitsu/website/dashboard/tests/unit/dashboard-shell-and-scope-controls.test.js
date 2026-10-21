@@ -9,7 +9,7 @@ import DashboardHeader from '../../src/components/layout/DashboardHeader.jsx';
 import SectionCard from '../../src/components/shared/SectionCard.jsx';
 import CategoryTag from '../../src/components/shared/CategoryTag.jsx';
 import { createDashboardTheme } from '../../src/theme/theme.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 it.each([
@@ -19,9 +19,9 @@ it.each([
   ['compare', true, true],
 ])('UI-003 gates %s scope using its own published runs (loading=%s)', (tab, loading, disabled) => {
   const publication = createMaintainedPublication();
-  publication.runs = publication.runs.filter(({ source }) => source.branch !== 'develop');
+  publication.runs = publication.runs.filter(({ publication: { source } }) => source.branch !== 'develop');
   publication.index.runFiles = publication.runs.map(fixtureRunPath);
-  const branchOnly = validatePublishedDashboardData(publication).data;
+  const branchOnly = adaptPublishedDashboardData(publication).data;
   expect(branchOnly.runs).toHaveLength(0);
   expect(branchOnly.allRuns).toHaveLength(20);
   const html = markup(DashboardShell, { data: branchOnly, state: { ...state, tab }, loading }, 'light', true);

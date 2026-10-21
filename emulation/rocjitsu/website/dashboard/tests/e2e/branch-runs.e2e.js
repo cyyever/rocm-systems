@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { setFixtureConfigurations } from '../fixtures/configurationScope.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { benchmarkData } from '../fixtures/publishedData.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectPublishedBranches } from '../../src/data/branchSelectors.js';
 import { expectNoDocumentOverflow, installPublication, openDashboard, selectRun } from './helpers/dashboard.js';
 
@@ -19,7 +19,7 @@ test('published branch search and PR filters preserve exact selection through em
   await expect(branchRows).toHaveCount(branches.length);
   await expect(branchRows.first()).toContainText(branches[0].branch);
   const search = page.getByRole('searchbox', { name: 'Search branch, PR or SHA' });
-  for (const query of ['optimization-01', '#1000', createMaintainedPublication().runs.find((run) => run.id === 'fictional-branch-01').provenance.rocjitsu.rocjitsu_commit_sha]) {
+  for (const query of ['optimization-01', '#1000', createMaintainedPublication().runs.find((run) => run.publication.id === 'fictional-branch-01').provenance.rocjitsu.rocjitsu_commit_sha]) {
     await search.fill(query);
     await expect(branchRows).toHaveCount(1);
     await expect(branchButton(page, '01')).toBeVisible();
@@ -135,10 +135,10 @@ function otherTargetPublication(onlyOther = false) {
   const publication = createMaintainedPublication();
   for (const [index, run] of publication.runs.entries()) {
     if (!onlyOther && index !== 0) continue;
-    const other = run.configurations.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));
-    setFixtureConfigurations(publication, run, onlyOther ? other : [...run.configurations, ...other]);
+    const other = run.benchmark_results.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));
+    setFixtureConfigurations(publication, run, onlyOther ? other : [...run.benchmark_results, ...other]);
   }
-  validatePublishedDashboardData(publication);
+  adaptPublishedDashboardData(publication);
   return publication;
 }
 

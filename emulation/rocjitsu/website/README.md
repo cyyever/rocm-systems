@@ -11,8 +11,7 @@ This directory contains the public web applications for Rocjitsu.
 
 Workflow authors should start with the dashboard
 [publication guide](dashboard/docs/architecture-and-publication.md#preparing-and-publishing-measurements) and follow the
-[maintained schema-1 contract](dashboard/docs/schema-1.md), including its current
-consumer-transition limitations.
+[corpus-owned raw-run schema](https://github.com/ROCm/rocjitsu-test-corpus/blob/develop/benchmarks/raw-run-schema.md).
 The [dashboard README](dashboard/README.md#documentation) also links build and test guidance.
 
 Each application owns its dependencies, build configuration, and tests. See its

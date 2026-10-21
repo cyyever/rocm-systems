@@ -7,7 +7,7 @@ import { selectConfigurationComparison } from '../../src/data/branchSelectors.js
 import { configurationState } from '../../src/components/branch/branchPresentation.js';
 import { formatDuration } from '../../src/utils/formatters.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectRunComparison } from '../../src/data/selectors.js';
 import { rowChanges } from '../../src/components/branch/branchPresentation.js';
 
@@ -16,11 +16,11 @@ const filters = { targets: ['gfx1250'], modes: ['single'], suites: ['Triton', 'L
 test('valid positive wire durations retain measurements when derived percentages overflow', () => {
   const publication = createMaintainedPublication();
   for (const [id, duration] of [['fictional-develop-14', 1e-300], ['fictional-branch-01', 4e15]]) {
-    for (const config of publication.runs.find((r) => r.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [duration] });
+    for (const result of publication.runs.find((r) => r.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [duration] });
     }
   }
-  const data = validatePublishedDashboardData(publication).data;
+  const data = adaptPublishedDashboardData(publication).data;
   const baseline = data.runs.find((r) => r.runId === 'fictional-develop-14');
   const candidate = data.allRuns.find((r) => r.runId === 'fictional-branch-01');
   const model = selectRunComparison(candidate, baseline, filters);
@@ -59,8 +59,8 @@ test('valid positive wire durations retain measurements when derived percentages
 
 test('zero remains a standalone normalized measurement, not an accepted wire sample', () => {
   const publication = createMaintainedPublication();
-  publication.runs[0].configurations[0].benchmark_results[0].timing_results_s = [0];
-  expect(() => validatePublishedDashboardData(publication)).toThrow(/timing_results_s/);
+  publication.runs[0].benchmark_results[0].timing_results_s = [0];
+  expect(adaptPublishedDashboardData(publication).data.runs[0].tests[0].durationSeconds).toBeNull();
   const row = { baselineTest: { durationSeconds: 0 }, candidateTest: { durationSeconds: 2 } };
   expect(rowChanges(row)).toEqual({ seconds: 2, percent: null });
 });

@@ -157,6 +157,6 @@ test.each([RunMetadataDiff, BranchEnvironment].map((Component) => ({ name: Compo
 test.each([RunMetadataDiff, BranchEnvironment].map((Component) => ({ name: Component.name, Component })))('metadata $name never calls candidate facts different without a baseline', ({ Component }) => {
   const { html } = renderMetadata(Component, 'light', null);
   expect(html).not.toContain('data-different="true"');
-  expect(html).toContain('Not provided');
+  expect(html).toContain('>-</td>');
   expect(html).toContain('fictional-candidate');
 });

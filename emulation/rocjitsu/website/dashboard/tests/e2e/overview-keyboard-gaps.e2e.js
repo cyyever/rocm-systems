@@ -5,25 +5,25 @@ import { readChart } from './helpers/chart.js';
 
 function keyboardPublication() {
   const original = createMaintainedPublication();
-  const latest = original.runs.find((run) => run.id === 'fictional-develop-23');
+  const latest = original.runs.find((run) => run.publication.id === 'fictional-develop-23');
   const dates = ['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03'];
   const runs = dates.map((day, index) => {
     const run = structuredClone(latest);
-    run.id = `qa-keyboard-${index}`;
+    run.publication.id = `qa-keyboard-${index}`;
     run.provenance.rocjitsu.rocjitsu_commit_sha = String(index + 1).repeat(40);
     run.provenance.rocjitsu.rocjitsu_commit_timestamp = `${day}T10:00:00Z`;
     run.execution_summary.timestamp = `${day}T11:00:00Z`;
     run.execution_summary.finished_at = `${day}T12:00:00Z`;
     if (index === 1 || index === 2) {
-      for (const configuration of run.configurations) {
+      for (const configuration of run.benchmark_results) {
         if (index === 2 && configuration.target !== 'gfx1250') continue;
-        for (const result of configuration.benchmark_results) Object.assign(result, { status: 'timeout', timing_results_s: [], error: 'QA-only keyboard timeout' });
+        Object.assign(configuration, { status: 'timeout', timing_results_s: [], error: 'QA-only keyboard timeout' });
       }
     }
     return run;
   });
-  return { index: { ...original.index, runFiles: runs.map((run) => `runs/default-branch/${run.id}.json`) },
-    catalogs: { [latest.benchmark_catalog]: original.catalogs[latest.benchmark_catalog] }, runs };
+  return { index: { ...original.index, runFiles: runs.map((run) => `runs/default-branch/${run.publication.id}.json`) },
+    runs };
 }
 
 for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and preserve comparisons at ${width}px`, async ({ page }, testInfo) => {
@@ -47,7 +47,7 @@ for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and p
   const chart = trend.getByRole('img');
   await readChart(chart, (instance) => instance.getOption().series.length);
   await group.scrollIntoViewIfNeeded();
-  await trend.getByRole('combobox', { name: 'Catalog', exact: true }).focus();
+  await trend.getByRole('combobox', { name: 'Benchmark set', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(group).toBeFocused();
   await page.keyboard.press('End');
@@ -98,7 +98,7 @@ for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and p
   await expect(status).toBeEmpty();
   await expect(trend.getByTestId('point-hover-guide')).not.toBeVisible();
 
-  for (const run of publication.runs.slice(1)) for (const configuration of run.configurations) for (const result of configuration.benchmark_results) {
+  for (const run of publication.runs.slice(1)) for (const result of run.benchmark_results) {
     Object.assign(result, { status: 'failed', timing_results_s: [], error: 'QA-only all-gap comparison' });
   }
   publication.runs[0].provenance.rocjitsu.rocjitsu_commit_timestamp = '2026-09-10T10:00:00Z';
@@ -127,7 +127,7 @@ for (const width of [1440, 390]) test(`keyboard slots expose truthful gaps and p
   await expect(trend).not.toContainText('provisional');
 
   Object.assign(last, savedLast);
-  publication.index.runFiles = [`runs/default-branch/${last.id}.json`];
+  publication.index.runFiles = [`runs/default-branch/${last.publication.id}.json`];
   publication.runs = [last];
   await page.goto('/?targets=gfx1250&modes=single&range=1M'); await ready(page);
   await readChart(trend.getByRole('img'), (instance) => instance.getOption().series.length);

@@ -14,9 +14,9 @@ export default function CatalogWorkloads({ catalogs, projection }) {
     || a.test.name.localeCompare(b.test.name) || a.test.id.localeCompare(b.test.id));
   return <Box component="details" data-testid="catalog-workloads" sx={{ mt: 1, fontSize: 12 }}>
     <Box component="summary" sx={{ cursor: 'pointer', py: 1, minHeight: 36 }}>Catalog workloads details</Box>
-    <Typography variant="caption" color="text.secondary">Membership across all displayed catalogs; plotted cohorts also depend on configuration, suites and range.</Typography>
+    <Typography variant="caption" color="text.secondary">Membership across all displayed benchmark sets; plotted cohorts also depend on configuration, suites and range.</Typography>
     <Box tabIndex={0} role="region" aria-label="Catalog workload membership" sx={{ overflowX: 'auto', maxHeight: 320, mt: 1 }}>
-      <Table size="small" sx={{ minWidth: 420 }}><TableHead><TableRow><TableCell>Benchmark</TableCell><TableCell>Shared across catalogs</TableCell>{catalogs.map(({ catalog, label }) => <TableCell key={catalog.id} title="Latest published develop commit using this catalog (UTC)" sx={{ overflowWrap: 'anywhere' }}>{label}</TableCell>)}</TableRow></TableHead>
+      <Table size="small" sx={{ minWidth: 420 }}><TableHead><TableRow><TableCell>Benchmark</TableCell><TableCell>Shared across benchmark sets</TableCell>{catalogs.map(({ catalog, label }) => <TableCell key={catalog.id} title="Latest published develop commit using this benchmark set (UTC)" sx={{ overflowWrap: 'anywhere' }}>{label}</TableCell>)}</TableRow></TableHead>
         <TableBody>{entries.map(({ test, shared, present }) => <TableRow key={test.id}><TableCell><Typography sx={{ fontSize: 12 }}>{test.name}</Typography><Typography variant="caption" color="text.secondary">{test.suite}</Typography></TableCell><TableCell aria-label={shared ? 'Shared' : 'Not shared'}>{shared ? '✓' : '—'}</TableCell>{present.map((value, index) => <TableCell key={catalogs[index].catalog.id} aria-label={value ? 'Member' : 'Not a member'}>{value ? '✓' : '—'}</TableCell>)}</TableRow>)}</TableBody>
       </Table>
     </Box>

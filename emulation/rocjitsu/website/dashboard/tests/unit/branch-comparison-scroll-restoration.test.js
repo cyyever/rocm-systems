@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 import App from '../../src/App.jsx';
 import { useDashboardState } from '../../src/hooks/useDashboardState.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const loader = vi.hoisted(() => ({ requests: [] }));
@@ -73,7 +73,7 @@ it('v11 full branch comparison preserves the atomic pair and scrolls to the top 
   roots.push(root);
   act(() => root.render(createElement(StrictMode, null, createElement(CaptureApp))));
   const request = loader.requests.findLast(({ options: requestOptions }) => !requestOptions.signal.aborted);
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   await act(async () => request.resolve({ data, sourceData: {}, cacheGeneration: null }));
   const branch = nodes(dashboardTree).find((node) => node.type?.name === 'BranchRunsView');
   expect(branch).toBeDefined();

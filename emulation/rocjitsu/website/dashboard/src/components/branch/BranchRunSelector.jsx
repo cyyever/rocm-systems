@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { formatMetadataValue } from '../../utils/formatters';
 import { Autocomplete, Box, TextField, Typography } from '@mui/material';
 import { monoFont } from '../../theme/tokens';
 import { filterRunOptions, runOptionLabel } from './branchPresentation';
@@ -23,7 +24,7 @@ export default function BranchRunSelector({ label, options, value, selectedId, o
       slotProps={{ listbox: { sx: { maxHeight: 360, '& li': { minHeight: 44 } } }, popper: { sx: { maxWidth: 'calc(100vw - 24px)' } }, clearIndicator: { sx: { minWidth: 44, minHeight: 44 } }, popupIndicator: { sx: { minWidth: 44, minHeight: 44 } } }}
       sx={{ '& .MuiInputBase-root': { minHeight: 44 }, minWidth: 0 }} />
     <Typography component="div" variant="caption" data-testid={`${label.toLowerCase()}-selected-identity`} sx={{ mt: 0.75, overflowWrap: 'anywhere', fontFamily: monoFont, color: 'text.secondary' }}>
-      {value ? <>{value.provenance.rocjitsuCommitSha}<br />Attempt {value.runId} · {value.timestamp}</> : selectedId ? `Unavailable attempt: ${selectedId}` : 'No reference selected · Choose reference above'}
+      {value ? <>{formatMetadataValue(value.provenance.rocjitsuCommitSha)}<br />Attempt {value.runId} · {value.timestamp}</> : selectedId ? `Unavailable attempt: ${selectedId}` : 'No reference selected · Choose reference above'}
     </Typography>
   </Box>;
 }

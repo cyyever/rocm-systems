@@ -9,11 +9,11 @@ src/main.jsx → src/App.jsx             # start React; coordinate loading and p
 src/components/                       # pages, charts, tables, pickers
 src/hooks/useDashboardState.js         # filters, selections, URL/history state
 src/data/dashboardData.js             # fetch publication JSON
-src/data/dashboardValidation.js       # validate and normalize it
-src/data/runSchema.js                 # maintained version and configuration identity
+src/data/dashboardDataAdapter.js      # adapt corpus runs and derive memory-only sets
+src/data/runSchema.js                 # corpus version and configuration identity
 src/data/selectors.js                  # derive chart/comparison data
-src/config/metadata.json              # bundled settings and target run schema
-scripts/dashboard-data/                # prepare and stage benchmark publications
+src/config/metadata.json              # bundled repository/Beta/canonical-branch settings
+scripts/process-dashboard-data.mjs     # local-only consumer inspection
 vite.config.js                        # build assets and select the data source
 ```
 
@@ -40,34 +40,28 @@ https://raw.githubusercontent.com/ROCm/rocm-systems/refs/heads/gh-pages-rocjitsu
 
 The base URL comes from `scripts/dashboard-data-source.mjs`; `src/data/publishedDataUrls.js` constructs the index URL. Fixture/local-data modes use `./data/`: fixtures come from `tests/fixtures/data/`, or `DASHBOARD_DATA_DIR` supplies a local directory.
 
-## What each JSON file contains
+## Data and browser loading
 
-| File | Information |
-| --- | --- |
-| `src/config/metadata.json` | Target run `schemaVersion`, repository URL, Beta flag, canonical branch. Bundled, never fetched from the data branch. |
-| `data/index.json` | Publication time and the complete list of visible run-file paths. |
-| `data/test-catalogs/<id>.json` | Workload definitions and target/policy membership. No measured timings. |
-| `data/runs/default-branch/<id>.json` | A develop attempt: schema version, source commit, execution summary/structured provenance, configurations, timings, statuses, diagnostics. |
-| `data/runs/side-branches/<id>.json` | The same run format for any other branch. Flat directory, not one directory per branch. |
+Bundled `src/config/metadata.json` contains repository URL, Beta flag and canonical
+branch, not a producer schema version. The data root contains only an index and
+corpus run documents. Each run embeds flat measurements and definitions; there
+are no external catalog resources.
 
 ```text
-index.runFiles[] → run file
-run.benchmark_catalog → catalog file
-run result.id → catalog.benchmark_definitions[id]
+Fetch index.json → fetch indexed runs → strict JSON parsing
+  → adapt corpus schema 1 and derive first-occurrence benchmark-set lookup
+  → existing selectors → UI
 ```
 
-## Browser loading
-
-```text
-Fetch index.json
-  → fetch every listed run
-  → fetch the distinct catalogs needed by included runs
-  → strict JSON text parsing and maintained version/shape validation
-  → validate and normalize
-  → selectors → UI
-```
-
-Unindexed files are not scanned. The [maintained schema contract](schema-1.md) specifies legacy rejection and parsed-published export preservation; its implementation-status section distinguishes local compatibility from unresolved numeric acceptance and rollout. The mutable index bypasses cache; immutable runs/catalogs can use cache. “Reload all data” cache-busts requests.
+Unindexed files are not scanned. The mutable index bypasses cache; immutable runs
+can use cache. Reload All cache-busts requests without changing source values.
+Failures of required identity/path/core inputs are visible data errors. Optional
+metadata does not gate the dataset. The [corpus raw-run schema](https://github.com/ROCm/rocjitsu-test-corpus/blob/develop/benchmarks/raw-run-schema.md)
+owns the input format. Missing provenance displays as ASCII `-` only in the UI;
+source nulls stay unchanged. Missing or unusable commit dates disable dependent
+chronology without replacing them with execution time. Download JSON preserves
+the full parsed `{index,runs}`, including ordered samples, exit codes and
+diagnostics, independently of filters.
 
 ## Preparing and publishing measurements
 
@@ -91,39 +85,30 @@ Prepare pinned dependencies, wheel, native adapter and four generated variants
   → run supported target/policy combinations in one corpus invocation
   → upload raw result directories as a GitHub Actions artifact
   → publish job downloads that artifact
-  → checkout gh-pages-rocjitsu, the source dashboard scripts and pinned corpus manifest
-  → prepare-dashboard-data.py (once)
-  → copy the run and catalog without overwriting existing files
-  → update-dashboard-index.py
-  → validate-dashboard-data.mjs
-  → Git commit + push
+  → fill publication context only
+  → copy the run into the branch-appropriate results directory
+  → structurally update index.json once
+  → ordinary Git commit + push
 ```
 
-- **Prepare:** pass the consolidated artifact's `run.json` once via `--raw-run`; validate per-result policy, identity, operation, samples and provenance; lowercase commit SHAs; preserve samples and derive medians only in normalized consumer data; and generate one maintained schema-1 run plus its suite-named catalog in an isolated build directory. Trusted `--corpus-dir`, repository-relative `--manifest` and `--expected-corpus-sha` inputs select committed TOML, not raw-artifact declarations. Each supplied raw input must independently match the full declared tuple set and typed workload definitions; diagnostic subsets reject even on first publication. Full finalized failures remain publishable. Preserve accepted sample order and corpus IDs. Failed/timeout wire rows retain partial samples and normalize to null duration. Policies remain literal `single`/`default` on configuration groups only; each group has `benchmark_results` with raw `id`, status, samples and error. Catalogs use `benchmark_suite`, ID-keyed `benchmark_definitions` and nested `membership[target][thread_policy]`. Problem/provenance values retain JSON types recursively. See [implementation status](schema-1.md#implementation-status) for implemented numeric rejection rules. Raw protocol lives in `execution_summary`. Four raw provenance sections retain typed facts, including explicit validated workflow_commit_sha in rocjitsu and tensile_commit_sha in auxiliary. Internal scalar environment projection preserves the earlier exclusions plus these tool revisions; it does not compare execution timestamps or the whole provenance object. The new-only wire shape still uses run schemaVersion1; old-shaped schema1 rejects and existing published resources must not be overwritten.
-- **Copy:** place the run and catalog at their fixed publication paths without overwriting them. An identical existing file is an idempotent retry; different content at the same path is an error.
-- **Index:** append the run path when absent. An already indexed run preserves `index.json` bytes and `generatedAt` exactly.
-- **Publish:** validate the complete dataset and stage only the index, run and catalog. Preserve the existing maximum of three normal push attempts: retry only confirmed non-fast-forward conflicts after reloading the branch, reapplying unchanged immutable inputs and validating the full index. Identical retries are idempotent; immutable conflicts, validation and other push errors fail immediately. No force-push or benchmark rerun.
+Publication keeps raw measurements, ordered samples, diagnostics, exit codes and
+provenance unchanged. Workflow/Tensile revisions belong in `publication`; source
+messages describe the measured SHA. Missing optional base/PR/tool context remains
+null. No catalog generation, downstream manifest check or dedicated validator
+stage is part of this boundary. Local browser tests are not hosted publication
+or release evidence.
 
-The Actions artifact only transfers raw results between jobs. The Git push makes dashboard JSON available.
+## Immutable runs
 
-## Immutable means “do not change an existing resource”
+The same path with identical bytes is reusable; different content at an existing
+path is an error. A newly indexed path updates `generatedAt`; an already indexed
+path leaves index bytes unchanged. Ordinary Git publication failures remain
+visible; no force push or custom retry engine is implied.
 
-```text
-Run/catalog: same path + same JSON content → reuse; no rewrite
-Run/catalog: same path + different content → error
-Changed catalog content                  → new manifest name/catalog file
-New benchmark attempt                    → new run ID/file
-index.json                               → mutable; updated to reference runs
-```
+Benchmark-set identity is `execution_summary.benchmark_suite`. The consumer
+trusts its upstream definition/membership guarantee. Set picker dates describe
+the latest known develop commit using each set, not execution or creation time.
+Unknown URL identities stay explicit until the user chooses an available set or
+Shared benchmarks. Export remains unfiltered.
 
-Timing, status, error and sampling changes do not change the catalog. The catalog ID
-is exactly `execution_summary.benchmark_suite`, equal to the pinned manifest name.
-The publisher checks out that manifest at the same immutable corpus pin as the
-runner, without persisted credentials. Changed membership/definitions require a
-new manifest name; incompatible workload definitions also require new workload IDs.
-Keep old run/catalog files for cached indexes. Catalog menu/table dates describe
-the latest published develop commit using each catalog (UTC), not catalog creation
-or execution time. Unknown URL identities remain unavailable until the user
-chooses an available catalog or Shared benchmarks; export remains unfiltered.
-
-Contract and examples: [maintained schema 1](schema-1.md). Commands: [build and test](build-and-test.md).
+Contract: [corpus run JSON](https://github.com/ROCm/rocjitsu-test-corpus/blob/develop/benchmarks/raw-run-schema.md). Commands: [build and test](build-and-test.md).

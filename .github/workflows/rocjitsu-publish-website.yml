@@ -121,14 +121,6 @@ jobs:
           npm run verify
           git rev-parse HEAD > dist/.source-revision
 
-      - name: Test dashboard data preparation
-        if: steps.changes.outputs.dashboard == 'true'
-        working-directory: emulation/rocjitsu/website/dashboard
-        shell: bash
-        run: |
-          "${RUNNER_TEMP}/.venv/bin/python" -m pip install pytest
-          "${RUNNER_TEMP}/.venv/bin/python" -m pytest scripts/dashboard-data/tests -v
-
       - name: Build rocjitsu handbook
         if: steps.changes.outputs.handbook == 'true'
         working-directory: emulation/rocjitsu/website/handbook

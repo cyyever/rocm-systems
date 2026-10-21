@@ -17,6 +17,7 @@ const selected = (run, filters) => (run?.tests ?? []).filter((test) => testMatch
 const pairsFor = (filters) => filters.targets.flatMap((target) => modesFor(filters).map((mode) => ({ target, mode, key: configurationKey(target, mode) })));
 
 export function periodKey(timestamp, period = 'weekly') {
+  if (timestamp == null || !Number.isFinite(new Date(timestamp).getTime())) return null;
   const date = new Date(timestamp);
   if (period === 'monthly') return date.toISOString().split('T')[0].slice(0, -3);
   if (period === 'daily') return date.toISOString().split('T')[0];

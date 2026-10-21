@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { provenanceDetails } from '../../src/data/provenance.js';
 import { escapeHtml } from '../../src/utils/formatters.js';
 import { changeTone, classifyDurationChange } from '../../src/utils/performance.js';
@@ -23,12 +23,12 @@ test('escapes every HTML-significant character in published text', () => {
 test('omits optional provenance fields that a run does not publish', () => {
   const source = createMaintainedPublication();
   source.runs.forEach((run) => {
-    delete run.source.message;
-    run.provenance.auxiliary = { tensile_commit_sha: run.provenance.auxiliary.tensile_commit_sha };
+    delete run.publication.source.message;
+    run.provenance.auxiliary = {};
   });
-  const { data } = validatePublishedDashboardData(source);
+  const { data } = adaptPublishedDashboardData(source);
 
   expect(data.runs.every((run) => !provenanceDetails(run.provenance).some(({ key }) => key === 'auxiliary.sdk'))).toBe(true);
-  expect(data.runs.every((run) => !Object.hasOwn(run.provenance, 'commitMessage'))).toBe(true);
+  expect(data.runs.every((run) => run.provenance.commitMessage == null)).toBe(true);
   expect(data.runs.every((run) => Boolean(run.provenance.rocjitsuCommitSha))).toBe(true);
 });

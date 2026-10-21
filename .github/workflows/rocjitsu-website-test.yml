@@ -48,11 +48,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bash git jq
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.13.0"
-
       - name: Install Python test dependencies
         run: python -m pip install -r scripts/dashboard-data/requirements-test.txt
 
@@ -90,32 +85,6 @@ jobs:
 
       - name: Verify website
         run: npm run verify
-
-      - name: Test dashboard data preparation
-        id: prepare-data
-        if: ${{ !cancelled() }}
-        shell: bash
-        env:
-          DASHBOARD_VALIDATION_DIR: ${{ runner.temp }}/dashboard-preparer-validation
-        run: |
-          python -m venv "${RUNNER_TEMP}/dashboard-tests-venv"
-          "${RUNNER_TEMP}/dashboard-tests-venv/bin/python" -m pip install pytest
-          "${RUNNER_TEMP}/dashboard-tests-venv/bin/python" -m pytest scripts/dashboard-data/tests -v
-
-      - name: Validate prepared dashboard data
-        if: ${{ !cancelled() && steps.prepare-data.outcome == 'success' }}
-        env:
-          DASHBOARD_VALIDATION_DIR: ${{ runner.temp }}/dashboard-preparer-validation
-        run: node scripts/validate-dashboard-data.mjs "${DASHBOARD_VALIDATION_DIR}"
-
-      - name: Upload prepared dashboard JSON example
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: rocjitsu-dashboard-prepared-data
-          path: ${{ runner.temp }}/dashboard-preparer-validation
-          if-no-files-found: ignore
-          retention-days: 7
 
       - name: Upload Playwright diagnostics
         if: ${{ !cancelled() && failure() }}

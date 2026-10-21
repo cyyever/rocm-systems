@@ -5,7 +5,7 @@ import { PUBLISHED_DATA_BASE_URL } from '../../scripts/dashboard-data-source.mjs
 
 test('empty production dashboard suppresses migration detail and makes all four icons gray', async ({ page }) => {
   const publication = createMaintainedPublication();
-  publication.runs[0].schemaVersion = 99;
+  publication.runs[0].schema_version = 99;
   await installPublication(page, { publication, prefix: PUBLISHED_DATA_BASE_URL });
   await page.goto('/');
   const banner = page.getByTestId('dashboard-data-error');

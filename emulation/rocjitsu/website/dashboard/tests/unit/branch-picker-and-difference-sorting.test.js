@@ -54,17 +54,17 @@ test('branch search stays centered with a normal floating label and visible sear
 test('exact requested fictional branch is schema-valid and preserves all original twenty branches', () => {
   expect(fixtures.publishedResult.data.schemaVersion).toBe(1);
   const branch = 'users/RattataKing/test-branch';
-  const wire = fixtures.publishedRuns.find((run) => run.source.branch === branch);
+  const wire = fixtures.publishedRuns.find((run) => run.publication.source.branch === branch);
   expect(wire).toBeDefined();
   expect(typeof wire.provenance.rocjitsu.rocjitsu_commit_sha).toBe('string');
   expect(wire.provenance.rocjitsu.rocjitsu_commit_sha).toMatch(/^[0-9a-f]{40}$/);
-  expect(wire.source.base.branch).toBe('develop');
-  expect(wire.source.base.commit).toMatch(/^[0-9a-f]{40}$/);
-  expect(fixtures.publishedCatalogs[wire.benchmark_catalog]).toBeDefined();
+  expect(wire.publication.source.base.branch).toBe('develop');
+  expect(wire.publication.source.base.commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(fixtures.benchmarkData.catalogs[wire.execution_summary.benchmark_suite]).toBeDefined();
   expect(selectPublishedBranches(fixtures.benchmarkData)).toHaveLength(21);
-  for (let index = 1; index <= 20; index++) expect(fixtures.publishedRuns.some((run) => run.source.branch === `fictional/optimization-${String(index).padStart(2, '0')}`)).toBe(true);
+  for (let index = 1; index <= 20; index++) expect(fixtures.publishedRuns.some((run) => run.publication.source.branch === `fictional/optimization-${String(index).padStart(2, '0')}`)).toBe(true);
   const generated = fixtures.createFeedbackPublication();
-  expect(generated.runs.find((run) => run.source.branch === branch)).toEqual(wire);
+  expect(generated.runs.find((run) => run.publication.source.branch === branch)).toEqual(wire);
   expect(generated.index).toEqual(fixtures.dataIndex);
   const checkedIn = JSON.parse(readFileSync(new URL('../fixtures/data/runs/side-branches/fictional-rattataking-test-branch.json', import.meta.url), 'utf8'));
   expect(checkedIn).toEqual(wire);

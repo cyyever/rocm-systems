@@ -2,7 +2,7 @@ import { fixtureRunPath } from '../fixtures/runPath.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { downloadSource, installPublication, openDashboard, RAW_DATA_PREFIX, ready } from '../e2e/helpers/dashboard.js';
 
 async function artifactFiles(directory, prefix = '') {
@@ -46,7 +46,7 @@ test('production consumer reads deterministic intercepted maintained schema 1 at
   expect(requests.some((url) => new URL(url).pathname.endsWith('/metadata.json'))).toBe(false);
   expect(requests).toContain(`${RAW_DATA_PREFIX}index.json`);
   expect(requests.filter((url) => url.startsWith(`${RAW_DATA_PREFIX}runs/`))).toHaveLength(publication.runs.length);
-  expect(requests.some((url) => url.startsWith(`${RAW_DATA_PREFIX}test-catalogs/`))).toBe(true);
+  expect(requests.some((url) => url.startsWith(`${RAW_DATA_PREFIX}test-catalogs/`))).toBe(false);
   expect(localDataRequests).toEqual([]);
   // This is an origin/consumer boundary test, not evidence of a live maintained schema-1
   // publisher, live GitHub CORS headers, or Chromium's HTTP cache hit rate.
@@ -55,14 +55,14 @@ test('production consumer reads deterministic intercepted maintained schema 1 at
   const generation = await page.evaluate(() => localStorage.getItem('rocjitsu-data-cache-generation'));
   expect(generation).toBeTruthy();
   const refreshed = requests.filter((url) => new URL(url).searchParams.has('reload'));
-  expect(refreshed).toHaveLength(publication.runs.length + Object.keys(publication.catalogs).length + 1);
+  expect(refreshed).toHaveLength(publication.runs.length + 1);
   expect(refreshed.every((url) => new URL(url).searchParams.get('reload') === generation)).toBe(true);
   expect(await downloadSource(page)).toEqual(publication);
 });
 
 test('production rejects unsupported run version 99 with generic no-data UI and no fixture substitution', async ({ page }) => {
   const publication = createMaintainedPublication();
-  publication.runs[0].schemaVersion = 99;
+  publication.runs[0].schema_version = 99;
   const { requests } = await installPublication(page, { prefix: RAW_DATA_PREFIX, publication });
   await page.goto('/');
   await expect(page.getByTestId('dashboard-data-error')).toContainText('No available test data');
@@ -96,18 +96,18 @@ test('a newer publication is available on reload without rebuilding the website 
   const next = createMaintainedPublication();
   next.index.generatedAt = '2026-10-06T12:00:00.000Z';
   const run = structuredClone(next.runs[23]);
-  run.id = 'fictional-next-publication';
+  run.publication.id = 'fictional-next-publication';
   run.provenance.rocjitsu.rocjitsu_commit_sha = 'b'.repeat(40);
   run.provenance.rocjitsu.rocjitsu_commit_timestamp = '2026-10-06T10:00:00.000Z';
   run.execution_summary.timestamp = '2026-10-06T10:30:00.000Z';
   run.execution_summary.finished_at = '2026-10-06T11:00:00.000Z';
   next.runs.push(run);
   next.index.runFiles.push(fixtureRunPath(run));
-  validatePublishedDashboardData(next);
+  adaptPublishedDashboardData(next);
   await installPublication(page, { prefix: RAW_DATA_PREFIX, publication: next });
   await page.getByRole('button', { name: 'Reload all data' }).click();
   await ready(page);
   expect(await downloadSource(page)).toEqual(next);
-  await expect(page.getByTestId('recent-runs-table').locator('tbody tr').first()).toHaveAttribute('data-run-id', run.id);
+  await expect(page.getByTestId('recent-runs-table').locator('tbody tr').first()).toHaveAttribute('data-run-id', run.publication.id);
   expect(dataRequests.some((url) => new URL(url).pathname.endsWith('/metadata.json'))).toBe(false);
 });

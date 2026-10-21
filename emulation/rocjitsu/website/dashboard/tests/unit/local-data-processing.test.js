@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile, access } fro
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { writeMaintainedFixtureDirectory } from '../fixtures/maintainedDataset.js';
-import { validateDashboardDataDirectory } from '../../scripts/validate-dashboard-data.mjs';
+import { loadDashboardDataDirectory } from '../../scripts/process-dashboard-data.mjs';
 import * as processing from '../../scripts/process-dashboard-data.mjs';
 
 test('local processing validates before output and preserves source, modes and serializable backfill identities', async () => {
@@ -70,7 +70,7 @@ test('local validation rejects symlink escapes and invalid snapshots never creat
     const outside = path.join(root, 'outside.json');
     await writeFile(outside, JSON.stringify(source.runs[0]));
     await rm(runPath); await symlink(outside, runPath);
-    await expect(validateDashboardDataDirectory(directory)).rejects.toThrow(/symbolic link/i);
+    await expect(loadDashboardDataDirectory(directory)).rejects.toThrow(/symbolic link/i);
     const output = path.join(root, 'must-not-exist.json');
     await expect(processing.processDashboardDataDirectory(directory, { output })).rejects.toThrow();
     await expect(access(output)).rejects.toThrow();

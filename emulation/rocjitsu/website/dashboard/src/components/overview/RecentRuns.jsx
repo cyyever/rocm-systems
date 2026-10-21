@@ -17,7 +17,7 @@ function sourceCommitUrl(run, publicationRepository) {
 }
 
 function RunTime({ timestamp }) {
-  if (!timestamp) return '—';
+  if (typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp))) return '-';
   return <Typography component="time" dateTime={timestamp} title={formatFullDate(timestamp)} aria-label={formatFullDate(timestamp)} variant="caption" sx={{ whiteSpace: 'nowrap', fontSize: 12 }}>{new Date(timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })}</Typography>;
 }
 

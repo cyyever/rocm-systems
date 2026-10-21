@@ -2,7 +2,7 @@ import { fixtureRunPath } from '../fixtures/runPath.js';
 import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { formatDuration, formatPercent } from '../../src/utils/formatters.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { readChart } from './helpers/chart.js';
 import { readMetricGeometry, metricContainmentFailures } from './helpers/metricGeometry.js';
 import { selectRunComparison } from '../../src/data/selectors.js';
@@ -26,13 +26,13 @@ for (const width of [1440, 390]) test(`numeric availability stays truthful and o
     { id: 'fictional-develop-17', seconds: 1e-289, delta: 3.9999999999999994e306 },
   ];
   for (const { id, seconds } of [...scenarios, { id: 'fictional-branch-01', seconds: 4e15 }]) {
-    for (const config of publication.runs.find((run) => run.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    for (const result of publication.runs.find((run) => run.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
     }
   }
-  validatePublishedDashboardData(publication);
+  adaptPublishedDashboardData(publication);
   await installPublication(page, { publication });
-  const branch = publication.runs.find((run) => run.id === 'fictional-branch-01').source.branch;
+  const branch = publication.runs.find((run) => run.publication.id === 'fictional-branch-01').publication.source.branch;
   await openDashboard(page, `/?${new URLSearchParams({ view: 'branch', branch, run: 'fictional-branch-01', reference: 'fictional-develop-14', manual: '1', target: 'gfx1250', mode: 'single', detail: '1' })}`);
   const card = page.getByTestId('branch-config-gfx1250-single');
   await expect(card).toContainText('Percentage unavailable');
@@ -98,11 +98,11 @@ for (const width of [1440, 900, 390]) test(`comparison metric painted values rem
   await page.setViewportSize({ width, height: 900 });
   const publication = createMaintainedPublication();
   for (const [id, seconds] of [['fictional-develop-17', 1e-289], ['fictional-develop-16', 2e15], ['fictional-branch-01', 4e15]]) {
-    for (const config of publication.runs.find((run) => run.id === id).configurations) {
-      for (const result of config.benchmark_results) Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
+    for (const result of publication.runs.find((run) => run.publication.id === id).benchmark_results) {
+       Object.assign(result, { status: 'completed', error: null, timing_results_s: [seconds] });
     }
   }
-  const data = validatePublishedDashboardData(publication).data;
+  const data = adaptPublishedDashboardData(publication).data;
   await installPublication(page, { publication });
   const scenarios = [
     ['extreme', 'fictional-develop-17', 'fictional-branch-01'],
@@ -240,17 +240,17 @@ test('comparison swap is atomic and browser history restores the pair, totals an
 
 test('branch-only publications keep comparison filters usable and long linked identities exact', async ({ page }) => {
   const publication = createMaintainedPublication();
-  publication.runs = publication.runs.filter((run) => ['fictional-branch-01', 'fictional-branch-04'].includes(run.id));
+  publication.runs = publication.runs.filter((run) => ['fictional-branch-01', 'fictional-branch-04'].includes(run.publication.id));
   const [candidate, baseline] = publication.runs;
-  candidate.id = `fictional-candidate-${'x'.repeat(220)}`;
-  baseline.id = `fictional-baseline-${'y'.repeat(220)}`;
+  candidate.publication.id = `fictional-candidate-${'x'.repeat(220)}`;
+  baseline.publication.id = `fictional-baseline-${'y'.repeat(220)}`;
   publication.index.runFiles = publication.runs.map(fixtureRunPath);
   // Valid fictional HTTP publication, with no develop attempts or disk fixture.
   await installPublication(page, { publication });
-  const query = new URLSearchParams({ view: 'compare', compareCandidate: candidate.id, compareBaseline: baseline.id, targets: 'gfx1250', modes: 'single' });
+  const query = new URLSearchParams({ view: 'compare', compareCandidate: candidate.publication.id, compareBaseline: baseline.publication.id, targets: 'gfx1250', modes: 'single' });
   await openDashboard(page, `/?${query}`);
   await expect(page.getByTestId('dashboard-route-error')).toHaveCount(0);
-  await expectPair(page, candidate.id, baseline.id);
+  await expectPair(page, candidate.publication.id, baseline.publication.id);
   await expect(metricValue(page, 'comparable')).toHaveText('4');
   await expect(chartFor(page)).toBeVisible();
   for (const [name, remaining] of [['gfx1250', '0'], ['single', '0'], ['Triton', '2'], ['Llama', '2']]) {
@@ -267,7 +267,7 @@ test('branch-only publications keep comparison filters usable and long linked id
   await page.reload();
   await ready(page);
   await expect(page.getByTestId('dashboard-route-error')).toHaveCount(0);
-  await expectPair(page, candidate.id, baseline.id);
+  await expectPair(page, candidate.publication.id, baseline.publication.id);
   await expect(metricValue(page, 'comparable')).toHaveText('4');
   // Branch measurements must not become canonical Overview measurements.
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
@@ -282,7 +282,7 @@ test('branch-only publications keep comparison filters usable and long linked id
   await expect(page.getByTestId('recent-runs-table').locator('tbody tr')).toHaveCount(0);
   await expect(page.getByTestId('largest-changes').locator('[data-change-state]')).toHaveCount(0);
   await page.getByRole('tab', { name: 'Run Comparison', exact: true }).click();
-  await expectPair(page, candidate.id, baseline.id);
+  await expectPair(page, candidate.publication.id, baseline.publication.id);
   await expect(page.getByRole('checkbox', { name: 'single', exact: true })).toBeEnabled();
   await expect(metricValue(page, 'comparable')).toHaveText('4');
 });
@@ -290,12 +290,11 @@ test('branch-only publications keep comparison filters usable and long linked id
 test('positive overflow ratios remain measured, arbitrary metadata stays aligned and chart text is escaped', async ({ page }) => {
   const publication = createMaintainedPublication();
   const injected = '<img src=x onerror="window.__tooltipInjection=true">';
-  for (const catalog of Object.values(publication.catalogs)) catalog.benchmark_definitions.b.name = injected;
+  for (const run of publication.runs) for (const row of run.benchmark_results) if (row.id === 'b') row.name = injected;
   for (const [id, side] of [['fictional-develop-14', 'baseline'], ['fictional-branch-01', 'candidate']]) {
-    const run = publication.runs.find((run) => run.id === id);
+    const run = publication.runs.find((run) => run.publication.id === id);
     Object.assign(run.provenance.auxiliary, { custom: side, same: false, [`${side}Only`]: 0 });
-    run.configurations.find((config) => config.target === 'gfx1250' && config.thread_policy === 'single')
-      .benchmark_results.find((result) => result.id === 'a').timing_results_s = [side === 'baseline' ? 1e-300 : 4e15];
+    run.benchmark_results.find((result) => result.target === 'gfx1250' && result.thread_policy === 'single' && result.id === 'a').timing_results_s = [side === 'baseline' ? 1e-300 : 4e15];
   }
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=compare&compareCandidate=fictional-branch-01&compareBaseline=fictional-develop-14&targets=gfx1250&modes=single');
@@ -313,8 +312,8 @@ test('positive overflow ratios remain measured, arbitrary metadata stays aligned
   await expect(metadata).toHaveAttribute('data-different', 'true');
   await expect(metadata).not.toContainText('Changed');
   await expect(page.getByTestId('metadata-row-auxiliary.same')).toHaveAttribute('data-different', 'false');
-  await expect(page.getByTestId('metadata-row-auxiliary.baselineOnly').getByRole('cell').nth(1)).toHaveText('Not provided');
-  await expect(page.getByTestId('metadata-row-auxiliary.candidateOnly').getByRole('cell').nth(0)).toHaveText('Not provided');
+  await expect(page.getByTestId('metadata-row-auxiliary.baselineOnly').getByRole('cell').nth(1)).toHaveText('-');
+  await expect(page.getByTestId('metadata-row-auxiliary.candidateOnly').getByRole('cell').nth(0)).toHaveText('-');
   const html = await readChart(chartFor(page), (instance) => {
     const option = instance.getOption();
     const dataIndex = option.series[0].data.findIndex((point) => point.comparison.candidateTest.logicalTestId === 'b');

@@ -17,7 +17,7 @@ export default function RunMetadataDiff({ baseline, candidate, filters }) {
   const keys = [...new Set([...oldDetails.keys(), ...newDetails.keys()])].sort();
   const facts = [
     ['coverage', 'Selected coverage', (run) => coverage(run, filters)],
-    ['catalog', 'Test catalog', (run) => run?.testCatalog ?? run?.catalogId],
+    ['catalog', 'Benchmark set', (run) => run?.testCatalog ?? run?.catalogId],
     ['machine', 'Machine', (run) => run?.machineId],
     ['configurations', 'Published configurations', (run) => run?.configurations],
   ].map(([key, label, value]) => ({ key, label, baseline: value(baseline), candidate: value(candidate) }));

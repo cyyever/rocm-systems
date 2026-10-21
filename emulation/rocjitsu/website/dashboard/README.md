@@ -21,6 +21,6 @@ Open `http://localhost:4174`. This preview uses fictional test data, not product
 
 - [Build and test](docs/build-and-test.md): setup, commands, and test execution.
 - [Website and publication](docs/architecture-and-publication.md): source map, deployment, data fetching, publishing workflows, and immutability.
-- [Maintained schema 1](docs/schema-1.md): wire contract, implementation-transition status, rejection policy and export boundary.
+- [Corpus run JSON](https://github.com/ROCm/rocjitsu-test-corpus/blob/develop/benchmarks/raw-run-schema.md): authoritative producer-owned format.
 - [Test fixtures](tests/fixtures/README.md): fictional datasets and test cases.
 - [Publishing setup](../handbook/README.md#verification-and-publishing): GitHub App credentials and Pages configuration.

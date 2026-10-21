@@ -14,11 +14,11 @@ const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
   timeZoneName: 'short',
 });
 
-export const formatShortDate = (timestamp) => shortDateFormatter.format(new Date(timestamp));
-export const formatFullDate = (timestamp) => fullDateFormatter.format(new Date(timestamp));
+export const formatShortDate = (timestamp) => typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)) ? shortDateFormatter.format(new Date(timestamp)) : '-';
+export const formatFullDate = (timestamp) => typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)) ? fullDateFormatter.format(new Date(timestamp)) : '-';
 
 export function formatMetadataValue(value) {
-  if (value == null) return 'Not provided';
+  if (value == null) return '-';
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
@@ -34,7 +34,7 @@ export function formatPercent(value, withSign = true) {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-export const shortSha = (run) => run?.provenance?.rocjitsuCommitSha?.slice(0, 8) ?? '—';
+export const shortSha = (run) => typeof run?.provenance?.rocjitsuCommitSha === 'string' && run.provenance.rocjitsuCommitSha ? run.provenance.rocjitsuCommitSha.slice(0, 8) : '-';
 
 const htmlEscapes = {
   '&': '&amp;',

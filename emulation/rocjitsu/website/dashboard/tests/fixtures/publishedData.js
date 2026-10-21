@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 export { createFeedbackPublication } from './feedback-publication.js';
 
 const dataDirectory = new URL('./data/', import.meta.url);
@@ -7,16 +7,12 @@ const readJson = (name) => JSON.parse(readFileSync(new URL(name, dataDirectory),
 
 export const dataIndex = readJson('index.json');
 export const publishedRuns = dataIndex.runFiles.map(readJson);
-export const publishedCatalogs = Object.fromEntries([...new Set(
-  publishedRuns.map((run) => run.benchmark_catalog),
-)].map((name) => [name, readJson(name)]));
 export const publishedRunErrors = publishedRuns.map(() => null);
 
-export const publishedResult = validatePublishedDashboardData({
+export const publishedResult = adaptPublishedDashboardData({
   index: dataIndex,
   runs: publishedRuns,
   runErrors: publishedRunErrors,
-  catalogs: publishedCatalogs,
 });
 
 export const benchmarkData = publishedResult.data;

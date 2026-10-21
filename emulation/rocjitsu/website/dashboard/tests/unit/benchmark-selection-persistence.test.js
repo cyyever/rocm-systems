@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import App from '../../src/App.jsx';
 import BenchmarksView from '../../src/components/views/BenchmarksView.jsx';
 import { BenchmarkGridPicker } from '../../src/components/benchmarks/BenchmarkPicker.jsx';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 const loader = vi.hoisted(() => ({ requests: [] }));
@@ -104,7 +104,7 @@ it('typed workload definitions survive fresh App persistence restoration', () =>
 });
 
 it.each(['empty', 'unavailable'])('UI-004 restores %s full workload selection on a fresh App root', async (choice) => {
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const selected = choice === 'empty' ? [] : [{ id: `fictional-exact-${'z'.repeat(240)}`, name: 'Fictional retained name', suite: 'Triton', problem: { dataType: false, size: 16 } }];
   const first = mountApp();
   await first.settle(data);
@@ -121,7 +121,7 @@ it.each(['empty', 'unavailable'])('UI-004 restores %s full workload selection on
 });
 
 it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice through real App navigation and data reload', async (choice) => {
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const before = structuredClone(data);
   const probe = mountApp();
   await probe.settle(data);
@@ -139,9 +139,9 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
     probe.apply([retained]);
     expected = [retained.id];
     const publication = createMaintainedPublication();
-    publication.runs = publication.runs.filter((run) => run.benchmark_catalog !== 'test-catalogs/fictional-old.json');
+    publication.runs = publication.runs.filter((run) => run.execution_summary.benchmark_suite !== 'fictional-old');
     publication.index.runFiles = publication.runs.map(fixtureRunPath);
-    nextData = validatePublishedDashboardData(publication).data;
+    nextData = adaptPublishedDashboardData(publication).data;
     expect(nextData.testCatalog.some((test) => test.id === retained.id)).toBe(false);
   }
   expect(probe.ids()).toEqual(expected);
@@ -162,7 +162,7 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
 });
 
 it('UI-004 derives first-four defaults only while unchosen, without history or workload preference writes', async () => {
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const probe = mountApp();
   const replacements = probe.browser.history.replaceState.mock.calls.length;
   expect(probe.state.selectedBenchmarks).toBeNull();
@@ -180,7 +180,7 @@ it('UI-004 derives first-four defaults only while unchosen, without history or w
 });
 
 it('UI-004 retains in-memory choices when optional storage is denied', async () => {
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const probe = mountApp(new Map(), true);
   await probe.settle(data);
   probe.apply([]);
@@ -198,7 +198,7 @@ it.each(['{broken', '{}', '[null]', '[{"id":"missing-name"}]', '[{"id":"a","name
 });
 
 it('UI-004 preserves standalone initialBenchmarkIds and distinguishes controlled null from empty', () => {
-  const data = validatePublishedDashboardData(createMaintainedPublication()).data;
+  const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const filters = { targets: ['gfx1250'], suites: data.suites, modes: ['single', 'default'] };
   const onBenchmarksChange = vi.fn();
   const markup = (props) => renderToStaticMarkup(createElement(BenchmarksView, { data, filters, onBenchmarksChange, ...props }));

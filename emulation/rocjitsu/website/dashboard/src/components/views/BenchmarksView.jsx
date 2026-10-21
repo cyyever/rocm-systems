@@ -29,7 +29,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
     onBenchmarksChange?.(next);
   };
   // Retain the chosen workload identity across scope/data updates, including a
-  // workload no longer present in the latest catalog. Never silently pick another.
+  // workload no longer present in the labenchmark set. Never silently pick another.
   const selected = selection.map((test) => catalog.all.find((current) => current.id === test.id) ?? test);
   const [draft, setDraft] = useState(null);
   const [inspectedBenchmark, setInspectedBenchmark] = useState(null);

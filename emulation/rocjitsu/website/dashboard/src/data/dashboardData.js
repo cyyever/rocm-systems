@@ -1,17 +1,12 @@
 import { parsePublishedJson } from './publishedJson.js';
 import { DASHBOARD_SITE_CONFIG } from '../config/siteConfig.js';
 import {
-  CATALOG_FILE_PATTERN,
   RUN_FILE_PATTERN,
   validatePublishedManifest,
   validateDashboardSiteConfig,
   CURRENT_SCHEMA_VERSION,
-  validatePublishedDashboardData,
-} from './dashboardValidation.js';
-
-function hasText(value) {
-  return typeof value === 'string' && Boolean(value.trim());
-}
+  adaptPublishedDashboardData,
+} from './dashboardDataAdapter.js';
 
 function withReloadToken(url, reloadToken) {
   if (!reloadToken) return url;
@@ -275,7 +270,7 @@ export async function loadDashboardDataFiles({
     : null;
 
   try {
-  // The mutable index must revalidate on every load. Runs and catalogs are immutable by
+  // The mutable index must revalidate on every load. Runs are immutable by
   // contract, so cached copies remain valid beyond the hosting service's freshness window. An
   // explicit reload changes every URL as well as bypassing the browser cache, which also bypasses
   // shared CDN entries that the browser cannot purge.
@@ -340,29 +335,9 @@ export async function loadDashboardDataFiles({
     return settle(result);
   });
 
-  const catalogPaths = [...new Set(runResults
-    .map((result) => result.run?.benchmark_catalog)
-    .filter((catalogPath) => hasText(catalogPath) && CATALOG_FILE_PATTERN.test(catalogPath)))];
-  const catalogResults = await mapWithConcurrency(catalogPaths, concurrency, async (catalogPath) => {
-    try {
-      const catalog = await fetchJsonResource(
-        withReloadToken(new URL(catalogPath, immutableBaseUrl), activeCacheGeneration),
-        {
-          ...immutableRequest,
-          resourceType: 'test catalog',
-        },
-      );
-      return { catalogPath, catalog, error: null };
-    } catch (error) {
-      if (isLoadCancelled(error)) throw error;
-      return { catalogPath, catalog: null, error };
-    }
-  });
-
   throwIfCancelled(loadSignal);
   const unavailableResources = [
     ...runResults.map((result) => result.error),
-    ...catalogResults.map((result) => result.error),
   ].filter((error) => error?.dashboardDataErrorCode === 'unavailable');
   if (unavailableResources.length > 0) {
     throw dashboardDataError(
@@ -374,15 +349,11 @@ export async function loadDashboardDataFiles({
   }
 
   return {
-    ...validatePublishedDashboardData({
+    ...adaptPublishedDashboardData({
     siteConfig,
     index,
     runs: runResults.map((result) => result.run),
     runErrors: runResults.map((result) => result.error),
-    catalogs: Object.fromEntries(catalogResults.map((result) => [result.catalogPath, result.catalog])),
-    catalogErrors: Object.fromEntries(catalogResults
-      .filter((result) => result.error)
-      .map((result) => [result.catalogPath, result.error])),
     }),
     cacheGeneration: activeCacheGeneration,
   };

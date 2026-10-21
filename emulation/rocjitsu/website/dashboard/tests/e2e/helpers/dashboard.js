@@ -39,7 +39,6 @@ export async function installPublication(page, {
 } = {}) {
   const files = {
     'index.json': publication.index,
-    ...publication.catalogs,
     ...Object.fromEntries(publication.runs.map((run, index) => [publication.index.runFiles[index], run])),
   };
   const requests = [];

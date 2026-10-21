@@ -4,11 +4,16 @@ function parsedTime(value) {
 }
 
 export function commitShaFor(run) {
-  return run?.provenance?.rocjitsuCommitSha ?? '';
+  const sha = run?.provenance?.rocjitsuCommitSha;
+  return typeof sha === 'string' ? sha : '';
 }
 
 export function commitTimestampFor(run) {
-  return run?.commitTimestamp ?? run?.timestamp;
+  return run?.commitTimestamp;
+}
+
+export function hasCommitTimestamp(run) {
+  return typeof run?.commitTimestamp === 'string' && Number.isFinite(Date.parse(run.commitTimestamp));
 }
 
 export function compareRunExecution(left, right) {
@@ -31,7 +36,7 @@ function compareRunsByCommit(left, right) {
 }
 
 export function sortRunsByCommit(runs) {
-  return [...runs].sort(compareRunsByCommit);
+  return runs.filter(hasCommitTimestamp).sort(compareRunsByCommit);
 }
 
 // A backfill is any run executed after a run that tested a newer commit. Walking execution order
@@ -41,6 +46,7 @@ export function backfillRunIds(runs) {
   const ids = new Set();
   let newestCommitRun = null;
   [...runs].sort(compareRunExecution).forEach((run) => {
+    if (!hasCommitTimestamp(run)) return;
     if (newestCommitRun && compareCommitPosition(run, newestCommitRun) < 0) {
       ids.add(run.runId);
       return;

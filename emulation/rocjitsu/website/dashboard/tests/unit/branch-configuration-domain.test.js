@@ -3,21 +3,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import BranchRunsView from '../../src/components/views/BranchRunsView.jsx';
 import { readDashboardRoute, buildDashboardUrl } from '../../src/hooks/useDashboardState.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
 function publication({ onlyOther = false } = {}) {
   const source = createMaintainedPublication();
-  for (const catalog of Object.values(source.catalogs)) {
-    const other = structuredClone(catalog.membership.gfx1250);
-    if (onlyOther) catalog.membership = {};
-    catalog.membership.gfx1201 = other;
-  }
   for (const run of source.runs) {
-    const other = run.configurations.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));
-    run.configurations = onlyOther ? other : [...run.configurations, ...other];
+    const other = run.benchmark_results.filter((c) => c.target === 'gfx1250').map((c) => ({ ...structuredClone(c), target: 'gfx1201' }));
+    run.benchmark_results = onlyOther ? other : [...run.benchmark_results, ...other];
   }
-  return validatePublishedDashboardData(source).data;
+  return adaptPublishedDashboardData(source).data;
 }
 
 function render(data, href = 'https://example.test/?view=branch') {

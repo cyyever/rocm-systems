@@ -19,6 +19,7 @@ const runTimeFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 function formatRunTime(timestamp) {
+  if (typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp))) return '-';
   return `${runTimeFormatter.format(new Date(timestamp))} UTC`;
 }
 

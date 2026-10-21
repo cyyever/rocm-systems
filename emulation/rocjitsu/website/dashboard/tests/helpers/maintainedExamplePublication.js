@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
+import raw from '../fixtures/fictional-producer-run.json' with { type: 'json' };
 
 export function readMaintainedExamplePublication() {
-  const document = readFileSync(new URL('../../docs/schema-1.md', import.meta.url), 'utf8');
-  const [, index, catalog, run] = [...document.matchAll(/```json\n([\s\S]*?)\n```/g)]
-    .map(([, json]) => JSON.parse(json));
-  return { index, runs: [run], catalogs: { [run.benchmark_catalog]: catalog } };
+  const run = structuredClone(raw);
+  run.publication.id = 'run-001';
+  run.publication.source.branch = 'develop';
+  return { index: { generatedAt: '2026-10-21T20:00:00Z', runFiles: ['runs/default-branch/run-001.json'] }, runs: [run] };
 }

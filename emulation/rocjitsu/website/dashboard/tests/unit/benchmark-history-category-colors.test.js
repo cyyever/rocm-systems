@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from 'vitest';
 import BenchmarkHistoryChart from '../../src/components/benchmarks/BenchmarkHistoryChart.jsx';
 import { createDashboardTheme } from '../../src/theme/theme.js';
 import { categoryColors } from '../../src/theme/tokens.js';
-import { validatePublishedDashboardData } from '../../src/data/dashboardValidation.js';
+import { adaptPublishedDashboardData } from '../../src/data/dashboardDataAdapter.js';
 import { selectBenchmarkSeries } from '../../src/data/selectors.js';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 
@@ -17,13 +17,10 @@ vi.mock('../../src/components/shared/Chart.jsx', () => ({ default: (props) => {
 
 function validatedTarget(target) {
   const publication = createMaintainedPublication();
-  for (const catalog of Object.values(publication.catalogs)) {
-    catalog.membership = Object.fromEntries(Object.entries(catalog.membership).map(([key, policies]) => [key === 'gfx1250' ? target : key, policies]));
-  }
   for (const run of publication.runs) {
-    for (const configuration of run.configurations) if (configuration.target === 'gfx1250') configuration.target = target;
+    for (const configuration of run.benchmark_results) if (configuration.target === 'gfx1250') configuration.target = target;
   }
-  const { data } = validatePublishedDashboardData(publication);
+  const { data } = adaptPublishedDashboardData(publication);
   expect(data.targets).toContain(target);
   return data;
 }

@@ -3,7 +3,7 @@ import { formatDuration, formatFullDate } from '../../utils/formatters.js';
 // Keyboard callers supply chronological slots; pointer callers stay finite-only.
 export function trendEmptyMessage(projection) {
   if (!projection.rows.length) return 'Select targets and thread policies to compare performance.';
-  if (!projection.attempts.length) return 'No develop runs in the selected range/catalog.';
+  if (!projection.attempts.length) return 'No develop runs in the selected range/benchmark set.';
   if (projection.rows.every((row) => !row.cohortIds.length)) {
     return 'No shared workloads. Select configurations and benchmark families with shared workloads.';
   }
