@@ -3780,7 +3780,9 @@ struct ForceScalarGuard {
 // host floats, whose comparison and fmax both raise invalid on a signaling NaN,
 // and scopes them so the caller's flags survive. The scalar VOPD slot calls
 // std::fmax unscoped, like the other scalar host min/max bodies, so this checks
-// the SIMD route only. mxcsr_mask makes the harness assert the flags survive.
+// the SIMD route only. mxcsr_mask makes the harness assert the flags survive,
+// and the harness only asserts it where MXCSR exists, as _MM_EXCEPT_MASK does.
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
 TEST(ValuFpModeHelpers, VopdMixedMaxSimdKeepsHostFlags) {
   if (!util::has_stdx_simd)
     GTEST_SKIP() << "std::experimental::simd unavailable";
@@ -3796,6 +3798,7 @@ TEST(ValuFpModeHelpers, VopdMixedMaxSimdKeepsHostFlags) {
                           _MM_EXCEPT_MASK},
                          expect_simd_path(amdgpu::SimdFastPath::VOPD));
 }
+#endif
 
 class ValuMinmaxFpModeTest : public testing::TestWithParam<ArithmeticCase> {};
 
