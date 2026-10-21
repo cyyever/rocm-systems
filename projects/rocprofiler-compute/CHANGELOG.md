@@ -22,6 +22,8 @@ Full documentation for ROCm Compute Profiler is available at [https://rocm.docs.
 
 ### Changed
 
+* Replaced the experimental `--torch-trace`, `--triton-trace`, `--ml-api-trace`, `--list-*-operators`, and `--*-operator` flags with `--trace-ml-api [torch triton jax]`, `--list-operators [torch triton jax user]`, and `--operator [FW:PATTERN]`. `jax` is accepted and not collected yet. User-defined regions are included with every `--trace-ml-api` run. Older workloads remain valid counter profiles; operator analyze requires a re-profile.
+
 * `--torch-trace` emits one-level ROCTX markers (name, location, arguments, launcher-thread correlation) instead of a stacked ancestor path. The collector ships as one generic C++17 library with no PyTorch or Python build dependencies. It no longer builds and caches a helper under `~/.cache/rocprofiler-compute/`. PyTorch 2.13 and 2.14 use native tracing on every thread, including autograd workers; other versions or an unavailable collector warn and use `TorchDispatchMode`. Profile keeps the raw marker and counter CSVs.
 
 * `--triton-trace` no longer emits `|triton` ranges for `torch.compile` / Inductor fused kernels. Inductor now launches those kernels through PyTorch's static launcher, not Triton's Python runtime. Use `--torch-trace`; the GPU kernels nest under `torch.compile.<fn>`. `--triton-trace` still marks `@triton.jit` launches.
