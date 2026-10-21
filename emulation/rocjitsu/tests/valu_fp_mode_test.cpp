@@ -4156,7 +4156,7 @@ TEST(ValuFpModeHelpers, F16BinaryRneMatchesScalarAcrossHalfEncodings) {
         for (uint32_t base = 0; base < 0x10000u; base += U::size()) {
           U a([&](auto i) { return (base + uint32_t(i)) | 0xdead0000u; });
           U b([&](auto i) { return ((base + uint32_t(i)) * 40503u + 17u) & 0xffffu; });
-          const auto actual = amdgpu::binary_f16_simd<operation>(a, b, denorm, ovfl);
+          const auto actual = amdgpu::binary_f16_simd_unscoped<operation>(a, b, denorm, ovfl);
           for (std::size_t i = 0; i < U::size(); ++i) {
             const auto input = amdgpu::input_denormal::Policy::make(denorm);
             const float lhs = util::f16_to_f32(

@@ -68,11 +68,11 @@ _ARITHMETIC_CORES: dict[str, ArithmeticCore] = {
     'amdgpu::fma_f32_simd_unscoped(': ArithmeticCore('wf.fp_round_mode_f32()', None),
     # DX9 keeps the host-matching gate: its zero-product rule is unvalidated
     # outside the default environment.
-    'amdgpu::fma_dx9_zero_f32_simd<false>(': ArithmeticCore(
+    'amdgpu::fma_dx9_zero_f32_simd_unscoped(': ArithmeticCore(
         'wf.fp_round_mode_f32()', _NATIVE_F32_GATE
     ),
-    # binary_f16_simd always rounds nearest-even, so directed guest rounding
-    # falls back to scalar while every denormal mode stays eligible.
+    # binary_f16_simd_unscoped always rounds nearest-even, so directed guest
+    # rounding falls back to scalar while every denormal mode stays eligible.
     'amdgpu::binary_f16_simd_unscoped<': ArithmeticCore(
         '0', 'wf.fp_round_mode_f16_f64() == 0'
     ),
@@ -996,7 +996,7 @@ SIMD_VOP2_TERNARY: dict[str, tuple[str, str, str]] = {
         'float32_t',
         '0u',
         '[&wf](auto a, auto b, auto d, auto) {'
-        ' return amdgpu::fma_dx9_zero_f32_simd<false>(a, b, d, wf); }',
+        ' return amdgpu::fma_dx9_zero_f32_simd_unscoped(a, b, d, wf); }',
     ),
     'v_mac_f32_vop2': ('float32_t', '0u', _FMA_ACC_F32),
     # --- f32 inline literal ---
@@ -2151,7 +2151,7 @@ SIMD_VOP3_TERNARY_FP32: dict[str, str] = {
     # lanes and uses no ±0 inputs). omod/clamp applied by the glue.
     # DX9 FMA has zero-product and mandatory flushing rules distinct from FMA.
     'v_fma_dx9_zero_f32_vop3': (
-        '[&wf](auto a, auto b, auto c) { return amdgpu::fma_dx9_zero_f32_simd<false>(a, b, c, wf); }'
+        '[&wf](auto a, auto b, auto c) { return amdgpu::fma_dx9_zero_f32_simd_unscoped(a, b, c, wf); }'
     ),
     'v_max3_f32_vop3': '[](auto a, auto b, auto c) { return util::stdx::fmax(util::stdx::fmax(a, b), c); }',
     'v_min3_f32_vop3': '[](auto a, auto b, auto c) { return util::stdx::fmin(util::stdx::fmin(a, b), c); }',

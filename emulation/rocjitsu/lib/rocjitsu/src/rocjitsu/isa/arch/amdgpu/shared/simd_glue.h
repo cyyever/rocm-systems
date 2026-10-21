@@ -1006,23 +1006,13 @@ inline util::native<uint32_t> binary_f16_simd_unscoped(util::native<uint32_t> a,
   return output_denormal::flush_output<Fmt>(rounded, output_denormal::Policy::make(denorm_mode));
 }
 
-/// @brief binary_f16_simd_unscoped under its own guest FP environment.
-/// @details For callers that evaluate one chunk at a time. Keeping the scope
-/// inside the operation leaves register callbacks in the caller's state. Callers
-/// that own a whole instruction should scope it once and use the unscoped form.
-template <fp_mode::Arithmetic operation>
-inline util::native<uint32_t> binary_f16_simd(util::native<uint32_t> a, util::native<uint32_t> b,
-                                              uint32_t denorm_mode, bool fp16_ovfl) {
-  fp_mode::ScopedEnvironment environment(0);
-  return binary_f16_simd_unscoped<operation>(a, b, denorm_mode, fp16_ovfl);
-}
-
 /// DX9 accumulator and three-source forms share the scalar flushing, zero-product,
-/// NaN and underflow policies. Source preparation is raw-bit, so the guest
-/// environment belongs to the FMA the unscoped and scoped forms select.
-template <bool Scoped = true>
-inline util::native<float> fma_dx9_zero_f32_simd(util::native<float> a, util::native<float> b,
-                                                 util::native<float> c, const Wavefront &wf) {
+/// NaN and underflow policies. Source preparation is raw-bit; the caller owns the
+/// guest environment of the FMA, as for fma_f32_simd_unscoped.
+inline util::native<float> fma_dx9_zero_f32_simd_unscoped(util::native<float> a,
+                                                          util::native<float> b,
+                                                          util::native<float> c,
+                                                          const Wavefront &wf) {
   using U = util::native<uint32_t>;
   a = denormal::flush_value(a);
   b = denormal::flush_value(b);
@@ -1035,10 +1025,7 @@ inline util::native<float> fma_dx9_zero_f32_simd(util::native<float> a, util::na
   util::stdx::where(zero_product, b_bits) = U(0x3f800000u);
   a = std::bit_cast<util::native<float>>(a_bits);
   b = std::bit_cast<util::native<float>>(b_bits);
-  if constexpr (Scoped)
-    return fma_f32_simd(a, b, c, wf, 0, true);
-  else
-    return fma_f32_simd_unscoped(a, b, c, wf, 0, true);
+  return fma_f32_simd_unscoped(a, b, c, wf, 0, true);
 }
 
 /// @brief Execute a MODE-aware native batch of architectural F64 FMAs.
