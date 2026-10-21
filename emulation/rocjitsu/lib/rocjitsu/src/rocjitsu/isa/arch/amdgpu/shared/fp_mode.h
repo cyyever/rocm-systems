@@ -918,11 +918,18 @@ inline uint32_t mullit_f32(uint32_t s0, uint32_t s1, uint32_t s2, uint32_t round
 /// @details The caller flushes each raw source half before widening. Destination
 /// rounding and output flushing belong to finish_arithmetic_f16; migrated VOP3
 /// callers apply OMOD/CLAMP to the returned half afterward.
+/// The unscoped form leaves the environment to the caller, for repairs running
+/// inside a region that already owns it.
+template <Arithmetic operation>
+inline double arithmetic_f16_unscoped(float lhs, float rhs, float addend) {
+  return detail::evaluate_arithmetic<operation>(static_cast<double>(lhs), static_cast<double>(rhs),
+                                                static_cast<double>(addend));
+}
+
 template <Arithmetic operation>
 inline double arithmetic_f16(float lhs, float rhs, float addend, uint32_t round_mode) {
   detail::ScopedFenv environment(round_mode);
-  return detail::evaluate_arithmetic<operation>(static_cast<double>(lhs), static_cast<double>(rhs),
-                                                static_cast<double>(addend));
+  return arithmetic_f16_unscoped<operation>(lhs, rhs, addend);
 }
 
 /// @brief Evaluate F16 LDEXP in F64 before destination rounding.
@@ -940,14 +947,22 @@ inline double ldexp_f16(float value, int32_t adjustment) {
 /// @details Migrated VOP3 callers leave omod=0 and modify the rounded bits
 /// afterward. SDWA supplies omod here to retain legacy pre-round scaling, which
 /// has no SDWA hardware validation. Its migration requires separate captures.
-inline uint16_t finish_arithmetic_f16(double value, uint32_t round_mode, uint32_t denorm_mode,
-                                      bool fp16_ovfl, uint32_t omod = 0) {
-  detail::ScopedFenv environment(0);
+/// The unscoped form leaves the nearest-even environment to the caller, keeping
+/// the same rounding, output flushing and FP16_OVFL handling.
+inline uint16_t finish_arithmetic_f16_unscoped(double value, uint32_t round_mode,
+                                               uint32_t denorm_mode, bool fp16_ovfl,
+                                               uint32_t omod = 0) {
   const uint16_t rounded =
       pseudo_scalar::round_f16_result(value, round_mode, omod, false, fp16_ovfl, false);
   const auto result = static_cast<uint16_t>(output_denormal::flush_output<fp_format::F16>(
       uint32_t{rounded}, output_denormal::Policy::make(denorm_mode)));
   return finalize_omod_f16(result, omod);
+}
+
+inline uint16_t finish_arithmetic_f16(double value, uint32_t round_mode, uint32_t denorm_mode,
+                                      bool fp16_ovfl, uint32_t omod = 0) {
+  detail::ScopedFenv environment(0);
+  return finish_arithmetic_f16_unscoped(value, round_mode, denorm_mode, fp16_ovfl, omod);
 }
 
 /// @brief Whether a host SIMD arithmetic fast path implements the wave's FP policy.

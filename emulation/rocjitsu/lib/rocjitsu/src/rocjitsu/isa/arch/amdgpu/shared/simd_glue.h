@@ -996,13 +996,16 @@ inline util::native<uint32_t> binary_f16_simd_unscoped(util::native<uint32_t> a,
   }();
   U rounded = util::f32_to_f16_mode_simd(result, fp16_ovfl);
   // Preserve the scalar helper's NaN selection and invalid-operation results.
+  // The unscoped forms reuse the caller's nearest-even environment rather than
+  // taking one per exceptional lane; rounding and flushing are unchanged.
   const auto exceptional =
       (a & Fmt::kMagnitude) >= Fmt::kInfinity || (b & Fmt::kMagnitude) >= Fmt::kInfinity;
   if (util::stdx::any_of(exceptional))
     for (std::size_t i = 0; i < U::size(); ++i)
       if (exceptional[i])
-        rounded[i] = fp_mode::finish_arithmetic_f16(
-            fp_mode::arithmetic_f16<operation>(lhs[i], rhs[i], 0.0f, 0), 0, denorm_mode, fp16_ovfl);
+        rounded[i] = fp_mode::finish_arithmetic_f16_unscoped(
+            fp_mode::arithmetic_f16_unscoped<operation>(lhs[i], rhs[i], 0.0f), 0, denorm_mode,
+            fp16_ovfl);
   return output_denormal::flush_output<Fmt>(rounded, output_denormal::Policy::make(denorm_mode));
 }
 
