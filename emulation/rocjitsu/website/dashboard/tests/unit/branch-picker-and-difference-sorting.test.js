@@ -84,10 +84,10 @@ test('Abs change sorts signed duration separately from Pct change, with missing 
   expect(presentation.rowChanges(pair('missing', null, 0))).toEqual({ seconds: null, percent: null });
 });
 
-test('sorting remains monotonic across real suite boundaries, including unavailable values', () => {
+test('each suite appears once with sorting and unavailable values last inside the suite', () => {
   const rows = [pair('negative', 100, 80), { ...pair('positive', 1, 2), candidateTest: { ...pair('positive', 1, 2).candidateTest, suite: 'Other' } }, pair('zero', 0, 0), { ...pair('missing', null, 1), candidateTest: { ...pair('missing', null, 1).candidateTest, suite: 'Other' } }];
-  expect(ids(rows, 'seconds', 'desc')).toEqual(['positive', 'zero', 'negative', 'missing']);
-  expect(ids(rows, 'seconds', 'asc')).toEqual(['negative', 'zero', 'positive', 'missing']);
+  expect(ids(rows, 'seconds', 'desc')).toEqual(['positive', 'missing', 'zero', 'negative']);
+  expect(ids(rows, 'seconds', 'asc')).toEqual(['positive', 'missing', 'negative', 'zero']);
 });
 
 test('separate sortable change headers expose active aria-sort and emit both directions; mobile retains sort controls', () => {

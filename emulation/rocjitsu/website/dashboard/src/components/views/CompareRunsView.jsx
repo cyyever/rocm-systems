@@ -242,7 +242,7 @@ export default function CompareRunsView({
   return (
     <Box data-testid="comparison-results" sx={{ display: 'grid', gap: 1.75, minWidth: 0 }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto minmax(0, 1fr)' }, alignItems: 'center', gap: 1.25 }}>
-        <RunSelector label="Baseline run" options={runOptions} value={baseline} onChange={onBaselineChange} />
+        <RunSelector label="Candidate run" options={runOptions} value={candidate} onChange={onCandidateChange} />
         <Button
           size="small"
           variant="outlined"
@@ -261,7 +261,7 @@ export default function CompareRunsView({
         >
           Swap
         </Button>
-        <RunSelector label="Candidate run" options={runOptions} value={candidate} onChange={onCandidateChange} />
+        <RunSelector label="Baseline run" options={runOptions} value={baseline} onChange={onBaselineChange} />
       </Box>
       {!candidate && selectedCandidateId && <Alert severity="info">Selected candidate is unavailable · {selectedCandidateId}. Choose a published attempt; no different run has been substituted.</Alert>}
       {!baseline && selectedBaselineId && <Alert severity="info">Selected baseline is unavailable · {selectedBaselineId}. Choose a published attempt; no different run has been substituted.</Alert>}

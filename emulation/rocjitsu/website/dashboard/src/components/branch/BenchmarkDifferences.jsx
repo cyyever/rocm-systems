@@ -1,5 +1,6 @@
+import AnchoredSelect from '../shared/AnchoredSelect';
 import { Fragment } from 'react';
-import { Box, Button, Checkbox, FormControl, InputLabel, MenuItem, Select, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, TextField, Typography } from '@mui/material';
+import { Box, Button, Checkbox, FormControl, InputLabel, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableSortLabel, TextField, Typography } from '@mui/material';
 import { formatDuration, formatPercent } from '../../utils/formatters';
 import { monoFont } from '../../theme/tokens';
 import CategoryTag from '../shared/CategoryTag';
@@ -32,7 +33,7 @@ function ExcludedResults({ rows, candidate, reference, target, mode }) {
   </Box>;
 }
 
-export default function BenchmarkDifferences({ comparison, summary, candidate, reference, selection, suites, suiteOptions, query, sort, onSuites, onQuery, onSort, onClear, onOpenComparison }) {
+export default function BenchmarkDifferences({ comparison, summary, candidate, reference, selection, suites, suiteOptions, query, sort, onSuites, onQuery, onSort, onClear, onOpenComparison, children }) {
   const sortKey = sort?.key ?? sort ?? 'seconds';
   const sortDirection = sort?.direction ?? 'desc';
   const groups = groupComparisonRows(comparison.comparable, sortKey, sortDirection);
@@ -46,15 +47,16 @@ export default function BenchmarkDifferences({ comparison, summary, candidate, r
     <Typography role="status" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
       {summary.matched} matched · {summary.excluded} excluded
       {summary.available && <> · Base {formatDuration(comparison.baselineDuration)} → Candidate {formatDuration(comparison.candidateDuration)}</>}
+      {' · Sorted within each suite'}
     </Typography>
     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', my: 1.5, alignItems: 'center' }}>
       <FormControl size="small" sx={{ minWidth: 160, maxWidth: '100%', flex: '0 1 200px' }}>
         <InputLabel id="branch-suite-filter-label" shrink>Suites</InputLabel>
-        <Select multiple displayEmpty label="Suites" labelId="branch-suite-filter-label" value={suites} onChange={(event) => onSuites(event.target.value)}
+        <AnchoredSelect multiple displayEmpty label="Suites" labelId="branch-suite-filter-label" value={suites} onChange={(event) => onSuites(event.target.value)}
           renderValue={(chosen) => !chosen.length ? 'No suites' : chosen.length === suiteOptions.length ? 'All suites' : chosen.join(', ')}
           sx={{ minHeight: 44 }} MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360, maxWidth: 'calc(100vw - 24px)' } } } }}>
           {suiteOptions.map((suite) => <MenuItem key={suite} value={suite} sx={{ minHeight: 44, overflowWrap: 'anywhere', whiteSpace: 'normal' }}><Checkbox checked={suites.includes(suite)} tabIndex={-1} size="small" />{suite}</MenuItem>)}
-        </Select>
+        </AnchoredSelect>
       </FormControl>
       <TextField size="small" type="search" label="Search benchmarks" value={query} onChange={(event) => onQuery(event.target.value)} sx={{ flex: '1 1 200px', '& .MuiInputBase-root': { minHeight: 44 } }} />
       {(query || suites.length !== suiteOptions.length) && <Button onClick={onClear} sx={{ minHeight: 44 }}>Reset benchmark filters</Button>}
@@ -92,13 +94,14 @@ export default function BenchmarkDifferences({ comparison, summary, candidate, r
         </Box>)}
       </Box>
     </>}
-    <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1.5 }}>Negative change means less measured wall time. Totals include only matched completed benchmarks; environment equivalence is not guaranteed.</Typography>
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mt: 1.5 }}>
+      <Typography variant="caption" color="text.secondary" component="p" sx={{ m: 0, flex: '1 1 320px' }}>Negative change means less measured wall time. Totals include only matched completed benchmarks; environment equivalence is not guaranteed.</Typography>
       <Button variant="contained" data-testid="branch-open-comparison" disabled={!candidate || !reference || typeof onOpenComparison !== 'function'}
         onClick={() => candidate && reference && onOpenComparison({ candidateId: selection.candidateId, baselineId: selection.referenceId, target: selection.target, mode: selection.mode, suites })}
-        sx={{ minHeight: 44, '@media (max-width:767px)': { width: '100%' } }}>Open full comparison ↗</Button>
+        sx={{ minHeight: 44, flexShrink: 0, ml: 'auto', '@media (max-width:767px)': { width: '100%' } }}>Open full comparison ↗</Button>
     </Box>
     {(!candidate || !reference) && <Typography variant="caption" component="p" color="text.secondary">Choose both published attempts to open full comparison.</Typography>}
+    {children}
     <ExcludedResults rows={comparison.notComparable} candidate={candidate} reference={reference} target={selection.target} mode={selection.mode} />
   </Box>;
 }

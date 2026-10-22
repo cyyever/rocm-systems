@@ -10,6 +10,7 @@ const branchButton = (page, number) => page.getByRole('button', { name: new RegE
 const results = (page) => page.getByRole('region', { name: 'Benchmark differences', exact: true });
 
 test('published branch search and PR filters preserve exact selection through empty matches', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await openDashboard(page, '/?view=branch');
   const list = page.getByTestId('branch-list-panel');
   const dataset = benchmarkData;
@@ -30,11 +31,17 @@ test('published branch search and PR filters preserve exact selection through em
   await expect(page.getByTestId('reference-selected-identity')).toContainText('fictional-develop-20');
   await search.fill('no-such-published-branch');
   await expect(list).toContainText('No matching branches');
+  const hint = await list.getByText('Try another branch, PR or SHA.').boundingBox();
+  const reset = await list.getByRole('button', { name: 'Clear filters' }).boundingBox();
+  expect(reset.y).toBeGreaterThanOrEqual(hint.y + hint.height);
+  expect(Math.abs(reset.x - hint.x)).toBeLessThan(1);
   await expect(page.getByTestId('candidate-selected-identity')).toContainText('fictional-branch-01');
   await list.getByRole('button', { name: 'Clear filters' }).click();
-  await page.getByLabel('Pull request', { exact: true }).selectOption('with-pr');
+  await page.getByRole('combobox', { name: 'Pull request', exact: true }).click();
+  await page.getByRole('option', { name: 'With PR', exact: true }).click();
   await expect(branchRows).toHaveCount(selectPublishedBranches(dataset, { pr: 'with-pr' }).length);
-  await page.getByLabel('Pull request', { exact: true }).selectOption('no-pr');
+  await page.getByRole('combobox', { name: 'Pull request', exact: true }).click();
+  await page.getByRole('option', { name: 'No PR', exact: true }).click();
   await expect(branchRows).toHaveCount(selectPublishedBranches(dataset, { pr: 'no-pr' }).length);
   await expect(branchButton(page, '01')).toHaveCount(0);
   await page.getByRole('button', { name: 'Clear filters', exact: true }).click();

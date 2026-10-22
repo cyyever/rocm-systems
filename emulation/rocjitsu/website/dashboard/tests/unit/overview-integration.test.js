@@ -105,7 +105,7 @@ test('Largest Changes keeps first duplicate reference, strict special-string IDs
 });
 
 test('catalog routing preserves unrelated query/hash and explicit selections', () => {
-  expect(readDashboardRoute('https://example.test/').historyRange).toBe('1W');
+  expect(readDashboardRoute('https://example.test/').historyRange).toBe('ALL');
   const route = readDashboardRoute('https://example.test/?catalog=cat-a&range=1M&targets=&view=overview&keep=yes#anchor');
   expect(route.overviewCatalogId).toBe('cat-a');
   expect(route.preferences.targets).toEqual([]);

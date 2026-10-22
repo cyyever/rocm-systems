@@ -46,6 +46,16 @@
   src: url('./assets/fonts/ibm-plex-mono-600.woff2') format('woff2');
 }
 
+/* Real bold face scoped to the approved Overview card headings. Its Plex
+   license is bundled through theme.fontLicenses.sans. */
+@font-face {
+  font-family: 'Overview Title';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/ibm-plex-sans-bold.ttf') format('truetype');
+}
+
 * {
   box-sizing: border-box;
 }
@@ -86,6 +96,31 @@ pre {
        so those coordinates are not scaled a second time. Dialog flex centering
        and in-chart tooltips stay in the shared density layer. */
     .MuiPopover-root, .MuiPopper-root { zoom: 1.25; }
+    /* Only portal coordinates escape the density layer. Match the surrounding
+       14px body / 12px caption text without scaling popup geometry again. */
+    .MuiAutocomplete-popper .MuiAutocomplete-listbox .MuiAutocomplete-option,
+    .MuiAutocomplete-popper .MuiAutocomplete-option .MuiTypography-body1,
+    .MuiAutocomplete-popper .MuiAutocomplete-option .MuiTypography-body2,
+    .MuiAutocomplete-popper .MuiAutocomplete-groupLabel,
+    .MuiAutocomplete-popper .MuiAutocomplete-noOptions,
+    .MuiAutocomplete-popper .MuiAutocomplete-loading,
+    .MuiMenu-root .MuiMenu-list .MuiMenuItem-root {
+      font-size: 11.2px;
+      line-height: 16px;
+    }
+    .MuiAutocomplete-popper .MuiAutocomplete-option .MuiTypography-caption {
+      font-size: 9.6px;
+      line-height: 14.4px;
+    }
+    .MuiAutocomplete-popper .MuiAutocomplete-option .MuiSvgIcon-fontSizeSmall {
+      font-size: 16px;
+    }
+    .MuiAutocomplete-popper .MuiAutocomplete-groupLabel {
+      line-height: 38.4px;
+    }
+    .MuiAutocomplete-popper .MuiAutocomplete-option .MuiListItemText-root {
+      margin-block: 4.8px;
+    }
   }
 }
 

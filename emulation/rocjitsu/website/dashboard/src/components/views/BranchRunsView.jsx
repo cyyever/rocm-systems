@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Button, Paper, TextField, Typography } from '@mui/material';
+import { Box, Button, FormControl, InputLabel, MenuItem, Paper, TextField, Typography } from '@mui/material';
+import AnchoredSelect from '../shared/AnchoredSelect';
 import { compareRunExecution } from '../../data/runOrdering';
 import { selectAutomaticReference, selectPublishedBranches } from '../../data/branchSelectors';
 import BranchList from '../branch/BranchList';
@@ -48,9 +49,12 @@ export default function BranchRunsView({ data, state, onOpenComparison }) {
     {branches.length || selection.branch ? <>
       <Box className="branch-toolbar" sx={{ display: 'flex', gap: 1.5, my: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <TextField type="search" label="Search branch, PR or SHA" placeholder="Search branch, PR or SHA" size="small" value={query} onChange={(event) => setQuery(event.target.value)} sx={{ flex: '1 1 240px', '& .MuiInputBase-root': { minHeight: 44 }, '& .MuiInputBase-input': { py: '10px' }, '& .MuiInputLabel-root:not(.MuiInputLabel-shrink)': { transform: 'translate(14px, 12px) scale(1)' } }} />
-        <TextField select label="Pull request" size="small" value={pr} onChange={(event) => setPr(event.target.value)} slotProps={{ select: { native: true }, inputLabel: { shrink: true } }} sx={{ width: 220, flexGrow: { xs: 1, sm: 0 }, '& .MuiInputBase-root': { minHeight: 44 } }}>
-          <option value="all">All branches</option><option value="with-pr">With PR</option><option value="no-pr">No PR</option>
-        </TextField>
+        <FormControl size="small" sx={{ width: 220, flexGrow: { xs: 1, sm: 0 } }}>
+          <InputLabel id="branch-pr-filter-label" shrink>Pull request</InputLabel>
+          <AnchoredSelect label="Pull request" labelId="branch-pr-filter-label" value={pr} onChange={(event) => setPr(event.target.value)} sx={{ minHeight: 44 }}>
+            <MenuItem value="all">All branches</MenuItem><MenuItem value="with-pr">With PR</MenuItem><MenuItem value="no-pr">No PR</MenuItem>
+          </AnchoredSelect>
+        </FormControl>
         {(query || pr !== 'all') && <Button onClick={clear} sx={{ minHeight: 44 }}>Clear filters</Button>}
       </Box>
       <Box sx={{ display: 'grid', gap: 2, minWidth: 0, gridTemplateColumns: 'minmax(0,1fr)', '@container branch-runs (min-width:1000px)': { gridTemplateColumns: pickerCollapsed ? '44px minmax(0,1fr)' : '304px minmax(0,1fr)', alignItems: 'stretch' } }}>

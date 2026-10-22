@@ -35,14 +35,16 @@ export function rowChanges(row) {
 export function groupComparisonRows(rows, sort = 'seconds', direction = 'desc') {
   const value = (row) => rowChanges(row)[sort === 'percent' ? 'percent' : 'seconds'];
   const ordered = [...rows].sort((left, right) => {
+    const suiteOrder = left.candidateTest.suite.localeCompare(right.candidateTest.suite);
+    if (suiteOrder) return suiteOrder;
     const a = value(left); const b = value(right);
     if (a === null && b !== null) return 1;
     if (b === null && a !== null) return -1;
     return (a !== null && b !== null ? (a - b) * (direction === 'asc' ? 1 : -1) : 0)
       || left.candidateTest.testId.localeCompare(right.candidateTest.testId);
   });
-  // Contiguous suite sections retain globally sorted order. A suite may recur;
-  // collecting all its rows together would move missing values ahead of measurements.
+  // One alphabetical section per suite; sort measured changes within each suite,
+  // retaining unavailable values last regardless of the requested direction.
   const groups = [];
   for (const row of ordered) {
     const suite = row.candidateTest.suite;

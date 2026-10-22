@@ -125,14 +125,14 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
   const before = structuredClone(data);
   const probe = mountApp();
   await probe.settle(data);
-  expect(probe.ids()).toEqual(['a', 'b', 'c', 'd']);
+  expect(probe.ids()).toEqual(['a', 'b', 'c']);
   let expected;
   let nextData = data;
   if (choice === 'removed') {
     probe.click('Remove Fictional GEMM from grid');
-    expected = ['b', 'c', 'd'];
+    expected = ['b', 'c'];
   } else if (choice === 'empty') {
-    for (const id of ['a', 'b', 'c', 'd']) probe.click(`Remove ${data.testCatalog.find((test) => test.id === id).name} from grid`);
+    for (const id of ['a', 'b', 'c']) probe.click(`Remove ${data.testCatalog.find((test) => test.id === id).name} from grid`);
     expected = [];
   } else {
     const retained = data.testCatalog.find((test) => test.id === 'c');
@@ -161,13 +161,13 @@ it.each(['removed', 'empty', 'unavailable'])('UI-004 retains %s workload choice 
   expect(data).toEqual(before);
 });
 
-it('UI-004 derives first-four defaults only while unchosen, without history or workload preference writes', async () => {
+it('UI-004 derives first-three measured defaults only while unchosen, without history or workload preference writes', async () => {
   const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
   const probe = mountApp();
   const replacements = probe.browser.history.replaceState.mock.calls.length;
   expect(probe.state.selectedBenchmarks).toBeNull();
   await probe.settle(data);
-  expect(probe.ids()).toEqual(['a', 'b', 'c', 'd']);
+  expect(probe.ids()).toEqual(['a', 'b', 'c']);
   expect(probe.state.selectedBenchmarks).toBeNull();
   expect(probe.storage.has('rocjitsu-dashboard-benchmarks')).toBe(false);
   expect(probe.browser.history.pushState).not.toHaveBeenCalled();
@@ -208,6 +208,6 @@ it('UI-004 preserves standalone initialBenchmarkIds and distinguishes controlled
   expect(initialMissing).toContain('exact-missing-id');
   expect(initialMissing).toContain('Not in this configuration');
   expect(markup({ selectedBenchmarks: [], initialBenchmarkIds: ['a'] })).not.toContain('data-testid="benchmark-grid-card"');
-  expect(markup({ selectedBenchmarks: null }).match(/data-testid="benchmark-grid-card"/g)).toHaveLength(4);
+  expect(markup({ selectedBenchmarks: null }).match(/data-testid="benchmark-grid-card"/g)).toHaveLength(3);
   expect(onBenchmarksChange).not.toHaveBeenCalled();
 });

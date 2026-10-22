@@ -2,8 +2,8 @@ import { expect, test } from 'vitest';
 import * as formatters from '../../src/utils/formatters.js';
 
 test.each([
-  [null, '-'],
-  [undefined, '-'],
+  [null, '—'],
+  [undefined, '—'],
   [false, 'false'],
   [true, 'true'],
   [0, '0'],

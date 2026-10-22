@@ -12,11 +12,16 @@ describe('v10 bundled fonts', () => {
     expect(source).toContain('ibmplexmono-OFL.txt?url');
   });
 
-  it('ships six local WOFF2 faces with Plex licenses through the source stylesheet', () => {
+  it('ships local Plex faces plus the scoped bold Overview title face with licenses', () => {
     const stylesheetUrl = new URL('../../src/index.css', import.meta.url);
     const stylesheet = readFileSync(stylesheetUrl, 'utf8');
     const faces = [...stylesheet.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((match) => match[1]);
-    expect(faces).toHaveLength(6);
+    expect(faces).toHaveLength(7);
+    const titleFace = faces.find((face) => face.includes("font-family: 'Overview Title'"));
+    expect(titleFace).toContain('font-weight: 700');
+    expect(titleFace).toContain("./assets/fonts/ibm-plex-sans-bold.ttf");
+    const titleBytes = readFileSync(new URL('../../src/assets/fonts/ibm-plex-sans-bold.ttf', import.meta.url));
+    expect([...titleBytes.subarray(0, 4)]).toEqual([0, 1, 0, 0]);
     for (const family of ['sans', 'mono']) {
       for (const weight of [400, 500, 600]) {
         const face = faces.find((item) => item.includes(`font-family: 'IBM Plex ${family === 'sans' ? 'Sans' : 'Mono'}'`) && item.includes(`font-weight: ${weight};`));

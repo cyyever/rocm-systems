@@ -19,7 +19,7 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=benchmarks');
   const headings = page.getByTestId('benchmark-grid-card').getByRole('heading');
-  await expect(headings).toHaveCount(4);
+  await expect(headings).toHaveCount(3);
   const original = await headings.allTextContents();
   await page.getByRole('button', { name: 'Add benchmarks', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Add benchmarks', exact: true });
@@ -44,7 +44,7 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
   // MUI hides the page from role locators until the exiting modal detaches.
   await expect(headings).toHaveText(original);
   await page.getByRole('button', { name: 'Add benchmarks', exact: true }).click();
-  for (const index of [54, 53, 52, 51]) {
+  for (const index of [54, 53, 52, 51, 50]) {
     await picker.fill(`Fictional picker ${index}`);
     if (index === 54) {
       await picker.press('ArrowDown');
@@ -53,7 +53,7 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
       await expect(scalarOption).toHaveAttribute('aria-selected', 'true');
     } else await page.getByRole('option').click();
   }
-  await picker.fill('Fictional picker 50');
+  await picker.fill('Fictional picker 49');
   await expect(page.getByRole('option')).toHaveAttribute('aria-disabled', 'true');
   await picker.press('ArrowDown');
   await picker.press('Enter');
@@ -77,10 +77,10 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
 test('removed and explicitly empty workload choices survive tab remounts and data reloads', async ({ page }) => {
   await openDashboard(page, '/?view=benchmarks');
   const headings = page.getByTestId('benchmark-grid-card').getByRole('heading');
-  await expect(headings).toHaveCount(4);
+  await expect(headings).toHaveCount(3);
   const original = await headings.allTextContents();
   const retained = original.filter((name) => name !== 'Fictional decode');
-  expect(retained).toHaveLength(3);
+  expect(retained).toHaveLength(2);
   await page.getByRole('button', { name: 'Remove Fictional decode from grid', exact: true }).click();
   await expect(headings).toHaveText(retained);
 

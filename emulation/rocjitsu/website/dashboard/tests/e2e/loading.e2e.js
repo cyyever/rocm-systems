@@ -32,7 +32,7 @@ test('loading shell reports partial progress and disables data actions until all
     release();
   }
   await ready(page);
-  await expect(page.getByTestId('benchmark-grid-card')).toHaveCount(4);
+  await expect(page.getByTestId('benchmark-grid-card')).toHaveCount(3);
 });
 
 test('fatal load and failed refresh discard stale exports; Retry restores raw maintained schema 1 and cache generations', async ({ page }) => {

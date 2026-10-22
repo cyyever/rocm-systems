@@ -18,7 +18,7 @@ export const formatShortDate = (timestamp) => typeof timestamp === 'string' && N
 export const formatFullDate = (timestamp) => typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)) ? fullDateFormatter.format(new Date(timestamp)) : '-';
 
 export function formatMetadataValue(value) {
-  if (value == null) return '-';
+  if (value == null) return '—';
   return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 

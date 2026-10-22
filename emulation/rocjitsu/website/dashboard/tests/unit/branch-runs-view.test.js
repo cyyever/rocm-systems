@@ -50,7 +50,7 @@ test('published branch rows use the activity window and newest execution orderin
   expect(html.includes('data-testid="branch-row-users/fictional/old"')).toBe(false);
   expect(html.indexOf('branch-row-users/fictional/newest')).toBeLessThan(html.indexOf('branch-row-users/fictional/second'));
   expect(html.includes('Search branch, PR or SHA')).toBe(true);
-  expect(html.includes('With PR')).toBe(true);
+  expect(html.includes('branch-pr-filter-label')).toBe(true);
   expect(html.includes('No PR')).toBe(true);
   expect(html.includes('Newest published executions first')).toBe(true);
   expect(html.includes('data-screen="list"')).toBe(true);
@@ -132,6 +132,11 @@ test('unavailable exact identities stay inspectable and cannot silently fall bac
   const manual = render(data, { branch: candidate.branch, candidateId: candidate.runId, referenceId: second.runId, manual: true, detail: true });
   expect(manual.includes('Manual reference')).toBe(true);
   expect(manual.includes('Restore automatic base')).toBe(true);
+});
+
+test('environment disclosure precedes excluded results in branch details', () => {
+  const html = render(data);
+  expect(html.indexOf('data-testid="branch-environment"')).toBeLessThan(html.indexOf('data-testid="branch-exclusions"'));
 });
 
 test('pending published data has a scoped loading state and never stale demonstration results', () => {

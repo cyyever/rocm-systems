@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+import { groupMetadataFacts, metadataLabel } from '../shared/metadataPresentation';
 import { Box, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { runEnvironmentDetails } from '../../data/provenance';
 import { formatMetadataValue, shortSha } from '../../utils/formatters';
@@ -26,9 +28,11 @@ export default function RunMetadataDiff({ baseline, candidate, filters }) {
     const changed = Boolean(baseline && candidate) && JSON.stringify(row.baseline ?? null) !== JSON.stringify(row.candidate ?? null);
     return <TableRow key={row.key} data-testid={`metadata-row-${row.key}`} data-different={changed} sx={changed ? { '& > .MuiTableCell-root': { bgcolor: 'action.selected', color: 'text.primary' } } : undefined}>
       <TableCell component="th" scope="row" sx={{ width: '26%', fontFamily: 'inherit', fontWeight: 500 }}>
-        {row.label ?? row.key}
+        {metadataLabel(row.label, row.key)}
       </TableCell>
-      {['baseline', 'candidate'].map((side) => <TableCell key={side} sx={{ width: '37%', fontFamily: monoFont, borderLeft: 1, borderColor: 'divider', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{formatMetadataValue(row[side])}</TableCell>)}
+      {['baseline', 'candidate'].map((side) => <TableCell key={side} sx={{ width: '37%', fontFamily: monoFont, borderLeft: 1, borderColor: 'divider', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{row.key === 'configurations' && Array.isArray(row[side])
+        ? row[side].length ? <Box component="ul" sx={{ m: 0, pl: 2 }}>{row[side].map((configuration) => <li key={`${configuration.target}:${configuration.thread_policy}`}>{configuration.target} · {configuration.thread_policy}</li>)}</Box> : 'None published'
+        : formatMetadataValue(row[side])}</TableCell>)}
     </TableRow>;
   });
   return <>
@@ -41,8 +45,10 @@ export default function RunMetadataDiff({ baseline, candidate, filters }) {
         <TableBody>
           <TableRow><TableCell colSpan={3} sx={{ bgcolor: 'action.hover', fontFamily: 'inherit', fontWeight: 600 }}>Benchmark configuration</TableCell></TableRow>
           {rows(facts)}
-          <TableRow><TableCell colSpan={3} sx={{ bgcolor: 'action.hover', fontFamily: 'inherit', fontWeight: 600 }}>Environment</TableCell></TableRow>
-          {environment.length ? rows(environment) : <TableRow><TableCell colSpan={3}>No environment details provided.</TableCell></TableRow>}
+          {environment.length ? groupMetadataFacts(environment).map((group) => <Fragment key={group.label}>
+            <TableRow><TableCell component="th" scope="rowgroup" colSpan={3} sx={{ bgcolor: 'action.hover', fontFamily: 'inherit', fontWeight: 600 }}>{group.label}</TableCell></TableRow>
+            {rows(group.rows)}
+          </Fragment>) : <TableRow><TableCell colSpan={3}>No environment details provided.</TableCell></TableRow>}
         </TableBody>
       </Table>
     </TableContainer>

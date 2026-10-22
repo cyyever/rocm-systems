@@ -1,16 +1,17 @@
+import AnchoredSelect from '../shared/AnchoredSelect';
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Box, Link, MenuItem, Select, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
+import { Box, Link, MenuItem, Stack, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import Chart from '../shared/Chart';
 import SectionCard from '../shared/SectionCard';
 import CatalogWorkloads from './CatalogWorkloads';
 import { escapeHtml, formatDuration, formatFullDate, formatShortDate } from '../../utils/formatters';
-import { targetColor } from '../../utils/chartColors';
+import { configurationColor as colorFor } from '../../utils/chartColors';
 import { historyRanges } from '../../config/historyRanges';
 import { visuallyHiddenStyles } from '../../theme/styles';
 import { trendEmptyMessage, trendKeyIndex, nearestTrendIndex, trendSlotStatus } from './overviewPresentation';
 
 const StableChart = memo(Chart);
-const colorFor = (row, index) => row.mode === 'default' ? ({ gfx1250: '#14826F', gfx950: '#7450B8' }[row.target] ?? targetColor(row.target, index + 2)) : targetColor(row.target, index);
+
 
 export default function DurationHistory({ projection, catalogs, onRangeChange, onCatalogChange, onOpenBenchmarks }) {
   const theme = useTheme();
@@ -119,10 +120,10 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
   return <SectionCard data-testid="performance-trend" title="Performance Trend" subtitle="Relative speedup · higher is faster · develop only" sx={{ height: '100%', minWidth: 0 }} contentSx={{ p: 2 }} action={<Box sx={{ maxWidth: '100%', overflowX: 'auto' }}><ToggleButtonGroup exclusive size="small" value={projection.range} onChange={(_, next) => next && onRangeChange(next)} aria-label="History timeframe">{historyRanges.map(({ id, label }) => <ToggleButton key={id} value={id} aria-label={label} sx={{ px: 1, minHeight: { xs: 44, sm: 36 } }}>{id}</ToggleButton>)}</ToggleButtonGroup></Box>}>
     <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
       <Typography id={catalogLabelId} variant="caption" color="text.secondary">Benchmark set</Typography>
-      <Select labelId={catalogLabelId} title="Latest published develop commit using this benchmark set (UTC)" value={projection.catalogId ?? ''} onChange={(e) => { clear(); onCatalogChange(e.target.value || null); }} size="small" displayEmpty MenuProps={{ slotProps: { paper: { sx: { maxWidth: 'calc(100vw - 32px)' } } } }} sx={{ minWidth: 170, maxWidth: '100%', fontSize: 12, '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}>
-        <MenuItem value="">Shared benchmarks</MenuItem>{projection.catalogId && !catalogs.some(({ catalog }) => catalog.id === projection.catalogId) && <MenuItem value={projection.catalogId} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>Unavailable benchmark set: {projection.catalogId}</MenuItem>}
+      <AnchoredSelect labelId={catalogLabelId} title="Latest published develop commit using this benchmark set (UTC)" value={projection.catalogId ?? ''} onChange={(e) => { clear(); onCatalogChange(e.target.value || null); }} size="small" displayEmpty MenuProps={{ slotProps: { paper: { sx: { maxWidth: 'calc(100vw - 32px)' } } } }} sx={{ minWidth: 170, maxWidth: '100%', fontSize: 12, '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}>
+        <MenuItem value="" sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>Shared benchmarks</MenuItem>{projection.catalogId && !catalogs.some(({ catalog }) => catalog.id === projection.catalogId) && <MenuItem value={projection.catalogId} sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>Unavailable benchmark set: {projection.catalogId}</MenuItem>}
         {catalogs.map(({ catalog, label }) => <MenuItem key={catalog.id} value={catalog.id} title="Latest published develop commit using this benchmark set (UTC)" sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{label}</MenuItem>)}
-      </Select>
+      </AnchoredSelect>
       <Typography variant="caption" color="text.secondary">1.00× = each configuration’s first valid positive point in range.</Typography>
     </Stack>
     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2, mb: 1 }}>{projection.rows.map((row, index) => <Typography key={row.key} variant="caption"><Box component="span" sx={{ color: colors[index], mr: 0.75 }}>{row.mode === 'single' ? '●' : '◆'}</Box>{row.target} {row.mode}</Typography>)}</Stack>

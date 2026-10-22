@@ -6,7 +6,7 @@ import { readMaintainedExamplePublication } from '../helpers/maintainedExamplePu
 import BranchEnvironment from '../../src/components/branch/BranchEnvironment.jsx';
 import RunMetadataDiff from '../../src/components/compare/RunMetadataDiff.jsx';
 
-test('optional provenance renders ASCII hyphens with zero/false intact and source nulls unchanged', () => {
+test('optional provenance renders em dashes with zero/false intact and source nulls unchanged', () => {
   const source = readMaintainedExamplePublication();
   source.runs[0].provenance = { rocjitsu: { rocjitsu_commit_sha: null, rocjitsu_commit_timestamp: null }, auxiliary: { zero: 0, enabled: false } };
   source.runs[0].publication.source.pull_request = { number: 12 };
@@ -14,7 +14,7 @@ test('optional provenance renders ASCII hyphens with zero/false intact and sourc
   const { data, sourceData } = adaptPublishedDashboardData(source);
   const run = data.runs[0];
   const branch = renderToStaticMarkup(createElement(BranchEnvironment, { candidate: run, selection: { target: 'gfx950', mode: 'default' } }));
-  expect(branch).toMatch(/branch-source-commit[\s\S]*?>-<\/td>/);
+  expect(branch).toMatch(/branch-source-commit[\s\S]*?>—<\/td>/);
   expect(branch).toContain('Benchmark set');
   const metadata = renderToStaticMarkup(createElement(RunMetadataDiff, { baseline: run, candidate: run, filters: { targets: run.targets, suites: data.suites, modes: run.modes } }));
   expect(metadata).toContain('>0</td>');

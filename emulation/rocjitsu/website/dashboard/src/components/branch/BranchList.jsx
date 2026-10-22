@@ -36,10 +36,10 @@ export default function BranchList({ branches, selectedBranch, onSelect, onClear
         </Typography>
         <Typography component="div" variant="caption" color="text.secondary">{formatFullDate(entry.latestRun.timestamp)}</Typography>
         <Typography component="div" variant="caption" color="text.secondary">{entry.latestRun.configurations.length} published configurations</Typography>
-      </ButtonBase>) : <Box sx={{ p: 2 }}>
+      </ButtonBase>) : <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
         <Typography variant="body2">No matching branches</Typography>
         <Typography variant="caption" color="text.secondary">Try another branch, PR or SHA.</Typography>
-        <Button onClick={onClear} sx={{ mt: 1, minHeight: 44 }}>Clear filters</Button>
+        <Button onClick={onClear} sx={{ mt: 1, minHeight: 44, px: 0 }}>Clear filters</Button>
       </Box>}
     </Box>
     <Typography variant="caption" color="text.secondary" sx={{ p: 1.5, borderTop: 1, borderColor: 'divider', flexShrink: 0 }}>

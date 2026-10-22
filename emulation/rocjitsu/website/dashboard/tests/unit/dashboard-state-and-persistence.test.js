@@ -179,7 +179,7 @@ it('restores the entire route on Back/Forward without pushing or losing local pa
   const pushes = probe.browser.history.pushState.mock.calls.length;
   const replacements = probe.browser.history.replaceState.mock.calls.length;
   probe.go(-1);
-  expect(probe.state).toMatchObject({ tab: 'branch', branchSelection: branch, comparisonCandidateId: null, comparisonBaselineId: null, historyRange: '1W' });
+  expect(probe.state).toMatchObject({ tab: 'branch', branchSelection: branch, comparisonCandidateId: null, comparisonBaselineId: null, historyRange: 'ALL' });
   expect(probe.state.filters).toEqual({ targets: ['gfx950'], suites: [], modes: ['single'] });
   probe.go(-1);
   expect(probe.state.branchSelection.candidateId).toBeNull();
@@ -203,7 +203,7 @@ it('replaces filter/range entries and resolves consecutive mode updaters against
     state.setModes((current) => [...current, 'default']);
     state.setTargets([]);
     state.setSuites([]);
-    state.setHistoryRange((current) => current === '1W' ? '1M' : 'ALL');
+    state.setHistoryRange((current) => current === 'ALL' ? '1M' : 'ALL');
   });
   expect(probe.state.filters).toEqual({ targets: [], suites: [], modes: ['single', 'default'] });
   expect(probe.state.historyRange).toBe('1M');

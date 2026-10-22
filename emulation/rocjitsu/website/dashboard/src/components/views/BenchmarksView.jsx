@@ -9,7 +9,7 @@ import ChartPointSelector from '../benchmarks/ChartPointSelector';
 import SectionCard from '../shared/SectionCard';
 import CategoryTag from '../shared/CategoryTag';
 import { benchmarkRangeData, benchmarkResultChoices, boundedGridSelection } from '../benchmarks/benchmarkExplorer';
-import { selectBenchmarkCatalog, selectBenchmarkSeries } from '../../data/selectors';
+import { selectBenchmarkCatalog, selectBenchmarkSeries, selectDefaultBenchmarks } from '../../data/selectors';
 import { historyRanges } from '../../config/historyRanges';
 import { formatFullDate } from '../../utils/formatters';
 
@@ -19,10 +19,16 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
   const range = controlledRange ?? localRange;
   const changeRange = (next) => { setLocalRange(next); onRangeChange?.(next); };
   const rangedData = useMemo(() => benchmarkRangeData(data, range), [data, range]);
-  const [localSelection, setLocalSelection] = useState(() => boundedGridSelection(initialBenchmarkIds ? initialBenchmarkIds.map((id) => catalog.all.find((test) => test.id === id) ?? { id, name: id, suite: 'Unknown suite' }) : catalog.available.slice(0, 4)));
+  const defaultSelection = useMemo(() => selectedBenchmarks === null ? selectDefaultBenchmarks(rangedData, filters) : null, [selectedBenchmarks, rangedData, filters]);
+  const [localSelection, setLocalSelection] = useState(() => {
+    if (selectedBenchmarks !== undefined) return [];
+    return boundedGridSelection(initialBenchmarkIds
+      ? initialBenchmarkIds.map((id) => catalog.all.find((test) => test.id === id) ?? { id, name: id, suite: 'Unknown suite' })
+      : selectDefaultBenchmarks(rangedData, filters));
+  });
   // Undefined preserves the standalone initialBenchmarkIds API. Controlled null
   // derives first-use defaults without writing state; controlled [] stays empty.
-  const selection = selectedBenchmarks === undefined ? localSelection : selectedBenchmarks ?? catalog.available.slice(0, 4);
+  const selection = selectedBenchmarks === undefined ? localSelection : selectedBenchmarks ?? defaultSelection;
   const changeSelection = (tests) => {
     const next = boundedGridSelection(tests);
     if (selectedBenchmarks === undefined) setLocalSelection(next);
@@ -72,7 +78,7 @@ export default function BenchmarksView({ data, filters, historyRange: controlled
         <Box data-testid="benchmark-grid" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', '@media (min-width:600px) and (max-width:899px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:900px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }, '@media (min-width:1200px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
           {selected.map((benchmark) => <Paper data-testid="benchmark-grid-card" key={benchmark.id} variant="outlined" sx={{ p: 1.75, minWidth: 0, borderRadius: '8px' }}>
             <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1 }}>
-              <Box sx={{ minWidth: 0 }}><Typography variant="h3" sx={{ fontSize: 14, lineHeight: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{benchmark.name}</Typography><CategoryTag label={benchmark.suite} sx={{ mt: 0.75 }} /></Box>
+              <Box sx={{ minWidth: 0 }}><Typography variant="h3" sx={{ fontSize: 14, lineHeight: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{benchmark.name}</Typography><Typography variant="caption" component="div" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{benchmark.id}</Typography><CategoryTag label={benchmark.suite} sx={{ mt: 0.75 }} /></Box>
               <IconButton size="small" aria-label={`Remove ${benchmark.name} from grid`} onClick={() => changeSelection(selected.filter((test) => test.id !== benchmark.id))} sx={{ width: { xs: 44, sm: 32 }, height: { xs: 44, sm: 32 } }}><CloseRoundedIcon sx={{ fontSize: 18 }} /></IconButton>
             </Stack>
             {availableIds.has(benchmark.id) ? <BenchmarkHistoryChart key={`${benchmark.id}:${range}`} {...chartProps} benchmark={benchmark} height={230} /> : <Box role="status" sx={{ minHeight: 230, display: 'grid', placeItems: 'center', textAlign: 'center', color: 'text.secondary', fontSize: 14 }}>Not in this configuration</Box>}

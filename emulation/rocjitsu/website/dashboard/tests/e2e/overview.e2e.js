@@ -13,7 +13,7 @@ test('Overview shares endpoints with cards and keeps hover/catalog/range/filter 
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   const publication = createMaintainedPublication();
   await installPublication(page, { publication });
-  await openDashboard(page, '/?campaign=kept#scope');
+  await openDashboard(page, '/?range=1W&campaign=kept#scope');
   const data = adaptPublishedDashboardData(publication).data;
   const model = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: data.modes }, { range: '1W' });
   expect(new URL(page.url()).searchParams.get('range')).toBe('1W');

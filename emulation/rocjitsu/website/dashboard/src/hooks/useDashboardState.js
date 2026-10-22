@@ -46,7 +46,7 @@ export function readDashboardRoute(href = globalThis.window?.location?.href ?? '
   };
   const route = {
     tab: field('view', 'overview', pages),
-    historyRange: field('range', '1W', ranges),
+    historyRange: field('range', 'ALL', ranges),
     overviewCatalogId: field('catalog', null),
     preferences,
     comparisonPreferences,

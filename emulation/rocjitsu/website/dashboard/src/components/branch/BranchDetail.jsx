@@ -45,8 +45,9 @@ export default function BranchDetail({ selection, candidate, reference, automati
         <Box data-testid="branch-selected-configuration" sx={{ display: 'flex', gap: 0.5 }}><CategoryTag kind="target" label={selection.target} /><CategoryTag kind="mode" label={selection.mode} /></Box>
       </Box>
       <BenchmarkDifferences comparison={comparison} summary={summary} candidate={candidate} reference={reference} selection={selection} suites={suites} suiteOptions={suiteOptions} query={query} sort={sort}
-        onSuites={setSelectedSuites} onQuery={setQuery} onSort={setSort} onClear={() => { setSelectedSuites(null); setQuery(''); }} onOpenComparison={onOpenComparison} />
+        onSuites={setSelectedSuites} onQuery={setQuery} onSort={setSort} onClear={() => { setSelectedSuites(null); setQuery(''); }} onOpenComparison={onOpenComparison}>
+        <BranchEnvironment candidate={candidate} reference={reference} selection={selection} repository={repository} />
+      </BenchmarkDifferences>
     </Box>
-    <BranchEnvironment candidate={candidate} reference={reference} selection={selection} repository={repository} />
   </Paper>;
 }

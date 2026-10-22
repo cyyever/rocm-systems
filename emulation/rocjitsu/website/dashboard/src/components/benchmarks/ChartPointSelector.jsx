@@ -1,3 +1,7 @@
+import RunOptionDetails from '../shared/RunOptionDetails';
+import { runSelectionLabel } from '../shared/runOptionPresentation';
+import { formatDuration } from '../../utils/formatters';
+import { matchAnchorWidth } from '../shared/dropdownGeometry';
 import {
   Autocomplete,
   Box,
@@ -10,7 +14,7 @@ import { visuallyHiddenStyles } from '../../theme/styles';
 // One option per run means a grid chart already offers hundreds of choices, so the listbox renders
 // a bounded window of the matches and the search narrows the full set.
 const MAX_RENDERED_OPTIONS = 50;
-const filterOptions = createFilterOptions({ limit: MAX_RENDERED_OPTIONS });
+const filterOptions = createFilterOptions({ limit: MAX_RENDERED_OPTIONS, stringify: (option) => option.label });
 
 export default function ChartPointSelector({
   label,
@@ -33,8 +37,13 @@ export default function ChartPointSelector({
         disableClearable
         openOnFocus
         options={options}
+        slotProps={{ popper: { modifiers: [matchAnchorWidth] }, listbox: { sx: { overflowWrap: 'anywhere' } } }}
         filterOptions={filterOptions}
-        getOptionLabel={(option) => option.label}
+        getOptionKey={(option) => option.id}
+        getOptionLabel={(option) => option.run ? `${runSelectionLabel(option.run)} · ${option.target} · ${option.mode} · ${option.status}` : option.label}
+        renderOption={({ key, ...props }, option) => <Box component="li" key={key} {...props} sx={{ py: 0.9, alignItems: 'flex-start', overflowWrap: 'anywhere' }}>
+          {option.run ? <RunOptionDetails run={option.run} result={`${option.target} · ${option.mode} · ${option.status}${option.status === 'completed' ? ` · ${formatDuration(option.record?.test.durationSeconds)}` : ''}`} /> : option.label}
+        </Box>}
         isOptionEqualToValue={(option, value) => option.id === value.id}
         value={selected}
         onChange={(_, option) => onSelectionChange(option?.id ?? '')}
@@ -43,6 +52,7 @@ export default function ChartPointSelector({
           <TextField
             {...params}
             label={label}
+            slotProps={{ ...params.slotProps, inputLabel: { ...params.slotProps.inputLabel, shrink: true } }}
             helperText={`Search all ${options.length} runs; up to ${MAX_RENDERED_OPTIONS} results shown`}
           />
         )}

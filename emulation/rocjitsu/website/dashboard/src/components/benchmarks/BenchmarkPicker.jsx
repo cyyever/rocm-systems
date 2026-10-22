@@ -1,3 +1,4 @@
+import { matchAnchorWidth } from '../shared/dropdownGeometry';
 import {
   Autocomplete,
   Box,
@@ -21,10 +22,6 @@ const benchmarkViewport = {
     const top = viewport?.offsetTop ?? 0;
     const bottom = top + (viewport?.height ?? window.innerHeight);
     const rect = anchor.getBoundingClientRect();
-    // The portal uses viewport coordinates; match its width to the scaled anchor,
-    // not Autocomplete's unscaled clientWidth, before overflow/flip calculations.
-    state.elements.popper.style.width = `${rect.width}px`;
-    state.rects.popper.width = rect.width;
     const height = Math.max(0, Math.min(340, Math.max(rect.top - top, bottom - rect.bottom) - 8));
     state.elements.popper.style.setProperty('--benchmark-listbox-height', `${height}px`);
     state.rects.popper.height = state.elements.popper.offsetHeight;
@@ -76,7 +73,7 @@ export function BenchmarkGridPicker({
             </Box>
             <ListItemText
               primary={option.name}
-              secondary={[option.problem?.operation, formatDataType(option.problem?.dataType)].filter(Boolean).join(' · ')}
+              secondary={<><Box component="span" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{option.id}</Box>{[option.problem?.operation, formatDataType(option.problem?.dataType)].filter(Boolean).join(' · ')}</>}
               slotProps={{ primary: { variant: 'body2', fontWeight: 650 }, secondary: { variant: 'caption' } }}
             />
           </Box>
@@ -92,7 +89,7 @@ export function BenchmarkGridPicker({
       )}
       slots={{ paper: Paper }}
       slotProps={{
-        popper: { modifiers: [benchmarkViewport, { name: 'flip', options: { padding: 8 } }, { name: 'preventOverflow', options: { padding: 8 } }] },
+        popper: { modifiers: [matchAnchorWidth, benchmarkViewport, { name: 'flip', options: { padding: 8 } }, { name: 'preventOverflow', options: { padding: 8 } }] },
         listbox: { sx: { maxHeight: 'min(340px, var(--benchmark-listbox-height, calc(100dvh - 16px)))', overflowY: 'auto', overscrollBehavior: 'contain', '& .MuiAutocomplete-option': { overflowWrap: 'anywhere' } } },
       }}
       sx={{ width: '100%', maxWidth: 720, '& .MuiAutocomplete-inputRoot': { maxHeight: 'min(240px, 30dvh)', overflowY: 'auto', overscrollBehavior: 'contain' }, '& .MuiAutocomplete-tag': { maxWidth: 'calc(100% - 6px)' } }}

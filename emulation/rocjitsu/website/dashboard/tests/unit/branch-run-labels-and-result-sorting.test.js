@@ -59,8 +59,8 @@ test('configuration reasons preserve missing-run precedence and exact optional p
 test('real suite grouping sorts signed measured seconds by default and signed percentages on request', () => {
   const pair = (name, suite, base, next) => ({ candidateTest: { name, suite, testId: name, durationSeconds: next }, baselineTest: { durationSeconds: base }, delta: base ? ((next - base) / base) * 100 : null });
   const rows = [pair('small', 'Suite A', 1, 2), pair('large', 'Suite A', 100, 80), pair('zero', 'Suite A', 0, 0), pair('other', 'Suite B', 60, 55)];
-  expect(presentation.groupComparisonRows?.(rows).map((group) => [group.suite, group.rows.map((row) => row.candidateTest.name)])).toEqual([['Suite A', ['small', 'zero']], ['Suite B', ['other']], ['Suite A', ['large']]]);
-  expect(presentation.groupComparisonRows(rows, 'percent').flatMap((group) => group.rows.map((row) => row.candidateTest.name))).toEqual(['small', 'other', 'large', 'zero']);
+  expect(presentation.groupComparisonRows?.(rows).map((group) => [group.suite, group.rows.map((row) => row.candidateTest.name)])).toEqual([['Suite A', ['small', 'zero', 'large']], ['Suite B', ['other']]]);
+  expect(presentation.groupComparisonRows(rows, 'percent').flatMap((group) => group.rows.map((row) => row.candidateTest.name))).toEqual(['small', 'large', 'zero', 'other']);
 });
 
 test('source links accept safe absolute HTTP(S) only, without credentials or unsafe protocols', () => {

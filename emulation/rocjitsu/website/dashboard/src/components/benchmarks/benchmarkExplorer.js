@@ -20,7 +20,7 @@ export function boundedGridSelection(options, maximum = 8) {
 
 export function filterBenchmarkOptions(options, query) {
   const normalized = query.trim().toLowerCase();
-  return options.filter((option) => [option.name, option.suite, option.problem?.operation, option.problem?.dataType]
+  return options.filter((option) => [option.id, option.name, option.suite, option.problem?.operation, option.problem?.dataType]
     .filter(Boolean).join(' ').toLowerCase().includes(normalized)).slice(0, 50);
 }
 

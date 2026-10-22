@@ -40,7 +40,7 @@ test('phone filters, all-page navigation, trend tap and result details stay usab
   await trend.tap({ position: { x: pixel[0], y: pixel[1] } });
   await trend.dispatchEvent('pointerleave', { pointerType: 'touch' });
   const data = adaptPublishedDashboardData(createMaintainedPublication()).data;
-  const projection = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: ['single'] }, { range: '1W' });
+  const projection = selectOverviewProjection(data, { targets: data.targets, suites: data.suites, modes: ['single'] }, { range: 'ALL' });
   const index = projection.slots.findIndex((slot) => slot.run?.runId === 'fictional-develop-23');
   const status = page.getByTestId('performance-trend').getByRole('status');
   await expect(status).toContainText('Attempt fictional-develop-23');

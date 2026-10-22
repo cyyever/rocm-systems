@@ -93,13 +93,21 @@ export function selectBenchmarkSeries(data, filters, logicalTestId) {
   }) };
 }
 
-export function selectBenchmarkCatalog(data, filters) {
+function scopedBenchmarkDefinitions(data, filters, resultPredicate) {
   const suites = new Map(data.testCatalog.map(({ id, suite }) => [id, suite]));
-  // Direct explorer callers may omit result-level suite metadata. Resolve it
-  // from the catalog here so availability still uses the shared scope policy.
+  // Resolve omitted result suites from the catalog for direct explorer callers.
   const ids = new Set(data.runs.flatMap((run) => (run.tests ?? [])
-    .filter((test) => testMatches({ ...test, suite: test.suite ?? suites.get(test.logicalTestId) }, filters))
+    .filter((test) => (!resultPredicate || resultPredicate(test))
+      && testMatches({ ...test, suite: test.suite ?? suites.get(test.logicalTestId) }, filters))
     .map(({ logicalTestId }) => logicalTestId)));
-  const available = data.testCatalog.filter(({ id }) => ids.has(id));
+  return data.testCatalog.filter(({ id }) => ids.has(id));
+}
+
+export function selectDefaultBenchmarks(data, filters) {
+  return scopedBenchmarkDefinitions(data, filters, completed).slice(0, 3);
+}
+
+export function selectBenchmarkCatalog(data, filters) {
+  const available = scopedBenchmarkDefinitions(data, filters);
   return { all: data.testCatalog, available, hiddenCount: data.testCatalog.length - available.length };
 }

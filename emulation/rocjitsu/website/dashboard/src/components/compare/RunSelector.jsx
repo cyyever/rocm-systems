@@ -1,31 +1,14 @@
+import RunOptionDetails from '../shared/RunOptionDetails';
+import { formatRunTime, runSelectionLabel as optionLabel } from '../shared/runOptionPresentation';
+import { matchAnchorWidth } from '../shared/dropdownGeometry';
 import {
   Autocomplete,
   Box,
-  ListItemText,
   TextField,
 } from '@mui/material';
 import { commitTimestampFor } from '../../data/runOrdering';
-import { shortSha } from '../../utils/formatters';
 
 const MAX_VISIBLE_OPTIONS = 50;
-const runTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'UTC',
-});
-
-function formatRunTime(timestamp) {
-  if (typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp))) return '-';
-  return `${runTimeFormatter.format(new Date(timestamp))} UTC`;
-}
-
-function optionLabel(run) {
-  return `${shortSha(run)} · Run ${formatRunTime(run.timestamp)}`;
-}
 
 function searchableRunText(run) {
   return [
@@ -73,20 +56,7 @@ export default function RunSelector({ label, options, value, onChange }) {
         const { key, ...optionProps } = props;
         return (
           <Box component="li" key={key} {...optionProps} sx={{ py: 0.9, alignItems: 'flex-start' }}>
-            <ListItemText
-              primary={`Test run · ${formatRunTime(run.timestamp)}`}
-              secondary={(
-                <>
-                  <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{shortSha(run)}</Box>
-                  {` · Commit · ${formatRunTime(commitTimestampFor(run))}`}
-                  <Box component="span" sx={{ display: 'block' }}>{run.branch} · {(run.modes ?? []).join(' / ')} · {run.runId}</Box>
-                </>
-              )}
-              slotProps={{
-                primary: { variant: 'body2', fontWeight: 680 },
-                secondary: { component: 'div', variant: 'caption', sx: { mt: 0.2 } },
-              }}
-            />
+            <RunOptionDetails run={run} />
           </Box>
         );
       }}
@@ -105,7 +75,7 @@ export default function RunSelector({ label, options, value, onChange }) {
       )}
       slotProps={{
         listbox: { sx: { maxHeight: 360, '& li': { overflowWrap: 'anywhere' } } },
-        popper: { sx: { maxWidth: 'calc(100vw - 24px)' } },
+        popper: { modifiers: [matchAnchorWidth], sx: { maxWidth: 'calc(100vw - 24px)' } },
       }}
     />
     {value && <Box

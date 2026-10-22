@@ -63,6 +63,8 @@ it('UI-005 keeps workload options named with no independently focusable nested c
 it.each([16, true, false, 0, null, 'fp16'])('UI-001 renders dataType %j safely, formatting only strings', (dataType) => {
   const option = renderOption(dataType);
   const description = descendants(option, (element) => 'secondary' in element.props)[0].props.secondary;
-  expect(description).toBe(dataType === null ? 'gemm' : `gemm · ${typeof dataType === 'string' ? dataType.toUpperCase() : String(dataType)}`);
+  const markup = renderToStaticMarkup(description);
+  expect(markup).toContain('fictional-scalar');
+  expect(markup).toContain(dataType === null ? 'gemm' : `gemm · ${typeof dataType === 'string' ? dataType.toUpperCase() : String(dataType)}`);
   expect(renderToStaticMarkup(createElement(() => option))).toContain('Fictional scalar workload');
 });

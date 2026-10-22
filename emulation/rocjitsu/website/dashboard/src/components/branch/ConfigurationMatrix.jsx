@@ -14,7 +14,7 @@ export default function ConfigurationMatrix({ candidate, reference, selection, s
       <Typography id="branch-matrix-heading" component="h3" variant="subtitle1" sx={{ fontWeight: 600 }}>Change by configuration</Typography>
       <Typography variant="caption" color="text.secondary">Matched benchmark wall time</Typography>
     </Box>
-    <Box sx={{ display: 'grid', gridTemplateColumns: `40px repeat(${Math.max(targets.length, 1)}, minmax(120px,1fr))`, minWidth: 0, overflowX: 'auto', gap: 1, alignItems: 'stretch' }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: `max-content repeat(${Math.max(targets.length, 1)}, minmax(120px,1fr))`, minWidth: 0, overflowX: 'auto', gap: 1, alignItems: 'stretch' }}>
       <Box />
       {targets.map((target) => <Box key={target} sx={{ textAlign: 'center' }}><CategoryTag kind="target" label={target} /></Box>)}
       {['single', 'default'].map((mode) => <Fragment key={mode}>
