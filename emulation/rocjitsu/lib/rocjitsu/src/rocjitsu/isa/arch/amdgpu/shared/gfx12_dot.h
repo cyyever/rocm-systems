@@ -129,7 +129,7 @@ inline uint32_t dot_bits(const std::array<Raw, N> &a, const std::array<Raw, N> &
   constexpr bool is_bf16 = LeftFormat == InputFormat::Bf16;
   static_assert(std::is_same_v<Raw, std::conditional_t<is_f8, uint8_t, uint16_t>>);
   static_assert(is_f8 == Factor<RightFormat>::is_f8);
-  static_assert(is_f8 ? (N == 8 && !Packed) : (N == 2 || N == 4));
+  static_assert(is_f8 ? ((N == 4 || N == 8) && !Packed) : (N == 2 || N == 4));
   static_assert(is_f8 || LeftFormat == RightFormat);
   const auto special = [](uint32_t bits) -> uint32_t {
     if constexpr (Packed)
@@ -229,6 +229,16 @@ inline uint32_t gfx12_dot_bits(const std::array<uint16_t, N> &a, const std::arra
 /// corresponding F16/BF16 grouped-arithmetic contract.
 template <bool A_FP8, bool B_FP8>
 inline uint32_t gfx12_dot8_f32(const std::array<uint8_t, 8> &a, const std::array<uint8_t, 8> &b,
+                               uint32_t acc) {
+  using gfx12_dot_detail::InputFormat;
+  constexpr auto left = A_FP8 ? InputFormat::Fp8 : InputFormat::Bf8;
+  constexpr auto right = B_FP8 ? InputFormat::Fp8 : InputFormat::Bf8;
+  return gfx12_dot_detail::dot_bits<left, right, false>(a, b, acc);
+}
+
+/// @brief Evaluate four native FP8/BF8 products plus F32 C, returning raw F32 bits.
+template <bool A_FP8, bool B_FP8>
+inline uint32_t gfx12_dot4_f32(const std::array<uint8_t, 4> &a, const std::array<uint8_t, 4> &b,
                                uint32_t acc) {
   using gfx12_dot_detail::InputFormat;
   constexpr auto left = A_FP8 ? InputFormat::Fp8 : InputFormat::Bf8;

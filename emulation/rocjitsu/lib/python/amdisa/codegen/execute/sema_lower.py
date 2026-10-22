@@ -1963,6 +1963,9 @@ def _lower_call(node: SemaNode, ctx: LoweringContext) -> str:
     else:
         args = [_lower_expr(c, ctx) for c in node.children[1:]]
     args_str = ', '.join(args)
+    if callee in ('maxmin', 'minmax') and node.ty.base in ('I', 'U', 'B'):
+        inner, outer = ('max', 'min') if callee == 'maxmin' else ('min', 'max')
+        return f'std::{outer}(std::{inner}({args[0]}, {args[1]}), {args[2]})'
     if callee == 'mul_legacy':
         if (arithmetic := _mode_arithmetic(node, ctx, 'MUL_LEGACY', args)) is not None:
             return arithmetic

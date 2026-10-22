@@ -1397,7 +1397,7 @@ def gen_dot2_true16(dst: list[str], src: list[str], cls: str) -> str:
     return '\n'.join(L)
 
 
-def gen_dot4(dst: list[str], src: list[str], cls: str) -> str:
+def gen_dot4(dst: list[str], src: list[str], cls: str, *, inst_name: str = '') -> str:
     """Generate V_DOT4_I32_I8 / V_DOT4_I32_IU8 / V_DOT4_U32_U8."""
     d, s0, s1, s2 = dst[0], src[0], src[1], src[2]
     L = []
@@ -1440,22 +1440,19 @@ def gen_dot4(dst: list[str], src: list[str], cls: str) -> str:
             f'    amdgpu::RegisterAccess(wf).write_lane({d}, lane, static_cast<uint32_t>(sum));'
         )
     elif cls == 'dot4_f32_fp8':
-        # FP8 dot product: D.f32 += sum(A.fp8[i] * B.fp8[i]) for i in 0..3
-        L.append(
-            f'    float acc = std::bit_cast<float>(amdgpu::RegisterAccess(wf).read_lane({s2}, lane));'
-        )
+        left, right = inst_name.rsplit('_', 2)[-2:] if inst_name else ('FP8', 'FP8')
+        a_fp8 = str(left == 'FP8').lower()
+        b_fp8 = str(right == 'FP8').lower()
+        L.append('    std::array<uint8_t, 4> a, b;')
         L.append('    for (int i = 0; i < 4; ++i) {')
-        L.append(
-            '      float a = util::fp8_e4m3_to_f32(static_cast<uint8_t>((raw0 >> (i * 8)) & 0xFF));'
-        )
-        L.append(
-            '      float b = util::fp8_e4m3_to_f32(static_cast<uint8_t>((raw1 >> (i * 8)) & 0xFF));'
-        )
-        L.append('      acc += a * b;')
+        L.append('      a[i] = static_cast<uint8_t>(raw0 >> (i * 8));')
+        L.append('      b[i] = static_cast<uint8_t>(raw1 >> (i * 8));')
         L.append('    }')
         L.append(
-            f'    amdgpu::RegisterAccess(wf).write_lane({d}, lane, std::bit_cast<uint32_t>(acc));'
+            f'    uint32_t result = amdgpu::gfx12_dot4_f32<{a_fp8}, {b_fp8}>(a, b, '
+            f'amdgpu::RegisterAccess(wf).read_lane({s2}, lane));'
         )
+        L.append(f'    amdgpu::RegisterAccess(wf).write_lane({d}, lane, result);')
     else:  # dot4_u32_u8
         L.append(
             f'    uint64_t sum = amdgpu::RegisterAccess(wf).read_lane({s2}, lane);'

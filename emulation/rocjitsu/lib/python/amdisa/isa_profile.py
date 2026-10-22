@@ -888,6 +888,13 @@ class IsaProfile(ABC):
         del enc_name, inst_name, src0_size_bits
         return DppOpcodeRule.ALLOW
 
+    def supports_dpp_opcode(
+        self, enc_name: str, inst_name: str, *, has_modifier_encoding: bool
+    ) -> bool:
+        """Resolve instruction availability after checking XML provenance."""
+        del enc_name, inst_name
+        return has_modifier_encoding
+
     def supports_sdwa_opcode(
         self,
         enc_name: str,
@@ -2721,6 +2728,25 @@ class Rdna4Profile(_AmdgpuProfileBase):
     def dpp_requires_opsel_lane_alignment(self) -> bool:
         return False
 
+    # LLVM encodes these DPP8/DPP16 forms and native gfx1201 executes them.
+    # The RDNA4 XML omits their alternate entries, unlike floating DOT2.
+    _FLOAT_DOT4_DPP = frozenset(
+        {
+            'V_DOT4_F32_FP8_FP8',
+            'V_DOT4_F32_FP8_BF8',
+            'V_DOT4_F32_BF8_FP8',
+            'V_DOT4_F32_BF8_BF8',
+        }
+    )
+
+    def supports_dpp_opcode(
+        self, enc_name: str, inst_name: str, *, has_modifier_encoding: bool
+    ) -> bool:
+        return has_modifier_encoding or (
+            enc_name.upper() == 'ENC_VOP3P'
+            and inst_name.upper() in self._FLOAT_DOT4_DPP
+        )
+
     def dpp_opcode_rule(
         self,
         enc_name: str,
@@ -2729,10 +2755,15 @@ class Rdna4Profile(_AmdgpuProfileBase):
         src0_size_bits: int | None = None,
     ) -> DppOpcodeRule:
         del src0_size_bits
+        if (
+            enc_name.upper() == 'ENC_VOP3P'
+            and inst_name.upper() in self._FLOAT_DOT4_DPP
+        ):
+            return DppOpcodeRule.ALLOW
         return _modern_rdna_dpp_opcode_rule(
             enc_name,
             inst_name,
-            allow_dot2_vop3p=False,
+            allow_dot2_vop3p=True,
             forbid_cvt_pk_f32_vop3=True,
             rdna4_vop1_exclusions=True,
         )

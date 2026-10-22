@@ -14364,9 +14364,9 @@ inline void execute_v_maxmin_i32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
       continue;
     sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(
         inst, wf, inst.vdst, lane,
-        std::fmin(
-            std::fmax(static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane)),
-                      static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane))),
+        std::min(
+            std::max(static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane)),
+                     static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane))),
             static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane))));
   }
 }
@@ -14406,9 +14406,9 @@ inline void execute_v_maxmin_u32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
       continue;
     sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(
         inst, wf, inst.vdst, lane,
-        std::fmin(std::fmax(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane),
-                            amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane)),
-                  amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane)));
+        std::min(std::max(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane),
+                          amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane)),
+                 amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane)));
   }
 }
 
@@ -15363,9 +15363,9 @@ inline void execute_v_minmax_i32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
       continue;
     sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(
         inst, wf, inst.vdst, lane,
-        std::fmax(
-            std::fmin(static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane)),
-                      static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane))),
+        std::max(
+            std::min(static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane)),
+                     static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane))),
             static_cast<int32_t>(amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane))));
   }
 }
@@ -15405,9 +15405,9 @@ inline void execute_v_minmax_u32_vop3([[maybe_unused]] Inst &inst, [[maybe_unuse
       continue;
     sdwa::write_lane<amdgpu::sdwa::ResultFormat::NONE>(
         inst, wf, inst.vdst, lane,
-        std::fmax(std::fmin(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane),
-                            amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane)),
-                  amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane)));
+        std::max(std::min(amdgpu::RegisterAccess(wf).read_lane(inst.src0, lane),
+                          amdgpu::RegisterAccess(wf).read_lane(inst.src1, lane)),
+                 amdgpu::RegisterAccess(wf).read_lane(inst.src2, lane)));
   }
 }
 

@@ -49,3 +49,11 @@ FP16/BF16 dense cases exercise packed destination halves and accumulator handlin
 
 Tests sample destination words and check that other registers remain unchanged.
 This deliberately small corpus is regression coverage, not exhaustive validation.
+
+RDNA4 floating DOT2 and all four FP8/BF8 DOT4 combinations were also checked
+with DPP8 reversal and DPP16 row shifts on R9700 (`gfx1201`) using TheRock
+`10.1.0a20260812`. Lane-dependent signs and integer accumulators distinguish
+source permutation from destination masking. The decoded regressions cover
+both wave sizes, inactive destinations, row/bank masks and overlapping sources.
+The four-term FP8/BF8 model uses the same group alignment as the eight-term
+matrix model, with a single group of four products.
