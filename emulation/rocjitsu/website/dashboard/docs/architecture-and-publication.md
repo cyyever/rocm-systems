@@ -57,7 +57,7 @@ Unindexed files are not scanned. The mutable index bypasses cache; immutable run
 can use cache. Reload All cache-busts requests without changing source values.
 Failures of required identity/path/core inputs are visible data errors. Optional
 metadata does not gate the dataset. The [corpus raw-run schema](https://github.com/ROCm/rocjitsu-test-corpus/blob/develop/benchmarks/raw-run-schema.md)
-owns the input format. Missing provenance displays as ASCII `-` only in the UI;
+owns the input format. Nullish provenance values display as an em dash (`—`) in metadata tables;
 source nulls stay unchanged. Missing or unusable commit dates disable dependent
 chronology without replacing them with execution time. Download JSON preserves
 the full parsed `{index,runs}`, including ordered samples, exit codes and

@@ -20,8 +20,8 @@ export function boundedGridSelection(options, maximum = 8) {
 
 export function filterBenchmarkOptions(options, query) {
   const normalized = query.trim().toLowerCase();
-  return options.filter((option) => [option.id, option.name, option.suite, option.problem?.operation, option.problem?.dataType]
-    .filter(Boolean).join(' ').toLowerCase().includes(normalized)).slice(0, 50);
+  return options.filter((option) => [option.id, option.name, option.suite, option.operation, option.problem?.dtype]
+    .filter((value) => value != null).join(' ').toLowerCase().includes(normalized)).slice(0, 50);
 }
 
 // Like canonical Overview, the range is commit-time based and anchored to published

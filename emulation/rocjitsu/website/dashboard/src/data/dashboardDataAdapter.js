@@ -49,6 +49,7 @@ function normalizedEnvironment(provenance, summary) {
 
 function normalizeResult(row) {
   if (!object(row) || !text(row.id) || !token(row.target) || !['single', 'default'].includes(row.thread_policy)) throw new Error('Unusable benchmark result identity');
+  if (!text(row.name)) throw new Error('Unusable benchmark result name');
   let durationSeconds = null;
   let unavailableReason = null;
   if (row.status === 'completed') {

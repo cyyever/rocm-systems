@@ -91,7 +91,7 @@ export async function inspectResult(page, name, runId, target = 'gfx1250', mode 
   const dialog = page.getByRole('dialog');
   const picker = dialog.getByRole('combobox', { name: `${name} result`, exact: true });
   await picker.fill(runId);
-  const option = page.getByRole('option').filter({ hasText: runId }).filter({ hasText: `${target} ${mode}` });
+  const option = page.getByRole('option').filter({ hasText: runId }).filter({ hasText: `${target} · ${mode}` });
   await expect(option).toHaveCount(1);
   await option.click();
   await dialog.getByRole('button', { name: 'Open result details' }).press('Enter');

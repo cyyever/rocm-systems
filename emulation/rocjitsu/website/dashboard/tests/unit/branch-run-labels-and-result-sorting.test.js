@@ -14,6 +14,11 @@ test('attempt selector labels and search identify branch, full SHA, PR, message,
   expect(presentation.filterRunOptions([attempt], { inputValue: 'not-published' })).toEqual([]);
 });
 
+test.each(['09:30', '14:00', '2026-10-02T09:30:00Z', 'single', 'gfx950'])('branch attempt search includes displayed context %s', (inputValue) => {
+  const run = { ...attempt, commitTimestamp: '2026-10-02T09:30:00Z', modes: ['single'], targets: ['gfx950'] };
+  expect(presentation.filterRunOptions([run], { inputValue })).toEqual([run]);
+});
+
 test('configuration availability uses explicit published modes and positive matched coverage, while measured zero is not an absent result', () => {
   const run = { configurations: [{ target: 'gfx1250', thread_policy: 'single' }] };
   const noPairs = { comparable: [], notComparable: [], baselineDuration: 0, candidateDuration: 0, aggregateDelta: null };

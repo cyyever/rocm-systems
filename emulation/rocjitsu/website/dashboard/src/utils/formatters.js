@@ -24,7 +24,11 @@ export function formatMetadataValue(value) {
 
 export function formatDuration(value) {
   if (!Number.isFinite(value)) return '—';
-  if (value >= 60) return `${Math.floor(value / 60)}m ${(value % 60).toFixed(1)}s`;
+  if (value >= 60) {
+    const seconds = Number((value % 60).toFixed(1));
+    const carry = seconds === 60;
+    return `${Math.floor(value / 60) + Number(carry)}m ${(carry ? 0 : seconds).toFixed(1)}s`;
+  }
   return `${value.toFixed(value < 10 ? 2 : 1)}s`;
 }
 

@@ -112,15 +112,22 @@ test('feedback: Abs/Pct headers sort raw deltas and full comparison navigation r
     await expect(header).toHaveAttribute('aria-sort', /ascending|descending/);
     for (let step = 0; step < 2; step++) {
       const order = await header.getAttribute('aria-sort');
-      const values = await rows.evaluateAll((entries, attr) => entries.map((entry) => {
-        const value = entry.getAttribute(attr);
-        return value === '' || value === null || value === 'unavailable' ? null : Number(value);
-      }), attribute);
-      expect(values.length).toBeGreaterThan(1);
-      const measured = values.filter((value) => value !== null);
-      expect(measured).toEqual([...measured].sort((a, b) => order === 'ascending' ? a - b : b - a));
-      const firstMissing = values.indexOf(null);
-      if (firstMissing >= 0) expect(values.slice(firstMissing).every((value) => value === null)).toBe(true);
+      const groups = await rows.evaluateAll((entries, attr) => {
+        const groups = [];
+        for (const entry of entries) {
+          if (entry.previousElementSibling?.querySelector('[scope="rowgroup"]')) groups.push([]);
+          const value = entry.getAttribute(attr);
+          groups.at(-1).push(value === '' || value === null || value === 'unavailable' ? null : Number(value));
+        }
+        return groups;
+      }, attribute);
+      expect(groups.flat().length).toBeGreaterThan(1);
+      for (const values of groups) {
+        const measured = values.filter((value) => value !== null);
+        expect(measured).toEqual([...measured].sort((a, b) => order === 'ascending' ? a - b : b - a));
+        const firstMissing = values.indexOf(null);
+        if (firstMissing >= 0) expect(values.slice(firstMissing).every((value) => value === null)).toBe(true);
+      }
       await sort.press('Enter');
     }
   }

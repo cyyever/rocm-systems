@@ -10,6 +10,24 @@ function publication() {
   return { index: { generatedAt: '2026-10-21T20:00:00Z', runFiles: ['runs/default-branch/fictional-producer.json'] }, runs: [run] };
 }
 
+test.each([null, undefined, 42, {}, '', '   '])('rejects unusable required result name %j before exposing a loaded dataset', async (name) => {
+  const source = publication();
+  source.runs[0].benchmark_results[0].name = name;
+  expect(() => adaptPublishedDashboardData(source)).toThrow(/result name/i);
+  await expect(loadDashboardDataFiles({
+    indexUrl: 'https://fictional.test/data/index.json', retryDelaysMs: [],
+    fetch: async (url) => ({ ok: true, text: async () => JSON.stringify(
+      new URL(url).pathname.endsWith('/index.json') ? source.index : source.runs[0],
+    ) }),
+  })).rejects.toThrow(/result name/i);
+});
+
+test('retains a usable published result name verbatim', () => {
+  const source = publication();
+  source.runs[0].benchmark_results[0].name = '  Exact published name  ';
+  expect(adaptPublishedDashboardData(source).data.runs[0].tests[0].name).toBe('  Exact published name  ');
+});
+
 test('flat measurements preserve ordered timings and diagnostics with completed-only medians', () => {
   const source = publication();
   const rows = source.runs[0].benchmark_results;

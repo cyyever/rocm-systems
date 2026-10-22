@@ -77,7 +77,9 @@ test('chart native wheel/buttons, global release and owned listener teardown sta
         return { pixel: instance.convertToPixel({ seriesIndex: 0 }, last), width: instance.getWidth(), height: instance.getHeight() };
       });
       const bounds = await canvas.boundingBox();
-      await page.mouse.move(bounds.x + point.pixel[0] * bounds.width / point.width, bounds.y + point.pixel[1] * bounds.height / point.height);
+      // ALL ends exactly on the plot border. Aim half a logical pixel inside
+      // that slot so CSS-scaled coordinate rounding cannot put it outside grid.
+      await page.mouse.move(bounds.x + (point.pixel[0] - 0.5) * bounds.width / point.width, bounds.y + point.pixel[1] * bounds.height / point.height);
       await expect(trend.getByTestId('point-hover-guide')).toBeVisible();
       await expect(canvas.getByText(/Attempt: fictional-develop-23/)).toBeVisible();
       await test.info().attach(`hover-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });

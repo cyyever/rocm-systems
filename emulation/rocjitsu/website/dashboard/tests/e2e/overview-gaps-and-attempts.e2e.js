@@ -35,7 +35,7 @@ test('weekly repeated attempts preserve collision-safe inspection and touch disc
   const attempt = structuredClone(publication.runs.find((r) => r.publication.id === 'fictional-develop-23'));
   attempt.publication.id = 'fictional-repeat'; attempt.execution_summary.finished_at = '2026-10-04T07:00:00.000Z';
   publication.runs.push(attempt); publication.index.runFiles.push('runs/default-branch/fictional-repeat.json');
-  await installPublication(page, { publication }); await openDashboard(page);
+  await installPublication(page, { publication }); await openDashboard(page, '/?range=1W');
   const trend = page.getByTestId('performance-trend'); const group = trend.getByRole('group', { name: 'Inspect performance trend' });
   await group.press('End'); await expect(trend.getByRole('status')).toContainText('fictional-repeat');
   await group.press('ArrowLeft'); await expect(trend.getByRole('status')).toContainText('fictional-develop-23');

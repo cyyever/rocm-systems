@@ -39,7 +39,7 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
     if (text) node.setAttribute('role', 'status');
     else node.removeAttribute('role');
   }, []);
-  const colors = projection.rows.map(colorFor);
+  const colors = projection.rows.map((row, index) => colorFor(row, index, theme.palette.mode));
   const clear = () => {
     const chart = chartRef.current;
     if (chart && !chart.isDisposed()) chart.dispatchAction({ type: 'hideTip' });
@@ -105,7 +105,7 @@ export default function DurationHistory({ projection, catalogs, onRangeChange, o
       nameTextStyle: { align: 'left', color: theme.palette.text.secondary }, axisLabel: { formatter: (v) => `${v.toFixed(2)}×`, color: theme.palette.text.secondary }, splitLine: { lineStyle: { color: theme.palette.divider } } },
     series: projection.rows.map((row, index) => ({ name: `${row.target} ${row.mode}`, type: 'line',
       data: row.points.map((point, i) => [projection.slots[i].x, point.speedup]), connectNulls: false,
-      showSymbol: false, symbol: 'none', emphasis: { disabled: true }, lineStyle: { width: 2.5, color: colorFor(row, index) },
+      showSymbol: false, symbol: 'none', emphasis: { disabled: true }, lineStyle: { width: 2.5, color: colorFor(row, index, theme.palette.mode) },
       ...(index === 0 ? { markLine: { silent: true, symbol: 'none', label: { show: false }, lineStyle: { type: 'dashed', color: theme.palette.text.disabled }, data: [{ yAxis: 1 }] } } : {}) })),
   }), [projection, theme]);
   const onReady = useMemo(() => (chart) => { chartRef.current = chart; }, []);

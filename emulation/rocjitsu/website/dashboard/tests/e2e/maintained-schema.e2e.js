@@ -3,6 +3,27 @@ import { expect, test } from '@playwright/test';
 import { createMaintainedPublication } from '../fixtures/maintainedDataset.js';
 import { downloadSource, inspectResult, installPublication, openDashboard, ready } from './helpers/dashboard.js';
 
+test('literal inherited-property metadata namespaces render safely in both comparison tables', async ({ page }) => {
+  const publication = createMaintainedPublication();
+  for (const run of publication.runs) run.provenance = {
+    ...run.provenance,
+    ...JSON.parse('{"__proto__":{"version":"literal-prototype"},"constructor":{"version":"literal-constructor"},"toString":{"version":"literal-method"}}'),
+  };
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  await installPublication(page, { publication });
+  await openDashboard(page, '/?view=compare&compareCandidate=fictional-branch-01&compareBaseline=fictional-develop-20');
+  for (const namespace of ['__proto__', 'constructor', 'toString']) {
+    await expect(page.getByRole('table', { name: 'Run metadata differences', exact: true }).getByText(namespace, { exact: true })).toBeVisible();
+  }
+  await openDashboard(page, '/?view=branch&branch=fictional/optimization-01&run=fictional-branch-01');
+  const environment = page.getByTestId('branch-environment');
+  await environment.locator('summary').click();
+  for (const namespace of ['__proto__', 'constructor', 'toString']) await expect(environment.getByText(namespace, { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('typed definitions render in details and remain intact in filtered JSON export and reload', async ({ page }) => {
   const publication = createMaintainedPublication();
   const problem = { shape: [16, 16], options: { transpose: false, note: null }, note: null, literal: '[16,16]' };
@@ -44,8 +65,8 @@ for (const width of [1440, 390]) test(`fictional producer output keeps undated r
   await page.goto('/?view=compare&compareCandidate=fictional-optional&compareBaseline=fictional-optional');
   await ready(page);
   await expect(page.getByTestId('comparison-metric-comparable')).toContainText('3');
-  await expect(page.getByTestId('metadata-row-machine').getByRole('cell').nth(0)).toHaveText('-');
-  await expect(page.getByTestId('metadata-row-rocjitsu.workflow_commit_sha').getByRole('cell').nth(0)).toHaveText('-');
+  await expect(page.getByTestId('metadata-row-machine').getByRole('cell').nth(0)).toHaveText('—');
+  await expect(page.getByTestId('metadata-row-rocjitsu.workflow_commit_sha').getByRole('cell').nth(0)).toHaveText('—');
   expect(await downloadSource(page)).toEqual(publication);
   expect(requests.some((url) => url.includes('test-catalogs'))).toBe(false);
   expect(errors).toEqual([]);

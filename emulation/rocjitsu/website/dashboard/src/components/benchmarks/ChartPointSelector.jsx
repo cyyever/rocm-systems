@@ -1,5 +1,6 @@
 import RunOptionDetails from '../shared/RunOptionDetails';
-import { runSelectionLabel } from '../shared/runOptionPresentation';
+import { formatRunTime, runSelectionLabel } from '../shared/runOptionPresentation';
+import { commitTimestampFor } from '../../data/runOrdering';
 import { formatDuration } from '../../utils/formatters';
 import { matchAnchorWidth } from '../shared/dropdownGeometry';
 import {
@@ -14,7 +15,12 @@ import { visuallyHiddenStyles } from '../../theme/styles';
 // One option per run means a grid chart already offers hundreds of choices, so the listbox renders
 // a bounded window of the matches and the search narrows the full set.
 const MAX_RENDERED_OPTIONS = 50;
-const filterOptions = createFilterOptions({ limit: MAX_RENDERED_OPTIONS, stringify: (option) => option.label });
+const filterOptions = createFilterOptions({
+  limit: MAX_RENDERED_OPTIONS,
+  stringify: (option) => [option.label, option.run && runSelectionLabel(option.run), option.run?.branch,
+    formatRunTime(commitTimestampFor(option.run)), option.run?.timestamp, commitTimestampFor(option.run),
+    option.run?.provenance?.rocjitsuCommitSha].filter(Boolean).join(' '),
+});
 
 export default function ChartPointSelector({
   label,

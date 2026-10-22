@@ -73,7 +73,7 @@ export function BenchmarkGridPicker({
             </Box>
             <ListItemText
               primary={option.name}
-              secondary={<><Box component="span" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{option.id}</Box>{[option.problem?.operation, formatDataType(option.problem?.dataType)].filter(Boolean).join(' · ')}</>}
+              secondary={<><Box component="span" sx={{ display: 'block', overflowWrap: 'anywhere' }}>{option.id}</Box>{[option.operation, formatDataType(option.problem?.dtype)].filter(Boolean).join(' · ')}</>}
               slotProps={{ primary: { variant: 'body2', fontWeight: 650 }, secondary: { variant: 'caption' } }}
             />
           </Box>

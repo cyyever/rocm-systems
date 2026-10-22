@@ -1,5 +1,7 @@
 import { formatFullDate, shortSha } from '../../utils/formatters';
 import { hasConfiguration } from '../../data/runSchema';
+import { commitTimestampFor } from '../../data/runOrdering';
+import { formatRunTime } from '../shared/runOptionPresentation';
 
 export function runOptionLabel(run) {
   return `${shortSha(run)} · ${run.branch} · ${formatFullDate(run.timestamp)} · ${run.runId}`;
@@ -7,7 +9,10 @@ export function runOptionLabel(run) {
 
 export function filterRunOptions(options, { inputValue }) {
   const query = inputValue.trim().toLocaleLowerCase();
-  return query ? options.filter((run) => [runOptionLabel(run), run.provenance?.rocjitsuCommitSha, run.provenance?.commitMessage, run.timestamp, run.pullRequest?.number].filter((value) => value != null).join(' ').toLocaleLowerCase().includes(query)) : options;
+  return query ? options.filter((run) => [runOptionLabel(run), run.provenance?.rocjitsuCommitSha, run.provenance?.commitMessage,
+    run.timestamp, formatRunTime(run.timestamp), commitTimestampFor(run), formatRunTime(commitTimestampFor(run)),
+    ...(run.modes ?? []), ...(run.targets ?? []), run.pullRequest?.number]
+    .filter((value) => value != null).join(' ').toLocaleLowerCase().includes(query)) : options;
 }
 
 export function configurationState(candidate, baseline, comparison, target, mode) {

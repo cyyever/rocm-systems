@@ -1,4 +1,4 @@
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Paper, Typography, useTheme } from '@mui/material';
 import TimerRoundedIcon from '@mui/icons-material/TimerRounded';
 import SpeedRoundedIcon from '@mui/icons-material/SpeedRounded';
 import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
@@ -8,10 +8,11 @@ import { formatDuration } from '../../utils/formatters';
 import { configurationColor } from '../../utils/chartColors';
 
 function Metric({ label, rows, valueFor, caption, icon: Icon, iconColor }) {
+  const theme = useTheme();
   return <Paper variant="outlined" data-testid={`metric-card-${label.toLowerCase().replaceAll(' ', '-')}`} data-tone="neutral" sx={{ p: 2, minWidth: 0, borderRadius: 1, display: 'flex', flexDirection: 'column' }}>
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.25 }}>
       <Typography component="h3" sx={{ color: 'text.primary', fontSize: 14, lineHeight: '24px', fontWeight: 700, letterSpacing: 0, fontFamily: '"Overview Title", "IBM Plex Sans", sans-serif' }}>{label}</Typography>
-      <Icon aria-hidden="true" sx={{ color: iconColor, fontSize: 19, flexShrink: 0 }} />
+      <Icon aria-hidden="true" sx={{ color: rows.some((row) => row.cohortIds.length && valueFor(row) != null) ? iconColor : 'text.secondary', fontSize: 19, flexShrink: 0 }} />
     </Box>
     <Box sx={{ flex: 1 }}>
       {!rows.length ? <Typography color="text.secondary">No configurations selected</Typography> : rows.map((row, index) => {
@@ -20,7 +21,7 @@ function Metric({ label, rows, valueFor, caption, icon: Icon, iconColor }) {
         const displayValue = row.cohortIds.length ? value ?? 'Unavailable' : 'No shared workloads';
         return <Box key={row.key} data-configuration={row.key} sx={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', alignItems: 'baseline', gap: 1.5, py: 0 }}>
           <Typography variant="caption" sx={{ overflowWrap: 'anywhere', color: 'text.secondary', lineHeight: '18px' }}>{row.target} {row.mode}</Typography>
-          <Typography title={row.latest.reason ?? undefined} sx={{ fontFamily: monoFont, fontSize: unavailable ? 12 : rows.length === 1 ? 24 : 14, lineHeight: rows.length === 1 && !unavailable ? '28px' : '18px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: unavailable ? 'text.secondary' : configurationColor(row, index) }}>{displayValue}</Typography>
+          <Typography title={row.latest.reason ?? undefined} sx={{ fontFamily: monoFont, fontSize: unavailable ? 12 : rows.length === 1 ? 24 : 14, lineHeight: rows.length === 1 && !unavailable ? '28px' : '18px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: unavailable ? 'text.secondary' : configurationColor(row, index, theme.palette.mode) }}>{displayValue}</Typography>
         </Box>;
       })}
     </Box>

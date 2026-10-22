@@ -312,8 +312,8 @@ test('positive overflow ratios remain measured, arbitrary metadata stays aligned
   await expect(metadata).toHaveAttribute('data-different', 'true');
   await expect(metadata).not.toContainText('Changed');
   await expect(page.getByTestId('metadata-row-auxiliary.same')).toHaveAttribute('data-different', 'false');
-  await expect(page.getByTestId('metadata-row-auxiliary.baselineOnly').getByRole('cell').nth(1)).toHaveText('-');
-  await expect(page.getByTestId('metadata-row-auxiliary.candidateOnly').getByRole('cell').nth(0)).toHaveText('-');
+  await expect(page.getByTestId('metadata-row-auxiliary.baselineOnly').getByRole('cell').nth(1)).toHaveText('—');
+  await expect(page.getByTestId('metadata-row-auxiliary.candidateOnly').getByRole('cell').nth(0)).toHaveText('—');
   const html = await readChart(chartFor(page), (instance) => {
     const option = instance.getOption();
     const dataIndex = option.series[0].data.findIndex((point) => point.comparison.candidateTest.logicalTestId === 'b');

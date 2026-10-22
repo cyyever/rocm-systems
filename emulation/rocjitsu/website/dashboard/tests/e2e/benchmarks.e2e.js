@@ -14,7 +14,7 @@ test('grid picker bounds search and eight slots while draft cancel, pointer remo
   const run = publication.runs.find((entry) => entry.publication.id === 'fictional-develop-23');
   publication.runs = [run];
   publication.index.runFiles = [fixtureRunPath(run)];
-  const extras = Array.from({ length: 55 }, (_, index) => ({ id: `picker-${index}`, name: `Fictional picker ${String(index).padStart(2, '0')}`, suite: 'Triton', operation: 'Fictional computation', problem: { size: index, ...(index === 54 ? { dataType: 64 } : {}) } }));
+  const extras = Array.from({ length: 55 }, (_, index) => ({ id: `picker-${index}`, name: `Fictional picker ${String(index).padStart(2, '0')}`, suite: 'Triton', operation: 'Fictional computation', problem: { size: index, ...(index === 54 ? { dtype: 64 } : {}) } }));
   run.benchmark_results.push(...extras.map((entry) => ({ ...entry, target: 'gfx1250', thread_policy: 'single', exit_code: 1, status: 'failed', timing_results_s: [], error: 'Fictional picker-only diagnostic' })));
   await installPublication(page, { publication });
   await openDashboard(page, '/?view=benchmarks');

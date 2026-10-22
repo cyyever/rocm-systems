@@ -1,6 +1,6 @@
 import { configurationKey, THREAD_POLICIES } from './runSchema.js';
 import { targetColor } from '../utils/chartColors.js';
-import { commitShaFor, commitTimestampFor, compareRunExecution, sortRunsByCommit } from './runOrdering.js';
+import { commitShaFor, commitTimestampFor, compareRunExecution, hasCommitTimestamp, sortRunsByCommit } from './runOrdering.js';
 
 
 const modesFor = (filters) => filters.modes ?? THREAD_POLICIES;
@@ -104,7 +104,7 @@ function scopedBenchmarkDefinitions(data, filters, resultPredicate) {
 }
 
 export function selectDefaultBenchmarks(data, filters) {
-  return scopedBenchmarkDefinitions(data, filters, completed).slice(0, 3);
+  return scopedBenchmarkDefinitions({ ...data, runs: data.runs.filter(hasCommitTimestamp) }, filters, completed).slice(0, 3);
 }
 
 export function selectBenchmarkCatalog(data, filters) {

@@ -15,7 +15,7 @@ function descendants(node, predicate) {
 }
 
 function renderOption(dataType) {
-  const option = { id: 'fictional-scalar', name: 'Fictional scalar workload', suite: 'Triton', problem: { operation: 'gemm', dataType } };
+  const option = { id: 'fictional-scalar', name: 'Fictional scalar workload', suite: 'Triton', operation: 'gemm', problem: { dtype: dataType } };
   const picker = BenchmarkGridPicker({ availableOptions: [option], selected: [], onChange() {} });
   return picker.props.renderOption({ key: option.id, role: 'option', 'aria-selected': true, tabIndex: -1 }, option, { selected: true });
 }
