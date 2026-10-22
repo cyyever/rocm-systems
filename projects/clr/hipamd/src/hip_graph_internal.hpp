@@ -10,6 +10,10 @@
 #include <queue>
 #include <stack>
 #include <iostream>
+#include <map>
+#include <set>
+#include <limits>
+#include <deque>
 #include <unordered_map>
 #include <unordered_set>
 #include <shared_mutex>
@@ -156,12 +160,36 @@ class GraphKernelArgManager : public amd::ReferenceCountedObject,
   //! Allocate kernel arg pool on device for the given size.
   bool AllocGraphKernargPool(size_t pool_size, amd::Device* device);
 
-  // Allocate kernel args from current chunck for given size and alignment.
-  // If kernel arg pool is full allocate new chunck and alloc kern args from new pool.
+  // Allocate kernel args for given size and alignment, reusing a retired slot
+  // when one fits. Otherwise bump-allocate from the current chunk, adding a
+  // new chunk when it is full.
   address AllocKernArg(size_t size, size_t alignment, int devId) override;
 
   // Do HDP flush/When HDP flush register is invalid fallback to Readback
   void ReadBackOrFlush();
+
+  //! A kernel-argument region handed out by AllocKernArg.
+  struct KernArgSlot {
+    amd::Device* device;
+    address addr;
+    size_t size;
+  };
+
+  //! Record the slots AllocKernArg hands out until EndNodeCapture, so the
+  //! caller can tie them to the node whose packets reference them.
+  void BeginNodeCapture();
+  std::vector<KernArgSlot> EndNodeCapture();
+
+  //! The node's packets now reference `slots`. Its previous slots are retired:
+  //! they become reusable once no launch that may still read them is in flight.
+  void CommitNodeSlots(const void* node, std::vector<KernArgSlot>&& slots);
+
+  //! Slots no submitted packet references go straight back for reuse.
+  void DiscardSlots(std::vector<KernArgSlot>&& slots);
+
+  //! Bracket every launch; LaunchCompleted takes the epoch LaunchSubmitted returned.
+  uint64_t LaunchSubmitted();
+  void LaunchCompleted(uint64_t epoch);
 
  private:
   struct KernelArgPoolGraph {
@@ -171,10 +199,28 @@ class GraphKernelArgManager : public amd::ReferenceCountedObject,
     size_t kernarg_pool_size_;    //! Size of the pool
     size_t kernarg_pool_offset_;  //! Current offset in the kernel arg alloc
   };
+  address AllocKernArgLocked(size_t size, size_t alignment, amd::Device* device);
+  void FreeSlotsLocked(const std::vector<KernArgSlot>& slots);
+  void ReclaimRetiredLocked();
+
   bool device_kernarg_pool_ = false;  //! Indicate if kernel pool in device mem
   std::unordered_map<amd::Device*, std::vector<KernelArgPoolGraph>>
       kernarg_graph_;  //! Vector of allocated kernarg pool per device
   using KernelArgImpl = device::Settings::KernelArgImpl;
+
+  std::mutex slot_lock_;  //! Guards the members below; launches complete on a callback thread
+  bool recording_ = false;
+  std::vector<KernArgSlot> recorded_;  //! Slots handed out by the capture in progress
+  std::unordered_map<const void*, std::vector<KernArgSlot>> node_slots_;  //! Slots each node's packets use
+  struct RetiredSlot {
+    KernArgSlot slot;
+    uint64_t epoch;  //! Last launch submitted when the slot was retired
+  };
+  std::deque<RetiredSlot> retired_;  //! Ordered by epoch
+  //! Slots safe to hand out again, ordered by (device, size) for best-fit lookup
+  std::multimap<std::pair<amd::Device*, size_t>, address> free_slots_;
+  std::set<uint64_t> in_flight_;  //! Epochs of launches not yet completed
+  uint64_t last_epoch_ = 0;
 };
 
 //! Per-GraphExecBase pool of HW event sets.
@@ -1087,6 +1133,7 @@ class GraphExecBase : public amd::ReferenceCountedObject, public Graph {
   }
   //! Recycle HW event signals borrowed for a launch. No-op on classic path.
   virtual void RecycleLaunchSignals(amd::Device* device, std::vector<void*>& signal_set) {}
+  virtual void KernargLaunchCompleted(uint64_t epoch) {}
 
  protected:
   uint64_t flags_ = 0;
@@ -1157,6 +1204,11 @@ class GraphExecSegmented : public GraphExecBase {
   void RecycleLaunchSignals(amd::Device* device, std::vector<void*>& signal_set) override {
     if (signalManager_ != nullptr && !signal_set.empty()) {
       signalManager_->ReleaseSet(device, signal_set);
+    }
+  }
+  void KernargLaunchCompleted(uint64_t epoch) override {
+    if (kernArgManager_ != nullptr) {
+      kernArgManager_->LaunchCompleted(epoch);
     }
   }
   // Kernel arg manager is for the entire graph.

@@ -1566,6 +1566,7 @@ struct GraphLaunchCleanup {
   GraphExecBase* exec;
   amd::Device* device;
   std::vector<void*> signal_set;
+  uint64_t kernarg_epoch = 0;  //! 0: no kernarg manager
 };
 
 // ================================================================================================
@@ -1977,6 +1978,29 @@ void GraphExecSegmented::PacketBatch::restorePatchListPointers(
 }
 
 // ================================================================================================
+// Ties the kernarg slots allocated while capturing one node to that node. The
+// node's previous slots are retired only on Commit(); on any other exit the new
+// slots are discarded, since no packet the exec keeps references them.
+class NodeKernArgCapture {
+ public:
+  NodeKernArgCapture(GraphKernelArgManager* mgr, const void* node) : mgr_(mgr), node_(node) {
+    if (mgr_ != nullptr) mgr_->BeginNodeCapture();
+  }
+  ~NodeKernArgCapture() {
+    if (mgr_ != nullptr) mgr_->DiscardSlots(mgr_->EndNodeCapture());
+  }
+  NodeKernArgCapture(const NodeKernArgCapture&) = delete;
+  NodeKernArgCapture& operator=(const NodeKernArgCapture&) = delete;
+  void Commit() {
+    if (mgr_ != nullptr) mgr_->CommitNodeSlots(node_, mgr_->EndNodeCapture());
+    mgr_ = nullptr;
+  }
+
+ private:
+  GraphKernelArgManager* mgr_;
+  const void* node_;
+};
+
 hipError_t GraphExecSegmented::CaptureAndFormPacketsForGraph() {
   // Fixme: Only single stream child graph nodes are supported.
   hipError_t status = hipSuccess;
@@ -2047,6 +2071,7 @@ hipError_t GraphExecSegmented::CaptureAndFormPacketsForGraph() {
           std::vector<uint8_t*> nodePackets;
           std::vector<const std::string*> nodeKernelNames;
           std::vector<uint8_t*> nodeMetadataPackets;
+          NodeKernArgCapture kernarg_capture(GetKernelArgManager(), currentNode);
           status = currentNode->CaptureAndFormPacket(GetKernelArgManager(), &nodePackets,
                                                      &nodeKernelNames, &nodeMetadataPackets);
 
@@ -2054,6 +2079,7 @@ hipError_t GraphExecSegmented::CaptureAndFormPacketsForGraph() {
             LogError("Packet capture failed");
             return status;
           }
+          kernarg_capture.Commit();
 
           // Create NodeRange for this node
           // RangeIndex is 0 at the start
@@ -2251,6 +2277,7 @@ hipError_t GraphExecSegmented::UpdateAQLPacket(hip::GraphNode* node) {
       if (saved_enabled_state == 0) {
         node->SetEnabled(1);
       }
+      NodeKernArgCapture kernarg_capture(kernArgManager_, node);
       hipError_t status = node->CaptureAndFormPacket(kernArgManager_, &newPackets,
                                                                       &newKernelNames,
                                                                       &newMetadataPackets);
@@ -2361,6 +2388,7 @@ hipError_t GraphExecSegmented::UpdateAQLPacket(hip::GraphNode* node) {
           }
         }
       }
+      kernarg_capture.Commit();
       return hipSuccess;
     }
   }
@@ -2497,6 +2525,9 @@ void GraphExecBase::OnLaunchComplete(cl_event event, cl_int command_exec_status,
   // Re-arm and recycle the launch's signals while the GraphExecBase (and thus its
   // signal pool) is still alive, then drop the launch's reference.
   execBase->RecycleLaunchSignals(cleanup->device, cleanup->signal_set);
+  if (cleanup->kernarg_epoch != 0) {
+    execBase->KernargLaunchCompleted(cleanup->kernarg_epoch);
+  }
   delete cleanup;
   execBase->release();
 }
@@ -3178,6 +3209,9 @@ hipError_t GraphExecSegmented::Run(hip::Stream* launch_stream) {
     graph_launch_stream->vdev()->HiddenHeapInit();
   }
 
+  // Returned by the completion callback below, on every path.
+  const uint64_t kernarg_epoch =
+      (kernArgManager_ != nullptr) ? kernArgManager_->LaunchSubmitted() : 0;
   amd::Command* last_cmd = nullptr;
   if (!cross_device_launch) {
     if (max_streams_dev_.size() == 1) {
@@ -3186,6 +3220,22 @@ hipError_t GraphExecSegmented::Run(hip::Stream* launch_stream) {
     } else {
       // Multi-device: pass empty vector, will use parallel_streams_ internally
       last_cmd = EnqueueSegmentedGraph(launch_stream, {}, &status, &launch_signal_set);
+    }
+    if (status != hipSuccess) {
+      // Drain partial work; the fallback callback marker does not wait for it.
+      launch_stream->finish();
+      for (auto* stream : streams_) {
+        if (stream != nullptr) {
+          stream->finish();
+        }
+      }
+      for (auto& [dev_id, streams] : parallel_streams_) {
+        for (auto* stream : streams) {
+          if (stream != nullptr) {
+            stream->finish();
+          }
+        }
+      }
     }
   } else {
     // Cross-device launch: replay segmented AQL on a capture-device stream.
@@ -3255,6 +3305,7 @@ hipError_t GraphExecSegmented::Run(hip::Stream* launch_stream) {
   cleanup->exec = this;
   cleanup->device = g_devices[captureDeviceId_]->devices()[0];
   cleanup->signal_set = std::move(launch_signal_set);
+  cleanup->kernarg_epoch = kernarg_epoch;
   if (!event.setCallback(CL_COMPLETE, GraphExecBase::OnLaunchComplete, cleanup, kBlocking)) {
     // setCallback essentially never fails, but if it does the launch's GPU work
     // is already queued (the accumulate is enqueued and was told not to destroy
@@ -3392,9 +3443,27 @@ address GraphKernelArgManager::AllocKernArg(size_t size, size_t alignment, int d
   if (size == 0) {
     return nullptr;
   }
-
-  amd::Device* device = g_devices[devId]->devices()[0];
   assert(alignment != 0 && "Alignment must be non-zero");
+  amd::Device* device = g_devices[devId]->devices()[0];
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  return AllocKernArgLocked(size, alignment, device);
+}
+
+address GraphKernelArgManager::AllocKernArgLocked(size_t size, size_t alignment,
+                                                  amd::Device* device) {
+  // A graph exec updated once per launch (e.g. per generated token) would
+  // otherwise consume a fresh slot on every update and exhaust device memory.
+  // Smallest free slot of this device that is large enough; slots handed out
+  // for the same kernel share one size, so the first candidate usually fits.
+  for (auto it = free_slots_.lower_bound({device, size});
+       it != free_slots_.end() && it->first.first == device; ++it) {
+    const KernArgSlot slot{device, it->second, it->first.second};
+    if (amd::alignUp(slot.addr, alignment) + size <= slot.addr + slot.size) {
+      free_slots_.erase(it);
+      if (recording_) recorded_.push_back(slot);
+      return amd::alignUp(slot.addr, alignment);
+    }
+  }
 
   // Check if we have any pools allocated for this device
   auto& device_pools = kernarg_graph_[device];
@@ -3410,6 +3479,7 @@ address GraphKernelArgManager::AllocKernArg(size_t size, size_t alignment, int d
   // Check if allocation fits in current pool
   if (new_pool_usage <= current_pool.kernarg_pool_size_) {
     current_pool.kernarg_pool_offset_ = new_pool_usage;
+    if (recording_) recorded_.push_back({device, aligned_addr, size});
     return aligned_addr;
   }
 
@@ -3418,8 +3488,62 @@ address GraphKernelArgManager::AllocKernArg(size_t size, size_t alignment, int d
     return nullptr;
   }
 
-  // Recursively allocate from the new pool
-  return AllocKernArg(size, alignment, devId);
+  // Allocate from the new pool
+  return AllocKernArgLocked(size, alignment, device);
+}
+
+void GraphKernelArgManager::BeginNodeCapture() {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  recording_ = true;
+  recorded_.clear();
+}
+
+std::vector<GraphKernelArgManager::KernArgSlot> GraphKernelArgManager::EndNodeCapture() {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  recording_ = false;
+  return std::exchange(recorded_, {});
+}
+
+void GraphKernelArgManager::CommitNodeSlots(const void* node, std::vector<KernArgSlot>&& slots) {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  for (const auto& slot : std::exchange(node_slots_[node], std::move(slots))) {
+    retired_.push_back({slot, last_epoch_});
+  }
+  ReclaimRetiredLocked();
+}
+
+void GraphKernelArgManager::DiscardSlots(std::vector<KernArgSlot>&& slots) {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  FreeSlotsLocked(slots);
+}
+
+void GraphKernelArgManager::FreeSlotsLocked(const std::vector<KernArgSlot>& slots) {
+  for (const auto& slot : slots) {
+    free_slots_.emplace(std::make_pair(slot.device, slot.size), slot.addr);
+  }
+}
+
+uint64_t GraphKernelArgManager::LaunchSubmitted() {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  in_flight_.insert(++last_epoch_);
+  return last_epoch_;
+}
+
+void GraphKernelArgManager::LaunchCompleted(uint64_t epoch) {
+  std::lock_guard<std::mutex> lock(slot_lock_);
+  [[maybe_unused]] const size_t erased = in_flight_.erase(epoch);
+  assert(erased == 1 && "graph launch completed more times than it was submitted");
+  ReclaimRetiredLocked();
+}
+
+void GraphKernelArgManager::ReclaimRetiredLocked() {
+  // A slot retired at epoch E is free once no launch <= E is in flight.
+  const uint64_t oldest_in_flight =
+      in_flight_.empty() ? std::numeric_limits<uint64_t>::max() : *in_flight_.begin();
+  while (!retired_.empty() && retired_.front().epoch < oldest_in_flight) {
+    FreeSlotsLocked({retired_.front().slot});
+    retired_.pop_front();
+  }
 }
 
 void GraphKernelArgManager::ReadBackOrFlush() {

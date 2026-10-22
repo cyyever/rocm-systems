@@ -10,6 +10,7 @@
 set(TEST_SRC
   hipGraphExecUpdate_oom_test.cc
   hipGraphExecUpdate_error_propagation_test.cc
+  hipGraphExecUpdate_kernarg_reuse_test.cc
   hipGraphAddEmptyNode.cc
   hipGraphAddDependencies.cc
   hipGraphAddEventRecordNode.cc

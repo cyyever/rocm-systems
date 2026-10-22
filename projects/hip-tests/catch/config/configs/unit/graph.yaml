@@ -494,6 +494,24 @@ graph:
   Unit_hipGraphExecUpdate_Negative_CountDiffer:
     <<: *level_2
     tags: [exec]
+  Unit_hipGraphExecUpdate_KernargPoolExhaustion:
+    <<: *level_default
+    tags: [exec]
+  Unit_hipGraphExecUpdate_ExhaustionErrorPropagation:
+    <<: *level_default
+    tags: [exec]
+  Unit_hipGraphExecUpdate_KernargReuse_MemoryStable:
+    <<: *level_default
+    tags: [exec]
+  Unit_hipGraphExecUpdate_KernargReuse_InflightLaunchesKeepArgs:
+    <<: *level_default
+    tags: [exec]
+  Unit_hipGraphExecUpdate_KernargReuse_SlidingWindow:
+    <<: *level_default
+    tags: [exec]
+  Unit_hipGraphInstantiate_KernelWithoutKernargs:
+    <<: *level_default
+    tags: [exec]
   Unit_hipGraphExecUpdate_Functional:
     <<: *level_2
     tags: [exec]
