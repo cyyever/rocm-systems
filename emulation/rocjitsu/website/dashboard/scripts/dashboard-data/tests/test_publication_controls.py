@@ -24,9 +24,11 @@ def workflow_step(name):
 def execute(names, ctx):
     # Resolve the small set of Actions contexts used by the authored shared env.
     job = yaml.safe_load(WORKFLOW.read_text())['jobs']['publish']
-    contexts = {'github.workspace': str(ctx.repo.parent),
-                'github.run_id': ctx.env['GITHUB_RUN_ID'],
-                'github.run_attempt': ctx.env['GITHUB_RUN_ATTEMPT']}
+    contexts = {
+        'github.workspace': str(ctx.repo.parent),
+        'github.run_id': ctx.env['GITHUB_RUN_ID'],
+        'github.run_attempt': ctx.env['GITHUB_RUN_ATTEMPT'],
+    }
     for key in ('RUN_ID', 'DATA_DIR'):
         value = job['env'][key]
         for context, replacement in contexts.items():
@@ -35,31 +37,47 @@ def execute(names, ctx):
         ctx.env[key] = value
     result = None
     for name in (names,) if isinstance(names, str) else names:
-        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', workflow_step(name)],
-                                cwd=ctx.repo, env=ctx.env, capture_output=True, text=True)
+        result = subprocess.run(
+            ['bash', '-e', '-o', 'pipefail', '-c', workflow_step(name)],
+            cwd=ctx.repo,
+            env=ctx.env,
+            capture_output=True,
+            text=True,
+        )
         if result.returncode != 0:
             return result
         # Actions exports GITHUB_ENV values to subsequent steps, not the current shell.
         env_file = Path(ctx.env['GITHUB_ENV'])
         if env_file.exists():
-            ctx.env.update(line.split('=', 1) for line in env_file.read_text().splitlines())
+            ctx.env.update(
+                line.split('=', 1) for line in env_file.read_text().splitlines()
+            )
     assert result is not None, 'At least one actual workflow step is required'
     return result
 
 
-PUBLICATION_STEPS = ('Store immutable run', 'Update run index', 'Commit and push publication')
+PUBLICATION_STEPS = (
+    'Store immutable run',
+    'Update run index',
+    'Commit and push publication',
+)
 
 
 def git(repo, *args, check=True):
-    return subprocess.run(['git', *args], cwd=repo, capture_output=True, text=True, check=check)
+    return subprocess.run(
+        ['git', *args], cwd=repo, capture_output=True, text=True, check=check
+    )
 
 
 @pytest.fixture
 def publication(tmp_path):
-    raw = json.loads((DASHBOARD / 'tests/fixtures/fictional-producer-run.json').read_text())
+    raw = json.loads(
+        (DASHBOARD / 'tests/fixtures/fictional-producer-run.json').read_text()
+    )
     raw['benchmark_results'][0]['timing_results_s'] = [3e-9, 1e-9, 2e-9]
-    raw['benchmark_results'][1].update(status='failed', exit_code=7,
-                                       timing_results_s=[], error='Fictional failure')
+    raw['benchmark_results'][1].update(
+        status='failed', exit_code=7, timing_results_s=[], error='Fictional failure'
+    )
     raw['extra'] = {'zero': 0, 'false': False, 'null': None}
     results = tmp_path / 'results'
     results.mkdir()
@@ -68,24 +86,44 @@ def publication(tmp_path):
     repo.mkdir()
     scratch = tmp_path / 'scratch'
     scratch.mkdir()
-    env = {**os.environ, 'RESULTS_DOWNLOAD_DIR': str(results), 'RUNNER_TEMP': str(scratch),
-           'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1', 'GITHUB_EVENT_NAME': 'push',
-           'BENCHMARK_BRANCH': 'develop', 'BENCHMARK_COMMIT_MESSAGE': 'Measured "subject" $(false)\nbody',
-           'BENCHMARK_MACHINE': 'fictional-machine',
-           'WORKFLOW_COMMIT_SHA': raw['provenance']['rocjitsu']['rocjitsu_commit_sha'],
-           'TENSILE_COMMIT_SHA': 'd' * 40, 'SOURCE_BASE_BRANCH': '', 'SOURCE_BASE_SHA': '',
-           'SOURCE_PULL_REQUEST_NUMBER': '', 'SOURCE_PULL_REQUEST_URL': '',
-           'RESULTS_BRANCH': 'gh-pages-rocjitsu', 'GITHUB_ENV': str(tmp_path / 'github-env')}
-    return SimpleNamespace(raw=raw, repo=repo, env=env,
-                           candidate=scratch / 'dashboard-publication-diagnostics/candidate.json',
-                           data=repo / 'rocjitsu-dashboard/data')
+    env = {
+        **os.environ,
+        'RESULTS_DOWNLOAD_DIR': str(results),
+        'RUNNER_TEMP': str(scratch),
+        'GITHUB_RUN_ID': '123',
+        'GITHUB_RUN_ATTEMPT': '1',
+        'GITHUB_EVENT_NAME': 'push',
+        'BENCHMARK_BRANCH': 'develop',
+        'BENCHMARK_COMMIT_MESSAGE': 'Measured "subject" $(false)\nbody',
+        'BENCHMARK_MACHINE': 'fictional-machine',
+        'WORKFLOW_COMMIT_SHA': raw['provenance']['rocjitsu']['rocjitsu_commit_sha'],
+        'TENSILE_COMMIT_SHA': 'd' * 40,
+        'SOURCE_BASE_BRANCH': '',
+        'SOURCE_BASE_SHA': '',
+        'SOURCE_PULL_REQUEST_NUMBER': '',
+        'SOURCE_PULL_REQUEST_URL': '',
+        'RESULTS_BRANCH': 'gh-pages-rocjitsu',
+        'GITHUB_ENV': str(tmp_path / 'github-env'),
+    }
+    return SimpleNamespace(
+        raw=raw,
+        repo=repo,
+        env=env,
+        candidate=scratch / 'dashboard-publication-diagnostics/candidate.json',
+        data=repo / 'rocjitsu-dashboard/data',
+    )
 
 
 def test_enrichment_preserves_raw_and_types_optional_metadata(publication):
     ctx = publication
-    ctx.env.update(BENCHMARK_BRANCH='feature/quoted', GITHUB_EVENT_NAME='workflow_dispatch',
-                   SOURCE_BASE_BRANCH='develop', SOURCE_BASE_SHA='b' * 40,
-                   SOURCE_PULL_REQUEST_NUMBER='42', SOURCE_PULL_REQUEST_URL='https://example.invalid/pull/42')
+    ctx.env.update(
+        BENCHMARK_BRANCH='feature/quoted',
+        GITHUB_EVENT_NAME='workflow_dispatch',
+        SOURCE_BASE_BRANCH='develop',
+        SOURCE_BASE_SHA='b' * 40,
+        SOURCE_PULL_REQUEST_NUMBER='42',
+        SOURCE_PULL_REQUEST_URL='https://example.invalid/pull/42',
+    )
     result = execute('Fill publication metadata', ctx)
     assert result.returncode == 0, result.stdout + result.stderr
     candidate = json.loads(ctx.candidate.read_text())
@@ -93,11 +131,17 @@ def test_enrichment_preserves_raw_and_types_optional_metadata(publication):
         k: v for k, v in ctx.raw.items() if k != 'publication'
     }
     assert candidate['publication'] == {
-        'id': 'github-123-attempt-1', 'machine_label': 'fictional-machine', 'trigger': 'manual',
-        'workflow_commit_sha': ctx.env['WORKFLOW_COMMIT_SHA'], 'tensile_commit_sha': 'd' * 40,
-        'source': {'branch': 'feature/quoted', 'message': ctx.env['BENCHMARK_COMMIT_MESSAGE'],
-                   'base': {'branch': 'develop', 'commit': 'b' * 40},
-                   'pull_request': {'number': 42, 'url': 'https://example.invalid/pull/42'}},
+        'id': 'github-123-attempt-1',
+        'machine_label': 'fictional-machine',
+        'trigger': 'manual',
+        'workflow_commit_sha': ctx.env['WORKFLOW_COMMIT_SHA'],
+        'tensile_commit_sha': 'd' * 40,
+        'source': {
+            'branch': 'feature/quoted',
+            'message': ctx.env['BENCHMARK_COMMIT_MESSAGE'],
+            'base': {'branch': 'develop', 'commit': 'b' * 40},
+            'pull_request': {'number': 42, 'url': 'https://example.invalid/pull/42'},
+        },
     }
 
 
@@ -128,7 +172,16 @@ def test_publication_places_new_run_and_refuses_repeat(publication, tmp_path):
     before = index.read_bytes()
     assert json.loads(before)['runFiles'] == [path]
     head = git(ctx.repo, 'rev-parse', 'HEAD').stdout.strip()
-    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout.strip() == head
+    assert (
+        git(
+            tmp_path,
+            '--git-dir',
+            str(remote),
+            'rev-parse',
+            'refs/heads/gh-pages-rocjitsu',
+        ).stdout.strip()
+        == head
+    )
     assert execute(PUBLICATION_STEPS, ctx).returncode != 0
     assert index.read_bytes() == before
     assert git(ctx.repo, 'rev-parse', 'HEAD').stdout.strip() == head
@@ -143,16 +196,34 @@ def test_publication_places_new_run_and_refuses_repeat(publication, tmp_path):
     assert json.loads(index.read_text())['runFiles'] == [path, next_path]
     assert (ctx.data / next_path).read_bytes() == ctx.candidate.read_bytes()
     assert (ctx.data / path).read_bytes() == original_run
-    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == git(ctx.repo, 'rev-parse', 'HEAD').stdout
+    assert (
+        git(
+            tmp_path,
+            '--git-dir',
+            str(remote),
+            'rev-parse',
+            'refs/heads/gh-pages-rocjitsu',
+        ).stdout
+        == git(ctx.repo, 'rev-parse', 'HEAD').stdout
+    )
 
 
 def test_unknown_metadata_and_unaligned_message_stay_null(publication):
     ctx = publication
-    ctx.env.update(BENCHMARK_MACHINE='', WORKFLOW_COMMIT_SHA='c' * 40,
-                   TENSILE_COMMIT_SHA='', GITHUB_EVENT_NAME='unknown')
+    ctx.env.update(
+        BENCHMARK_MACHINE='',
+        WORKFLOW_COMMIT_SHA='c' * 40,
+        TENSILE_COMMIT_SHA='',
+        GITHUB_EVENT_NAME='unknown',
+    )
     assert execute('Fill publication metadata', ctx).returncode == 0
     pub = json.loads(ctx.candidate.read_text())['publication']
-    assert pub['source'] == {'branch': 'develop', 'message': None, 'base': None, 'pull_request': None}
+    assert pub['source'] == {
+        'branch': 'develop',
+        'message': None,
+        'base': None,
+        'pull_request': None,
+    }
     assert pub['trigger'] is pub['machine_label'] is pub['tensile_commit_sha'] is None
     ctx.env.update(SOURCE_PULL_REQUEST_NUMBER='42', WORKFLOW_COMMIT_SHA='')
     assert execute('Fill publication metadata', ctx).returncode == 0
@@ -164,7 +235,10 @@ def test_unknown_metadata_and_unaligned_message_stay_null(publication):
     raw['provenance']['rocjitsu']['rocjitsu_commit_sha'] = None
     raw_path.write_text(json.dumps(raw))
     assert execute('Fill publication metadata', ctx).returncode == 0
-    assert json.loads(ctx.candidate.read_text())['publication']['source']['message'] is None
+    assert (
+        json.loads(ctx.candidate.read_text())['publication']['source']['message']
+        is None
+    )
 
 
 @pytest.mark.parametrize('identical', [False, True])
@@ -174,22 +248,41 @@ def test_existing_run_is_never_overwritten(publication, tmp_path, identical):
     assert execute('Fill publication metadata', ctx).returncode == 0
     existing = ctx.data / 'runs/default-branch/github-123-attempt-1.json'
     existing.parent.mkdir(parents=True)
-    existing.write_bytes(ctx.candidate.read_bytes() if identical else b'existing conflicting run\n')
+    existing.write_bytes(
+        ctx.candidate.read_bytes() if identical else b'existing conflicting run\n'
+    )
     git(ctx.repo, 'add', 'rocjitsu-dashboard')
     git(ctx.repo, 'commit', '-m', 'Seed conflict')
     before = existing.read_bytes()
-    remote_head = git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout
+    remote_head = git(
+        tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu'
+    ).stdout
     assert execute('Fill publication metadata', ctx).returncode == 0
     result = execute(PUBLICATION_STEPS, ctx)
     assert result.returncode != 0
     assert existing.read_bytes() == before
-    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == remote_head
+    assert (
+        git(
+            tmp_path,
+            '--git-dir',
+            str(remote),
+            'rev-parse',
+            'refs/heads/gh-pages-rocjitsu',
+        ).stdout
+        == remote_head
+    )
 
 
-@pytest.mark.parametrize('component', ['rocjitsu-dashboard', 'rocjitsu-dashboard/data/runs',
-                                      'rocjitsu-dashboard/data/runs/default-branch',
-                                      'rocjitsu-dashboard/data/index.json',
-                                      'rocjitsu-dashboard/data/runs/default-branch/github-123-attempt-1.json'])
+@pytest.mark.parametrize(
+    'component',
+    [
+        'rocjitsu-dashboard',
+        'rocjitsu-dashboard/data/runs',
+        'rocjitsu-dashboard/data/runs/default-branch',
+        'rocjitsu-dashboard/data/index.json',
+        'rocjitsu-dashboard/data/runs/default-branch/github-123-attempt-1.json',
+    ],
+)
 def test_publication_rejects_symbolic_paths(publication, tmp_path, component):
     ctx = publication
     initialize_results(ctx, tmp_path)
@@ -209,23 +302,36 @@ def test_publication_rejects_symbolic_paths(publication, tmp_path, component):
     assert marker.read_bytes() == b'keep\n'
 
 
-def test_index_append_preserves_history_and_stages_only_run_and_index(publication, tmp_path):
+def test_index_append_preserves_history_and_stages_only_run_and_index(
+    publication, tmp_path
+):
     ctx = publication
     initialize_results(ctx, tmp_path)
     ctx.env['BENCHMARK_BRANCH'] = 'feature/side'
     ctx.data.mkdir(parents=True)
     index = ctx.data / 'index.json'
-    index.write_text(json.dumps({'generatedAt': '2026-01-01T00:00:00Z',
-                                 'runFiles': ['runs/default-branch/old.json']}))
+    index.write_text(
+        json.dumps(
+            {
+                'generatedAt': '2026-01-01T00:00:00Z',
+                'runFiles': ['runs/default-branch/old.json'],
+            }
+        )
+    )
     git(ctx.repo, 'add', 'rocjitsu-dashboard/data/index.json')
     git(ctx.repo, 'commit', '-m', 'Seed index')
     assert execute('Fill publication metadata', ctx).returncode == 0
     result = execute(PUBLICATION_STEPS, ctx)
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(index.read_text())['runFiles'] == [
-        'runs/default-branch/old.json', 'runs/side-branches/github-123-attempt-1.json',
+        'runs/default-branch/old.json',
+        'runs/side-branches/github-123-attempt-1.json',
     ]
-    assert set(git(ctx.repo, 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').stdout.splitlines()) == {
+    assert set(
+        git(
+            ctx.repo, 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'
+        ).stdout.splitlines()
+    ) == {
         'rocjitsu-dashboard/data/index.json',
         'rocjitsu-dashboard/data/runs/side-branches/github-123-attempt-1.json',
     }
@@ -234,7 +340,9 @@ def test_index_append_preserves_history_and_stages_only_run_and_index(publicatio
     assert index.read_bytes() == before
 
 
-@pytest.mark.parametrize('paths', [['../escape.json'], ['runs/default-branch/old.json'] * 2, None])
+@pytest.mark.parametrize(
+    'paths', [['../escape.json'], ['runs/default-branch/old.json'] * 2, None]
+)
 def test_unusable_index_is_not_rewritten(publication, tmp_path, paths):
     ctx = publication
     initialize_results(ctx, tmp_path)
@@ -266,23 +374,45 @@ def test_non_fast_forward_push_fails_without_overwriting_peer(publication, tmp_p
     result = execute(PUBLICATION_STEPS, ctx)
     assert result.returncode != 0
     assert 'rejected' in result.stdout + result.stderr
-    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == remote_head
+    assert (
+        git(
+            tmp_path,
+            '--git-dir',
+            str(remote),
+            'rev-parse',
+            'refs/heads/gh-pages-rocjitsu',
+        ).stdout
+        == remote_head
+    )
     assert (ctx.candidate.parent / 'push.log').is_file()
 
 
 def test_commit_failure_is_visible_and_never_pushes(publication, tmp_path):
     ctx = publication
     remote = initialize_results(ctx, tmp_path)
-    before = git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout
+    before = git(
+        tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu'
+    ).stdout
     hooks = tmp_path / 'hooks'
     hooks.mkdir()
     hook = hooks / 'pre-commit'
-    hook.write_text('#!/bin/sh\nprintf "deliberate local commit failure\\n" >&2\nexit 1\n')
+    hook.write_text(
+        '#!/bin/sh\nprintf "deliberate local commit failure\\n" >&2\nexit 1\n'
+    )
     hook.chmod(0o755)
     git(ctx.repo, 'config', 'core.hooksPath', str(hooks))
     assert execute('Fill publication metadata', ctx).returncode == 0
     result = execute(PUBLICATION_STEPS, ctx)
     assert result.returncode != 0
     assert 'deliberate local commit failure' in result.stdout + result.stderr
-    assert git(tmp_path, '--git-dir', str(remote), 'rev-parse', 'refs/heads/gh-pages-rocjitsu').stdout == before
+    assert (
+        git(
+            tmp_path,
+            '--git-dir',
+            str(remote),
+            'rev-parse',
+            'refs/heads/gh-pages-rocjitsu',
+        ).stdout
+        == before
+    )
     assert not (ctx.candidate.parent / 'push.log').exists()
