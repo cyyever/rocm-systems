@@ -2354,14 +2354,17 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       }
     }
 
-    // Connect to local net proxy
-    NCCLCHECKGOTO(ncclProxyConnect(comm, TRANSPORT_NET, 1, comm->rank, &proxyConn), ret, fail);
-    NCCLCHECKGOTO(ncclProxyCallBlocking(comm, &proxyConn, ncclProxyMsgSharedInit, &comm->p2pnChannels, sizeof(int),
-                                        NULL, 0),
-                  ret, fail);
+    // Connect to local net proxy. A single-rank communicator runs its collectives and
+    // self send/recv as local copies, so it would never use the shared p2p net buffers.
+    if (comm->nRanks > 1) {
+      NCCLCHECKGOTO(ncclProxyConnect(comm, TRANSPORT_NET, 1, comm->rank, &proxyConn), ret, fail);
+      NCCLCHECKGOTO(ncclProxyCallBlocking(comm, &proxyConn, ncclProxyMsgSharedInit, &comm->p2pnChannels, sizeof(int),
+                                          NULL, 0),
+                    ret, fail);
+    }
 
     // Then to remote ones when using PXN
-    if (ncclPxnDisable(comm) == 0) {
+    if (comm->nRanks > 1 && ncclPxnDisable(comm) == 0) {
       int nranks;
       NCCLCHECKGOTO(ncclTopoGetPxnRanks(comm, &pxnPeers, &nranks), ret, fail);
       for (int r = 0; r < nranks; r++) {
