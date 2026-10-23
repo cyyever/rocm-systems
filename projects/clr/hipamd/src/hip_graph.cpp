@@ -1343,8 +1343,11 @@ hipError_t hipStreamEndCapture_common(hipStream_t stream, hip::Graph** pGraph) {
     s->GetCaptureGraph()->RemoveNode(pGraphNode);
     s->GetCaptureGraph()->RemoveManualNodesDuringCapture();
     if (leafNodes.size() > 1 && foundInRemovedDep == false) {
+      *pGraph = nullptr;
       // Release created graph as it can't be retrieved anymore
       s->ReleaseCaptureGraph();
+      // As for an invalidated capture, return every stream in it to non-capturing
+      (void)s->EndCapture();
       return hipErrorStreamCaptureUnjoined;
     }
   } else {
