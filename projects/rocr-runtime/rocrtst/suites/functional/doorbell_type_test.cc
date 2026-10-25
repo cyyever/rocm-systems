@@ -20,7 +20,7 @@
  *
  * From projects/rocr-runtime/rocrtst/suites/functional/:
  *
- * Build:  g++ -std=c++17 -I../../gtest/include -I../../gtest \
+ * Build:  g++ -std=c++23 -I../../gtest/include -I../../gtest \
  *           -o doorbell_type_test doorbell_type_test.cc \
  *           ../../gtest/src/gtest.cpp \
  *           ../../gtest/src/gtest-port.cpp \

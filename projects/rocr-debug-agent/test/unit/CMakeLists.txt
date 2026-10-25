@@ -49,7 +49,7 @@ target_link_libraries(
 set_target_properties(
     rocm-debug-agent-unit-tests
     PROPERTIES
-        CXX_STANDARD 17
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
 )

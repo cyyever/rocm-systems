@@ -5,7 +5,7 @@
 #   2. As part of the main RCCL build via add_subdirectory(plugins/profiler/accl)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.16)
+    cmake_minimum_required(VERSION 3.20)
     project(rccl-profiler-accl LANGUAGES CXX)
     set(ACCL_STANDALONE ON)
 else()
@@ -26,7 +26,7 @@ target_include_directories(rccl-profiler-accl PRIVATE
     ${RCCL_ROOT}/src/include
 )
 
-target_compile_features(rccl-profiler-accl PRIVATE cxx_std_14)
+target_compile_features(rccl-profiler-accl PRIVATE cxx_std_23)
 
 target_compile_options(rccl-profiler-accl PRIVATE -Wall -Wextra)
 

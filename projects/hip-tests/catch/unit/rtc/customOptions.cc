@@ -39,7 +39,7 @@ HIP_TEST_CASE(Unit_hiprtc_cpp17) {
 #else
   std::string sarg = std::string("--fmad=false");
 #endif
-  const char* options[] = {sarg.c_str(), "-std=c++17", "-Werror"};
+  const char* options[] = {sarg.c_str(), "-std=c++23", "-Werror"};
   hiprtcResult compileResult{hiprtcCompileProgram(prog, 3, options)};
   size_t logSize;
   HIPRTC_CHECK(hiprtcGetProgramLogSize(prog, &logSize));

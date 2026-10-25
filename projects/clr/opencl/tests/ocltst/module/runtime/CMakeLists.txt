@@ -60,7 +60,7 @@ foreach(TEST ${TESTS})
 endforeach()
 
 set_target_properties(oclruntime PROPERTIES
-    CXX_STANDARD 14
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests/ocltst

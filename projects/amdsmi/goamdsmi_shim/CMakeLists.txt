@@ -63,7 +63,7 @@ set(CPACK_PACKAGE_FILE_NAME "${GOAMDSMI_SHIM_PACKAGE}-${SO_VERSION_STRING}")
 
 ## Compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -fpic -fno-rtti -m64")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2 -std=c++11 ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2 -std=c++23 ")
 # Use this instead of above for 32 bit
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
 

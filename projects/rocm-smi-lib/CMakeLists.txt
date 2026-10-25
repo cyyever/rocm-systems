@@ -4,7 +4,7 @@
 message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
 message("                    CMake ROCm SMI (Library) [root]                ")
 message("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.20)
 project(rocm_smi_lib)
 
 # ROCm SMI is deprecated in favor of AMD SMI. Set ROCM_SMI_DISABLE=True to skip
@@ -101,7 +101,7 @@ set(COMMON_SRC_ROOT ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location source co
 set(ROCM_SMI_PACKAGE rocm-smi-lib)
 
 project(${ROCM_SMI_LIBS_TARGET})
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)

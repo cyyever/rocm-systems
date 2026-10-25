@@ -48,6 +48,10 @@ namespace
 struct Section
 {
     Section()                   = default;
+    Section(std::string label_v, roctx_range_id_t id_v)
+    : label{std::move(label_v)}
+    , id{id_v}
+    {}
     ~Section()                  = default;
     Section(const Section&)     = default;
     Section(Section&&) noexcept = default;

@@ -21,7 +21,7 @@
 #define NPBVERSION      "4.1"
 #define LIBVERSION      "201511"
 #define COMPILERVERSION "11.1.0"
-#define CS1             "g++ -std=c++14"
+#define CS1             "g++ -std=c++23"
 #define CS2             "$(CC)"
 #define CS3             "-lm"
 #define CS4             "-I../common "

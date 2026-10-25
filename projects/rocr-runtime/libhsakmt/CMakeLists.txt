@@ -23,7 +23,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.6.3 )
+cmake_minimum_required ( VERSION 3.20.3 )
 
 if (WIN_SDK)
   include(${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists_wsl.txt)
@@ -138,7 +138,7 @@ else()
       target_include_directories(${HSAKMT_TARGET} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}../inc/shared)
     endif()
 
-    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     ## Source files
     set ( HSAKMT_SRC "src/dxg/ais.cpp"

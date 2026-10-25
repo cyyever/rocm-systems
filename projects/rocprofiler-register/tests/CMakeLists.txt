@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 project(rocprofiler-register-tests LANGUAGES C CXX)
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME tests)
@@ -8,7 +8,7 @@ include(GNUInstallDirs)
 
 if("${CMAKE_PROJECT_NAME}" STREQUAL "${PROJECT_NAME}")
     find_package(rocprofiler-register REQUIRED)
-    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_EXTENSIONS OFF)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_C_VISIBILITY_PRESET "hidden")

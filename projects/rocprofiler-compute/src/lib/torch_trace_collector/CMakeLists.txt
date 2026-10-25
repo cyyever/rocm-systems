@@ -11,7 +11,7 @@ if(NOT rocprofiler-sdk-roctx_FOUND)
     _skip_collector("rocprofiler-sdk-roctx not found")
 endif()
 
-if(NOT cxx_std_17 IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+if(NOT cxx_std_23 IN_LIST CMAKE_CXX_COMPILE_FEATURES)
     _skip_collector("compiler does not support C++17")
 endif()
 
@@ -31,7 +31,7 @@ target_link_libraries(
         synchronized
         gsl_assert
 )
-target_compile_features(torch-trace-collector PUBLIC cxx_std_17)
+target_compile_features(torch-trace-collector PUBLIC cxx_std_23)
 target_compile_definitions(torch-trace-collector PUBLIC _GLIBCXX_USE_CXX11_ABI=1)
 set_target_properties(
     torch-trace-collector

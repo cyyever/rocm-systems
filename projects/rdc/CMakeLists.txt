@@ -21,7 +21,7 @@
 #
 # Minimum version of cmake required
 #
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.20)
 
 set(COMP_TYPE "runtime")
 set(BUILD_ENABLE_LINTIAN_OVERRIDES ON CACHE BOOL "Enable/Disable Lintian Overrides")
@@ -235,7 +235,7 @@ set(${RDC}_VERSION_PATCH "0")
 set(${RDC}_VERSION_BUILD "0")
 set(CPACK_PACKAGE_VERSION ${VERSION_STRING})
 
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard to use")
+set(CMAKE_CXX_STANDARD 23 CACHE STRING "The C++ standard to use")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

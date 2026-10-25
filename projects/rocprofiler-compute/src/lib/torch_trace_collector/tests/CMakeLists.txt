@@ -69,7 +69,7 @@ target_link_options(${target} PRIVATE LINKER:--wrap=roctxRangePushA)
 
 target_include_directories(${target} SYSTEM PRIVATE ${_torch_include_dirs})
 target_link_libraries(${target} PRIVATE ${_torch_libraries})
-target_compile_features(${target} PRIVATE cxx_std_20)
+target_compile_features(${target} PRIVATE cxx_std_23)
 
 # libtorch_cpu needs rocm-openblas but its RUNPATH points at the wheel builder.
 set(_openblas_dir "")

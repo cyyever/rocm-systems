@@ -4,7 +4,7 @@
 # Requires NCCL to be built first: make src.build
 
 # std::optional and other C++17 features used in nccl_moe.cc
-CXXSTD := -std=c++17
+CXXSTD := -std=c++23
 include ../../makefiles/common.mk
 
 # NVCC_CXX_COMPILER: nvcc -ccbin; from CXX if one token, else g++

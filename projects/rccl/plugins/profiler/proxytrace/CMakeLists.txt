@@ -10,7 +10,7 @@
 
 # Detect standalone vs. in-tree configuration.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.16)
+    cmake_minimum_required(VERSION 3.20)
     project(rccl-profiler-proxytrace LANGUAGES CXX)
     set(PROXYTRACE_STANDALONE ON)
 else()
@@ -41,7 +41,7 @@ target_compile_definitions(rccl-profiler-proxytrace PRIVATE
     __HIP_PLATFORM_AMD__
 )
 
-target_compile_features(rccl-profiler-proxytrace PRIVATE cxx_std_17)
+target_compile_features(rccl-profiler-proxytrace PRIVATE cxx_std_23)
 
 target_compile_options(rccl-profiler-proxytrace PRIVATE -Wall -Wextra)
 

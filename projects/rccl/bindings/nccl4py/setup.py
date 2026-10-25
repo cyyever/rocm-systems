@@ -29,7 +29,7 @@ def calculate_modules(module: str):
         lowpp_mod,
         sources=[lowpp_pyx],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++23"],
         libraries=["dl"],
     )
 
@@ -42,7 +42,7 @@ def calculate_modules(module: str):
         cy_mod,
         sources=[cy_mod_pyx],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++23"],
         libraries=["dl"],
     )
 
@@ -55,7 +55,7 @@ def calculate_modules(module: str):
         inter_mod,
         sources=[inter_mod_pyx],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++23"],
         libraries=["dl"],
     )
 
@@ -69,7 +69,7 @@ def calculate_modules(module: str):
         inter_utils_mod,
         sources=[inter_utils_mod_pyx],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++23"],
         libraries=["dl"],
     )
 
@@ -87,7 +87,7 @@ ext_modules.append(
         "nccl.bindings.rocm_extensions",
         sources=["nccl/bindings/rocm_extensions.pyx"],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++23"],
         libraries=["dl"],
     )
 )

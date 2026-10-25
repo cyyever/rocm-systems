@@ -428,7 +428,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
     --clang=${DL_CLANG}
     ${DL_OPT_FLAGS}
     ${DL_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     ${DL_HIP_COMPILER_FLAGS}
     # -fPIC is required so amdclang++ emits GOT-relative relocations for
     # cross-function calls inside the device .o files. Without it, larger
@@ -539,7 +539,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
       ${DL_LINK_INHERITED_FLAGS}
       ${DL_COVERAGE_FLAGS}
       ${DL_MAIN_MODULE_CUID_FLAGS}
-      -std=c++17
+      -std=c++23
       -o ${ARCH_DEVICE_ELF}
       @${_link_rsp}
     DEPENDS ${_dev_target} ${HIPIFY_DIR}/src/device/common.cu.cpp ${_rocshmem_link_depends}
@@ -598,7 +598,7 @@ foreach(DL_GPU_TARGET ${DL_GPU_TARGETS})
         -x hip --offload-device-only --offload-arch=${DL_GPU_TARGET}
         ${DL_HIP_COMPILER_FLAGS}
         -gline-tables-only
-        -std=c++17 ${DL_OPT_FLAGS}
+        -std=c++23 ${DL_OPT_FLAGS}
         -emit-llvm -S
         -o ${IR_OUT}
         ${SRC}
@@ -674,7 +674,7 @@ add_custom_command(
     ${DL_INHERITED_FLAGS}
     ${DL_COVERAGE_FLAGS}
     ${DL_MAIN_MODULE_CUID_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     ${DL_HOST_COMPRESS}
     -c -o ${COMMON_FAT_OBJ}
@@ -700,7 +700,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${ONERANK_FAT_OBJ}
     ${HIPIFY_DIR}/src/device/onerank.cu.cpp
@@ -735,7 +735,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20")
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -MD -MF ${COLLECTIVES_DEPFILE}
       -c -o ${COLLECTIVES_FAT_OBJ}
@@ -757,7 +757,7 @@ else()
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -c -o ${COLLECTIVES_FAT_OBJ}
       ${HIPIFY_DIR}/src/collectives.cc
@@ -787,7 +787,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${DIAG_P2P_FAT_OBJ}
     ${HIPIFY_DIR}/src/diagnostics/device/p2p.cu.cpp
@@ -812,7 +812,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${DDA_ALL_REDUCE_IPC_FAT_OBJ}
     ${HIPIFY_DIR}/src/algorithms/dda/all_reduce/dda_all_reduce_ipc.cu.cpp
@@ -832,7 +832,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${DDA_REDUCE_SCATTER_IPC_FAT_OBJ}
     ${HIPIFY_DIR}/src/algorithms/dda/reduce_scatter/dda_reduce_scatter_ipc.cu.cpp
@@ -852,7 +852,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${DDA_ALL_GATHER_IPC_FAT_OBJ}
     ${HIPIFY_DIR}/src/algorithms/dda/all_gather/dda_all_gather_ipc.cu.cpp
@@ -872,7 +872,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -c -o ${DDA_ALLTOALL_IPC_FAT_OBJ}
     ${HIPIFY_DIR}/src/algorithms/dda/alltoall/dda_alltoall_ipc.cu.cpp
@@ -905,7 +905,7 @@ if(ENABLE_ROCSHMEM_GIN)
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -c -o ${GIN_ALLTOALL_SDMA_FAT_OBJ}
       ${HIPIFY_DIR}/src/algorithms/gin/sdma/gin_alltoall_sdma.cu.cpp
@@ -939,7 +939,7 @@ if(ENABLE_ROCSHMEM_GIN)
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -c -o ${GIN_ALLREDUCE_SDMA_FAT_OBJ}
       ${HIPIFY_DIR}/src/algorithms/gin/sdma/gin_all_reduce_sdma.cu.cpp
@@ -968,7 +968,7 @@ if(ENABLE_ROCSHMEM_GIN)
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -c -o ${GIN_ANVIL_CONN_CHECK_FAT_OBJ}
       ${HIPIFY_DIR}/src/gin/gin_anvil_conn_check_device.cc
@@ -994,7 +994,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_REDUCE_FABRIC_FAT_OBJ}
@@ -1018,7 +1018,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_REDUCE_FABRIC_LL_FAT_OBJ}
@@ -1039,7 +1039,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_REDUCE_FABRIC_LL128_FAT_OBJ}
@@ -1070,7 +1070,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_REDUCE_SCATTER_FABRIC_FAT_OBJ}
@@ -1091,7 +1091,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_GATHER_FABRIC_FAT_OBJ}
@@ -1112,7 +1112,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_GATHER_FABRIC_LL_FAT_OBJ}
@@ -1133,7 +1133,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALL_GATHER_FABRIC_LL128_FAT_OBJ}
@@ -1154,7 +1154,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALLTOALL_FABRIC_FAT_OBJ}
@@ -1175,7 +1175,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALLTOALL_FABRIC_LL_FAT_OBJ}
@@ -1196,7 +1196,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_ALLTOALL_FABRIC_LL128_FAT_OBJ}
@@ -1217,7 +1217,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_REDUCE_SCATTER_FABRIC_LL_FAT_OBJ}
@@ -1238,7 +1238,7 @@ add_custom_command(
     ${DL_OPT_FLAGS}
     ${DL_INHERITED_FLAGS}
     ${DL_DEVICE_COVERAGE_FLAGS}
-    -std=c++17
+    -std=c++23
     -fPIC
     -w
     -c -o ${DDA_REDUCE_SCATTER_FABRIC_LL128_FAT_OBJ}
@@ -1278,7 +1278,7 @@ foreach(_ce_reduce_src IN LISTS _ce_reduce_srcs)
       ${DL_OPT_FLAGS}
       ${DL_INHERITED_FLAGS}
       ${DL_DEVICE_COVERAGE_FLAGS}
-      -std=c++17
+      -std=c++23
       -fPIC
       -w
       -c -o ${_ce_reduce_obj}
@@ -1334,7 +1334,7 @@ if(GENERATE_SYM_KERNELS)
       COMMAND ${DL_CLANG}
         -x hip --cuda-device-only --offload-arch=${_bc_arch}
         -emit-llvm -Xclang -disable-llvm-passes
-        -std=c++17 -fPIC
+        -std=c++23 -fPIC
         -I${ROCSHMEM_SOURCE_DIR}/src
         -I${ROCSHMEM_SOURCE_DIR}/include
         -c -o ${_cm_bc} ${_cm_src}
@@ -1382,7 +1382,7 @@ if(GENERATE_SYM_KERNELS)
         ${DL_OPT_FLAGS}
         ${DL_INHERITED_FLAGS}
         ${DL_DEVICE_COVERAGE_FLAGS}
-        -std=c++17
+        -std=c++23
         -fPIC
         ${_this_bc_flag}
         -c -o ${_sym_obj}

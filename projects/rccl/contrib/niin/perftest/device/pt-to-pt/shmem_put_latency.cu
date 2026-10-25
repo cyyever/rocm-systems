@@ -13,7 +13,7 @@
 //       -I ../../common -I ../../../include \
 //       -I <nccl>/build/include \
 //       -I <mpi>/include -L <nccl>/build/lib -lnccl -L <mpi>/lib -lmpi \
-//       --expt-relaxed-constexpr -std=c++17 -arch=sm_90
+//       --expt-relaxed-constexpr -std=c++23 -arch=sm_90
 //
 // Run:
 //   mpirun -np 2 ./shmem_put_latency

@@ -22,7 +22,7 @@ set(API_EXAMPLES
 foreach(example ${API_EXAMPLES})
     add_executable(${example} "${example}.cpp")
 
-    target_compile_features(${example} PRIVATE cxx_std_17)
+    target_compile_features(${example} PRIVATE cxx_std_23)
     set_target_properties(${example} PROPERTIES CXX_EXTENSIONS OFF)
     target_compile_options(${example} PRIVATE -Wall -Wextra)
     target_link_libraries(${example} PRIVATE hip::host hip::hipfile)

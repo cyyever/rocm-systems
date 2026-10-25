@@ -20,7 +20,7 @@ GTEST_LIBS := $(GTEST_OBJDIR)/gtest.a $(GTEST_OBJDIR)/gtest_main.a
 
 NVCC         ?= $(shell which nvcc 2>/dev/null || echo /usr/local/cuda/bin/nvcc)
 NVCC_GENCODE ?= -gencode=arch=compute_90,code=sm_90
-CXXSTD       := -std=c++17
+CXXSTD       := -std=c++23
 
 NVCUFLAGS := $(NVCC_GENCODE) \
              -I$(NCCL_EP_INCDIR) \

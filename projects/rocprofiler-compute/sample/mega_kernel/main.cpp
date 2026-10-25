@@ -20,7 +20,7 @@
  *   - gfx1250 (gfx1250)
  *
  * Build: make (default GPU_ARCH=gfx1151; override e.g. GPU_ARCH=gfx1201 make) or manual:
- *   hipcc -O2 -g -std=c++17 -Wall -Wextra -fPIC --offload-arch=gfx1151 -I. -o
+ *   hipcc -O2 -g -std=c++23 -Wall -Wextra -fPIC --offload-arch=gfx1151 -I. -o
  * mega_kernel_test mega_kernel.hip main.cpp
  *
  */

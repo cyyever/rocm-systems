@@ -21,7 +21,7 @@
 #
 # ##############################################################################
 
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.20)
 
 # ROCM Path
 if(DEFINED ENV{ROCM_PATH})
@@ -46,7 +46,7 @@ if(USING_THE_ROCK)
 endif()
 
 # Set AMD Clang as default compiler
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS ON)
 if(NOT DEFINED CMAKE_CXX_COMPILER)

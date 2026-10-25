@@ -389,7 +389,7 @@ add_library(
 set_target_properties(
     amd-dbgapi
     PROPERTIES
-        CXX_STANDARD 17
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS ON
         CXX_VISIBILITY_PRESET hidden
@@ -440,7 +440,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(amd-dbgapi PRIVATE src/os_driver_kfd.cpp src/utils_linux.cpp)
 
     set(CMAKE_REQUIRED_FLAGS_BKP "${CMAKE_REQUIRED_FLAGS}")
-    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++17")
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++23")
     # For some platforms (PPC64), linux/types.h uses L64, but this code assumes
     # LL64 (i.e.  __u64 should be a long long unsigned, not long unsigned).
     check_cxx_source_compiles(

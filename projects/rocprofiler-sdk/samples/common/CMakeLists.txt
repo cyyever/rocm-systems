@@ -18,7 +18,7 @@ add_library(rocprofiler-sdk::samples-build-flags ALIAS
             rocprofiler-sdk-samples-build-flags)
 target_compile_options(rocprofiler-sdk-samples-build-flags INTERFACE -W -Wall -Wextra
                                                                      -Wshadow)
-target_compile_features(rocprofiler-sdk-samples-build-flags INTERFACE cxx_std_17)
+target_compile_features(rocprofiler-sdk-samples-build-flags INTERFACE cxx_std_23)
 
 if(ROCPROFILER_BUILD_CI OR ROCPROFILER_BUILD_WERROR)
     target_compile_options(rocprofiler-sdk-samples-build-flags INTERFACE -Werror)
@@ -32,7 +32,7 @@ add_library(rocprofiler-sdk::samples-common-library ALIAS
             rocprofiler-sdk-samples-common-library)
 target_link_libraries(rocprofiler-sdk-samples-common-library
                       INTERFACE rocprofiler-sdk::samples-build-flags libdw::libdw)
-target_compile_features(rocprofiler-sdk-samples-common-library INTERFACE cxx_std_17)
+target_compile_features(rocprofiler-sdk-samples-common-library INTERFACE cxx_std_23)
 target_include_directories(rocprofiler-sdk-samples-common-library
                            INTERFACE ${COMMON_LIBRARY_INCLUDE_DIR})
 

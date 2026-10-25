@@ -41,7 +41,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_HIP_STANDARD 17)
@@ -231,7 +231,7 @@ if(HIP_PLATFORM STREQUAL "amd")
     set(win_disable_warnings ${win_disable_warnings} -Wno-ignored-attributes -Wno-microsoft-cast)
     # Windows for some reason does not honor the `CMAKE_CXX_STANDARD` we set initially in the file
     # Which results in errors about missing headers etc
-    set(win_cxx_standard -std=c++17)
+    set(win_cxx_standard -std=c++23)
   endif()
   add_compile_options(${HIP_PATH_OPT} ${win_cxx_standard} -x hip -Wall -Wextra -Wvla -Wno-deprecated ${win_disable_warnings})
   if(HIP_TESTS_ENABLE_WERROR AND UNIX)

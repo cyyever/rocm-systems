@@ -10,7 +10,7 @@ endif
 HIPCC=$(HIP_PATH)/bin/hipcc
 
 EXE=HelloRccl
-CXXFLAGS = -std=c++11 -O3 -I../../src/include -I$(RCCL_INSTALL) -L$(RCCL_INSTALL) -lrccl
+CXXFLAGS = -std=c++23 -O3 -I../../src/include -I$(RCCL_INSTALL) -L$(RCCL_INSTALL) -lrccl
 
 all: $(EXE)
 

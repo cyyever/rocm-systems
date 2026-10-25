@@ -26,12 +26,12 @@ cmake_minimum_required(VERSION 3.21)
 project(PAL LANGUAGES CXX)
 add_library(pal INTERFACE)
 set_target_properties(pal PROPERTIES
-    CXX_STANDARD 20
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
     POSITION_INDEPENDENT_CODE TRUE
 )
-target_compile_features(pal INTERFACE cxx_std_20)
+target_compile_features(pal INTERFACE cxx_std_23)
 if (NOT PAL_CLIENT_INTERFACE_MAJOR_VERSION EQUAL 995)
     message(WARNING "PAL: PAL_CLIENT_INTERFACE_MAJOR_VERSION ${PAL_CLIENT_INTERFACE_MAJOR_VERSION} not supported !!!")
 endif()

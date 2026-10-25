@@ -32,7 +32,7 @@ device: $(DEVICE_LTOIR)
 # its output must never be reused after switching NCCL trees or architectures.
 $(DEVICE_LTOIR): $(DEVICE_SRC) $(DEVICE_HDR) FORCE
 	@mkdir -p $(BUILDDIR)
-	$(NVCC) -std=c++17 -arch=sm_$(ARCH) -dlto -ltoir -x cu --extended-lambda \
+	$(NVCC) -std=c++23 -arch=sm_$(ARCH) -dlto -ltoir -x cu --extended-lambda \
 		-I$(NCCL_INCLUDE_DIR) -Ishim \
 		$(DEVICE_SRC) -o $@
 

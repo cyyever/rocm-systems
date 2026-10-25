@@ -12,7 +12,7 @@ hip_add_exe_to_target(NAME HipSpecificTest
                       TEST_SRC ${TEST_SRC}
                       TEST_TARGET_NAME build_tests
                       LINKER_LIBS hiprtc::hiprtc
-                      PROPERTY CXX_STANDARD 17)
+                      PROPERTY CXX_STANDARD 23)
 if(UNIX)
 file(GLOB NEGATIVE_TEST_SRC
      "hip_hc_8pk_negative_kernels.cc" )

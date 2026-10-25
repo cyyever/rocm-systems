@@ -184,7 +184,7 @@ std::string NvccCompiler::compiler_id() const {
 
 std::vector<std::string> NvccCompiler::compile_options(const JitCompileConfig& config) const {
     std::vector<std::string> options;
-    options.push_back("--std=c++17");
+    options.push_back("--std=c++23");
     options.push_back("--extended-lambda");
     options.push_back("--expt-relaxed-constexpr");
 

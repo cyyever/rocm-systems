@@ -347,6 +347,23 @@ get_link_map()
 struct client_library
 {
     client_library() = default;
+    client_library(std::string name_v,
+                   void* handle_v,
+                   decltype(::rocprofiler_configure)* configure_v,
+                   decltype(::rocprofiler_configure_attach)* configure_attach_v,
+                   rocprofiler_tool_configure_result_t* configure_result_v,
+                   rocprofiler_tool_configure_attach_result_t* configure_attach_result_v,
+                   rocprofiler_client_id_t internal_id_v,
+                   rocprofiler_client_id_t mutable_id_v)
+    : name{std::move(name_v)}
+    , dlhandle{handle_v}
+    , configure_func{configure_v}
+    , configure_attach_func{configure_attach_v}
+    , configure_result{configure_result_v}
+    , configure_attach_result{configure_attach_result_v}
+    , internal_client_id{internal_id_v}
+    , mutable_client_id{mutable_id_v}
+    {}
     ~client_library()
     {
         delete configure_result;
@@ -416,7 +433,7 @@ emplace_client(Tp&                                 data,
 
     constexpr auto client_id_size = sizeof(rocprofiler_client_id_t);
     uint32_t       _prio          = get_client_offset() + data.size();
-    auto           _client_v      = client_library{std::string{_name},
+    auto _client_v = client_library{std::string{_name},
                                     _dlhandle,
                                     _cfg_func,
                                     _attach_func,

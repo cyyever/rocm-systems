@@ -8,9 +8,9 @@
 
 # C++20 on Windows (MSVC requires it for some std features), C++17 on Linux.
 if(WIN32)
-  set(HRR_CXX_STANDARD 20)
+  set(HRR_CXX_STANDARD 23)
 else()
-  set(HRR_CXX_STANDARD 17)
+  set(HRR_CXX_STANDARD 23)
 endif()
 
 # ---------------------------------------------------------------------------

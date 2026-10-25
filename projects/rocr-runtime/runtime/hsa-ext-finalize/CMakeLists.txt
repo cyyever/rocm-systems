@@ -114,7 +114,7 @@ if ( HAVE_PTHREAD_RWLOCKATTR_SETKIND_NP )
 endif()
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
-set ( CMAKE_CXX_FLAGS "-std=c++11 " )
+set ( CMAKE_CXX_FLAGS "-std=c++23 " )
 
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-deprecated-declarations -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -fPIC" )
 

@@ -1,4 +1,4 @@
-CXXSTD := -std=c++17
+CXXSTD := -std=c++23
 
 .PHONY: all install clean
 

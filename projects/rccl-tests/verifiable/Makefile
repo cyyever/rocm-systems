@@ -22,7 +22,7 @@ NCCL_HOME ?= ""
 HIPCC = $(ROCM_PATH)/llvm/bin/amdclang++
 CXX = $(HIPCC)
 
-HIPCUFLAGS := -std=c++14
+HIPCUFLAGS := -std=c++23
 LDFLAGS    :=
 HIPLDFLAGS :=
 

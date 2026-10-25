@@ -120,7 +120,7 @@ add_executable(hrr-integration-tests
   hrr_clock_hook.cc
 )
 set_target_properties(hrr-integration-tests PROPERTIES
-  CXX_STANDARD 17
+  CXX_STANDARD 23
   CXX_STANDARD_REQUIRED ON
   HIP_STANDARD 17
   HIP_STANDARD_REQUIRED ON)
@@ -219,7 +219,7 @@ add_dependencies(hrr-integration-tests hrr-playback)
 if(NOT WIN32)
   add_library(hrr-test-dispatch-tool MODULE hrr_dispatch_tool.cc)
   set_target_properties(hrr-test-dispatch-tool PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CXX_VISIBILITY_PRESET hidden)
   target_link_libraries(hrr-test-dispatch-tool PRIVATE ${CMAKE_DL_LIBS})

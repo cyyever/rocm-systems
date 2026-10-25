@@ -109,7 +109,7 @@ def test_emitted_matrix_header_compiles_standalone(tmp_path):
         encoding='utf-8',
     )
     result = subprocess.run(
-        [compiler, '-std=c++20', '-pedantic-errors', '-fsyntax-only', str(source)],
+        [compiler, '-std=c++23', '-pedantic-errors', '-fsyntax-only', str(source)],
         capture_output=True,
         text=True,
         timeout=60,

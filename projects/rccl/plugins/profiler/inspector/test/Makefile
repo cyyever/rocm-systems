@@ -3,7 +3,7 @@
 #
 
 CXX := g++
-CXXFLAGS := -Wall -Wextra -g -std=c++17 -pthread
+CXXFLAGS := -Wall -Wextra -g -std=c++23 -pthread
 TARGET := test_coll_info_lifecycle
 SOURCES := test_coll_info_lifecycle.cpp
 ASAN ?= 0

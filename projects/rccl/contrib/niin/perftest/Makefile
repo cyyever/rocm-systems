@@ -27,7 +27,7 @@ IBVERBS_RPATH := -Xlinker -rpath,$(dir $(IBVERBS_LIBRARY))
 endif
 
 NVCC      := nvcc
-NVCUFLAGS := --expt-relaxed-constexpr -std=c++17 -arch=$(ARCH) -DNIIN_HAS_MPI
+NVCUFLAGS := --expt-relaxed-constexpr -std=c++23 -arch=$(ARCH) -DNIIN_HAS_MPI
 INCLUDES  := -I common -I ../include -I $(NCCL_HOME)/build/include -I $(MPI_HOME)/include
 LDFLAGS   := -L $(NCCL_HOME)/build/lib -lnccl -L $(MPI_HOME)/lib -lmpi -lcuda -lcudart -lrt \
              -Xlinker -rpath,$(NCCL_HOME)/build/lib -Xlinker -rpath,$(MPI_HOME)/lib

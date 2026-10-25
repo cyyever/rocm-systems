@@ -43,7 +43,7 @@ hip_add_exe_to_target(NAME PrintfTest
                     TEST_SRC ${TEST_SRC}
                     TEST_TARGET_NAME build_tests
                     LINKER_LIBS ${LINKER_LIBS}
-                    PROPERTY CXX_STANDARD 17)
+                    PROPERTY CXX_STANDARD 23)
 
 if(UNIX)
   file(GLOB NEGATIVE_TEST_SRC

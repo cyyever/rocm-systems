@@ -12,7 +12,7 @@ CORE_SRC := $(RCCL_ROOT)/src/misc/proxy_trace/proxy_trace.cc
 # it cannot drift. nccl/ must stay ahead of src/include: it supplies the minimal
 # os.h that keeps RCCL's internal os.h (and nccl.h) out of the build.
 INC := -I$(CURDIR) -I$(CURDIR)/nccl -I$(RCCL_ROOT)/src/include/plugin -I$(RCCL_ROOT)/src/include -I$(ROCM_PATH)/include
-CXXFLAGS := -fPIC -O2 -g -std=c++17 -Wall -Wextra -DRCCL_PROXYTRACE_PLUGIN_BUILD -DNCCL_OS_LINUX -D__HIP_PLATFORM_AMD__
+CXXFLAGS := -fPIC -O2 -g -std=c++23 -Wall -Wextra -DRCCL_PROXYTRACE_PLUGIN_BUILD -DNCCL_OS_LINUX -D__HIP_PLATFORM_AMD__
 LDFLAGS := -shared
 # Emit a .d alongside each object so edits to any header reached by an #include
 # rebuild the plugin. -MP adds phony targets for those headers, so a removed or

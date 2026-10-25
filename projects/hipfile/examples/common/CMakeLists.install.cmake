@@ -16,7 +16,7 @@ find_package(hipfile REQUIRED CONFIG)
 # directories pull this in via add_subdirectory(), so the include dir and the
 # hipFile link are PUBLIC to propagate to them.
 add_library(examples_common STATIC examples_common.cpp)
-target_compile_features(examples_common PRIVATE cxx_std_17)
+target_compile_features(examples_common PRIVATE cxx_std_23)
 set_target_properties(examples_common PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(examples_common PRIVATE -Wall -Wextra)
 target_include_directories(examples_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

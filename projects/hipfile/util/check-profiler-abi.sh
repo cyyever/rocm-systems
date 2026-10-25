@@ -89,7 +89,7 @@ echo "  CXX=${CXX}  ROCM_PATH=${ROCM_PATH}"
 #                                        ABI asserts (see lib/common/abi.hpp)
 #   __HIP_PLATFORM_AMD__                 required by the HIP headers hipfile.h
 #                                        transitively includes
-"${CXX}" -std=c++17 -fsyntax-only \
+"${CXX}" -std=c++23 -fsyntax-only \
     -D__HIP_PLATFORM_AMD__ \
     -DROCPROFILER_SDK_USE_SYSTEM_HIPFILE=1 \
     -DROCPROFILER_CI=1 \

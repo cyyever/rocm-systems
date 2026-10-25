@@ -26,7 +26,7 @@
 #
 # Minimum version of cmake required
 #
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.20)
 
 option(CMAKE_VERBOSE_MAKEFILE "Enable verbose output" ON)
 option(CMAKE_EXPORT_COMPILE_COMMANDS "Export compile commands for linters and autocompleters" ON)
@@ -58,7 +58,7 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL
     "Flags for MinSizeRel builds"
 )
 
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard to use")
+set(CMAKE_CXX_STANDARD 23 CACHE STRING "The C++ standard to use")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

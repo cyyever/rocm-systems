@@ -47,7 +47,7 @@ fn build() -> Result<(), String> {
         .rust_edition(bindgen::RustEdition::Edition2024)
         .clang_arg("-x")
         .clang_arg("c++")
-        .clang_arg("-std=c++17")
+        .clang_arg("-std=c++23")
         .clang_arg(format!("-I{}", cuda_include.display()))
         .allowlist_function("^(?:nccl|NCCL).*")
         .allowlist_type("^(?:nccl|NCCL).*")

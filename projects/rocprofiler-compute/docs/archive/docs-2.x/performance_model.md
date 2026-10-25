@@ -3409,7 +3409,7 @@ For this section, we use the instructions-per-cycle (IPC) [example](https://gith
 This example is compiled using `c++17` support:
 
 ```shell-session
-$ hipcc -O3 ipc.hip -o ipc -std=c++17
+$ hipcc -O3 ipc.hip -o ipc -std=c++23
 ```
 
 and was run on an MI250 CDNA2 accelerator:

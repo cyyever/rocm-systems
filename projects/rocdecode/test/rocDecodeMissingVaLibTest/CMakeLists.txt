@@ -23,7 +23,7 @@
 
 # Windows-only: checks that rocdecode.dll fails cleanly when the TheRock VA-API
 # DLLs cannot be found. See rocdecodemissingvalibtest.cpp.
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 if(DEFINED ENV{ROCM_PATH})
   set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Default ROCm installation path")
 elseif(ROCM_PATH)
@@ -31,7 +31,7 @@ elseif(ROCM_PATH)
 else()
   set(ROCM_PATH /opt/rocm CACHE PATH "Default ROCm installation path")
 endif()
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS ON)
 

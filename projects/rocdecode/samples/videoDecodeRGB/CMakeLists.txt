@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 # ROCM Path
 if(DEFINED ENV{ROCM_PATH})
   set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Default ROCm installation path")
@@ -45,7 +45,7 @@ if(USING_THE_ROCK)
 endif()
 
 # Set AMD Clang as default compiler
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS ON)
 if(NOT WIN32)
@@ -185,7 +185,7 @@ if(HIP_FOUND AND FFMPEG_FOUND AND rocdecode_FOUND AND (WIN32 OR (Threads_FOUND A
             add_custom_command(
                 OUTPUT ${KOBJ}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${KOBJ_DIR}
-                COMMAND ${HIP_KERNEL_COMPILER} -x hip -c ${KSRC} -o ${KOBJ} -D__HIP_PLATFORM_AMD__=1 -std=c++17
+                COMMAND ${HIP_KERNEL_COMPILER} -x hip -c ${KSRC} -o ${KOBJ} -D__HIP_PLATFORM_AMD__=1 -std=c++23
                     ${OFFLOAD_ARCH_FLAGS}
                     --rocm-path=${ROCM_PATH}
                     --rocm-device-lib-path=${ROCM_PATH}/lib/llvm/amdgcn/bitcode

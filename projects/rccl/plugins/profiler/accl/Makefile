@@ -3,7 +3,7 @@ INC := -I. -I$(RCCL_ROOT)/src/include/plugin -I$(RCCL_ROOT)/src/include
 PLUGIN_SO := librccl-profiler-accl.so
 
 CXX := g++
-CXXFLAGS := -std=c++14 -O2 -fPIC -shared -Wall -Wextra -DNDEBUG
+CXXFLAGS := -std=c++23 -O2 -fPIC -shared -Wall -Wextra -DNDEBUG
 
 ifeq ($(DEBUG), 1)
 CXXFLAGS += -g2 -ggdb3 -rdynamic -funwind-tables -fno-omit-frame-pointer

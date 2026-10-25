@@ -20,7 +20,7 @@
 ## IN THE SOFTWARE.
 ################################################################################
 
-cmake_minimum_required(VERSION 3.18.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 include( utils.cmake )
 set( CORE_TARGET "roctracer" )
@@ -44,7 +44,7 @@ if(WIN32)
   message(FATAL_ERROR "Windows build is not supported.")
 endif()
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wno-error=ignored-attributes -Werror)
 # To set addition RUNPATH in libraries

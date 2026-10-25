@@ -181,7 +181,7 @@ ROCP_SDK_ROCDECODE_FORMATTER(
     static_cast<void*>(v.ext_video_info),
     '}')
 
-ROCP_SDK_ROCDECODE_FORMATTER(RocdecTimeStamp, "{}RocdecTimeStamp={}{}", '{', v, '}')
+
 
 ROCP_SDK_ROCDECODE_FORMATTER(_RocdecSourceDataPacket,
                              "{}flags={}, payload_size={}, payload={}, pts={}{}",

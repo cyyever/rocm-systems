@@ -105,7 +105,7 @@ add_library(rccl_ep SHARED python/rccl_ep_capi.hip)
 set_target_properties(rccl_ep PROPERTIES
   HIP_ARCHITECTURES "${RCCL_EP_GPU_TARGETS}"
   POSITION_INDEPENDENT_CODE ON
-  CXX_STANDARD 17
+  CXX_STANDARD 23
   CXX_STANDARD_REQUIRED ON)
 
 # Sources include "device/..." and "include/..." relative to the module root.

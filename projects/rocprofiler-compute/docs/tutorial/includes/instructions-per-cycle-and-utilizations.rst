@@ -11,7 +11,7 @@ This example is compiled using ``c++17`` support:
 
 .. code-block:: shell
 
-   $ hipcc -O3 ipc.hip -o ipc -std=c++17
+   $ hipcc -O3 ipc.hip -o ipc -std=c++23
 
 and was run on an MI250 CDNA2 accelerator:
 

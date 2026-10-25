@@ -52,7 +52,7 @@ target_include_directories(nccl_m2n_gtest
 )
 target_compile_options(nccl_m2n_gtest PRIVATE -Wno-uninitialized)
 set_target_properties(nccl_m2n_gtest PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
 )
@@ -67,7 +67,7 @@ target_include_directories(nccl_m2n_gtest_main
 )
 target_compile_options(nccl_m2n_gtest_main PRIVATE -Wno-uninitialized)
 set_target_properties(nccl_m2n_gtest_main PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
 )
@@ -174,7 +174,7 @@ target_link_libraries(unit_tests PRIVATE
 set_target_properties(basic_api_test_local unit_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-    CXX_STANDARD 17
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
     CUDA_STANDARD 17
     CUDA_STANDARD_REQUIRED ON
@@ -186,7 +186,7 @@ if(MPI_FOUND)
   set_target_properties(basic_api_test_mpi PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
       CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}"
-      CXX_STANDARD 17
+      CXX_STANDARD 23
       CXX_STANDARD_REQUIRED ON
       CUDA_STANDARD 17
       CUDA_STANDARD_REQUIRED ON

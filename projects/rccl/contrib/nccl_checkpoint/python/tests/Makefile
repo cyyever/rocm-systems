@@ -3,7 +3,7 @@ NCCL_HOME ?= $(error set NCCL_HOME to your NCCL install/build prefix)
 CUDA_HOME ?= $(error set CUDA_HOME to your CUDA install prefix)
 
 CXX ?= g++
-CXXFLAGS ?= -std=c++17 -ffunction-sections -fdata-sections
+CXXFLAGS ?= -std=c++23 -ffunction-sections -fdata-sections
 TARGET := comm_hash_two_local_ranks
 SRC := comm_hash_two_local_ranks.c
 

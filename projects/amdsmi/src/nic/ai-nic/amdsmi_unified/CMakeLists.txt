@@ -1,7 +1,7 @@
 # Copyright Advanced Micro Devices, Inc.
 # SPDX-License-Identifier: MIT
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 # Capture the amd_smi project root before the project() call below opens a new
 # project scope, which would repoint PROJECT_SOURCE_DIR at this subdirectory.
@@ -10,7 +10,7 @@ set(AMD_SMI_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
 project(amdsminic LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})

@@ -117,7 +117,7 @@ if(AQLPROFILE_LIB AND AQLPROFILE_V2_INCLUDE_DIR AND AQLPROFILE_VERSION_INCLUDE_D
         ${AQLPROFILE_V2_INCLUDE_DIR}
         ${AQLPROFILE_VERSION_INCLUDE_DIR}
     )
-    target_compile_options(capture_aqlprofile_gfx9 PRIVATE ${TOOLS_COMPILE_OPTIONS} -std=c++17)
+    target_compile_options(capture_aqlprofile_gfx9 PRIVATE ${TOOLS_COMPILE_OPTIONS} -std=c++23)
     target_link_libraries(capture_aqlprofile_gfx9 PRIVATE ${AQLPROFILE_LIB})
 
     message(STATUS "AQLProfile capture tool: enabled")

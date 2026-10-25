@@ -41,9 +41,9 @@ set_target_properties(amdhip64 PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
 if(WIN32)
-  set_target_properties(amdhip64 PROPERTIES CXX_STANDARD 20)
+  set_target_properties(amdhip64 PROPERTIES CXX_STANDARD 23)
 else()
-  set_target_properties(amdhip64 PROPERTIES CXX_STANDARD 17)
+  set_target_properties(amdhip64 PROPERTIES CXX_STANDARD 23)
 endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

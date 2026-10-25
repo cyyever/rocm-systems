@@ -1,7 +1,7 @@
 # Copyright (c) 2019-2021 Advanced Micro Devices, Inc. All rights reserved.
 # Modifications Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 if(BUILD_TESTS)
 
@@ -589,7 +589,7 @@ if(BUILD_TESTS)
       ${GTEST_BOTH_LIBRARIES} hip::host hip::device Threads::Threads)
     set_target_properties(rccl-UnitTestsGinAnvilConnCheckDevice PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test"
-      CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+      CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
     add_test(NAME rccl-UnitTestsGinAnvilConnCheckDevice COMMAND rccl-UnitTestsGinAnvilConnCheckDevice)
     set_tests_properties(rccl-UnitTestsGinAnvilConnCheckDevice PROPERTIES LABELS "unit;gpu")
     rocm_install(TARGETS rccl-UnitTestsGinAnvilConnCheckDevice COMPONENT tests)
@@ -758,7 +758,7 @@ if(BUILD_TESTS)
       ${GTEST_BOTH_LIBRARIES} hip::host hip::device Threads::Threads)
     set_target_properties(rccl-UnitTestsGinSdmaAllGatherGpu PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test"
-      CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON)
+      CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
     add_test(NAME rccl-UnitTestsGinSdmaAllGatherGpu COMMAND rccl-UnitTestsGinSdmaAllGatherGpu)
     set_tests_properties(rccl-UnitTestsGinSdmaAllGatherGpu PROPERTIES LABELS "unit;gpu")
   endif()

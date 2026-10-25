@@ -89,7 +89,7 @@ NIIN_HOME=<nccl>/contrib/niin
 nvcc my_app.cu -o my_app \
     -I ${NIIN_HOME}/include \
     -L ${NIIN_HOME}/lib -lnvshmem_host \
-    --expt-relaxed-constexpr -std=c++17 -arch=sm_89
+    --expt-relaxed-constexpr -std=c++23 -arch=sm_89
 ```
 
 For device code spanning multiple CUDA translation units, compile those units
@@ -845,7 +845,7 @@ export NIIN_HOME=$PWD/contrib/niin
 nvcc contrib/niin/test/niin_test.cu -o niin_test \
     -I ${NIIN_HOME}/include \
     -L ${NIIN_HOME}/lib -lnvshmem_host \
-    --expt-relaxed-constexpr -std=c++17 -arch=sm_89 \
+    --expt-relaxed-constexpr -std=c++23 -arch=sm_89 \
     -Xlinker -rpath,${NIIN_HOME}/lib
 
 ./niin_test    # requires >= 2 GPUs

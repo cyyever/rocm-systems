@@ -7,7 +7,7 @@ RCCL_SRC := $(RCCL_ROOT)/src
 HIPIFY_DIR := ./hipify
 
 INCLUDES := -I. -I$(HIPIFY_DIR) -I$(RCCL_SRC)/include -I$(RCCL_SRC) -I$(ROCM_PATH)/include -I$(ROCM_PATH)/include/rocm_smi -I$(ROCM_PATH)/include/amd_smi
-CXXFLAGS := -std=c++17 -Wall -Wextra -Wno-unused-parameter -D__HIP_PLATFORM_AMD__ -DRCCL_STANDALONE_TEST $(INCLUDES)
+CXXFLAGS := -std=c++23 -Wall -Wextra -Wno-unused-parameter -D__HIP_PLATFORM_AMD__ -DRCCL_STANDALONE_TEST $(INCLUDES)
 LDFLAGS := -L$(ROCM_PATH)/lib -L$(ROCM_PATH)/lib64
 LIBS := -lrocm_smi64 -lpthread -ldl -lamdhip64
 

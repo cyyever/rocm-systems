@@ -205,7 +205,7 @@ ExternalProject_Add(hotswap_intercept
   SOURCE_DIR        "${_hotswap_testing_src}"
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E make_directory ${_hotswap_libdir}
   BUILD_COMMAND
-    ${CMAKE_CXX_COMPILER} -shared -fPIC -std=c++17 -O2
+    ${CMAKE_CXX_COMPILER} -shared -fPIC -std=c++23 -O2
       -o ${_hotswap_libdir}/libhotswap_intercept.so
       <SOURCE_DIR>/runtime/tools/hotswap_intercept.cpp -ldl
   INSTALL_COMMAND

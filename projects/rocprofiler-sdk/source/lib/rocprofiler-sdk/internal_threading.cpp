@@ -157,7 +157,10 @@ TaskGroup::join(bool async_only)
 namespace
 {
 template <rocprofiler_runtime_library_t... Idx>
-using library_sequence_t     = std::integer_sequence<rocprofiler_runtime_library_t, Idx...>;
+struct library_sequence_t
+{
+    static constexpr std::size_t size() noexcept { return sizeof...(Idx); }
+};
 using creation_notifier_cb_t = void (*)(rocprofiler_runtime_library_t, void*);
 
 // this is used to loop over the different libraries
@@ -231,7 +234,7 @@ update_creation_notifiers(creation_notifier_cb_t pre,
 template <notifier_stage StageT, rocprofiler_runtime_library_t... Idx>
 void
 execute_creation_notifiers(rocprofiler_runtime_library_t libs,
-                           std::integer_sequence<rocprofiler_runtime_library_t, Idx...>)
+                           library_sequence_t<Idx...>)
 {
     auto execute = [libs](auto& notifier) {
         if(((libs & notifier.value) == notifier.value))

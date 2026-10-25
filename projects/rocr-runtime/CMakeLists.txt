@@ -132,7 +132,7 @@ set_target_properties(hsakmt PROPERTIES
                                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/runtime")
 if (WIN32)
 set_target_properties(hsakmt PROPERTIES
-                      CXX_STANDARD 20
+                      CXX_STANDARD 23
                       CXX_STANDARD_REQUIRED ON)
 endif()
 
@@ -148,7 +148,7 @@ if (BUILD_ROCR)
                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/runtime")
 if (WIN32)
   set_target_properties(hsa-runtime64 PROPERTIES
-                        CXX_STANDARD 20
+                        CXX_STANDARD 23
                         CXX_STANDARD_REQUIRED ON)
 endif()
 

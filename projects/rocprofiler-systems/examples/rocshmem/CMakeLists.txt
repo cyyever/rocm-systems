@@ -93,7 +93,7 @@ set_target_properties(
     PROPERTIES
         HIP_STANDARD 17
         HIP_STANDARD_REQUIRED ON
-        CXX_STANDARD 17
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
 )
 

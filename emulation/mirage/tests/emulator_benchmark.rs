@@ -146,7 +146,7 @@ fn compile_fat_binary(out_dir: &Path) -> PathBuf {
         cmd.arg(format!("--offload-arch={arch}"));
     }
     let status = cmd
-        .arg("-std=c++20")
+        .arg("-std=c++23")
         .arg(&src)
         .arg("-o")
         .arg(&bin)

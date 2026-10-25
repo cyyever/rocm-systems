@@ -6,7 +6,7 @@ option(BUILD_RUNTIME "Build C++ runtime library" ON)
 option(BUILD_TESTING "Build tests" ON)
 
 # C++17 standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

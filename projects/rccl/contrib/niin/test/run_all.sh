@@ -86,7 +86,7 @@ NVCC_FLAGS="
   -I $MPI_HOME/include
   -L $NCCL_HOME/build/lib -lnccl
   -L $MPI_HOME/lib -lmpi
-  --expt-relaxed-constexpr -std=c++17 -arch=$ARCH
+  --expt-relaxed-constexpr -std=c++23 -arch=$ARCH
   -DNIIN_HAS_MPI
   -lcuda -lcudart -lrt
   -Xlinker -rpath,$NCCL_HOME/build/lib

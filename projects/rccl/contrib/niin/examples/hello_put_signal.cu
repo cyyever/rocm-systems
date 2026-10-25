@@ -9,7 +9,7 @@
  *   nvcc hello_put_signal.cu -o hello_put_signal -DNIIN_HAS_MPI \
  *       -I ${NIIN_HOME}/include \
  *       -L ${NIIN_HOME}/lib -lnvshmem_host -lmpi \
- *       --expt-relaxed-constexpr -std=c++17 -arch=sm_89 \
+ *       --expt-relaxed-constexpr -std=c++23 -arch=sm_89 \
  *       -Xlinker -rpath,${NIIN_HOME}/lib
  *
  * Run:

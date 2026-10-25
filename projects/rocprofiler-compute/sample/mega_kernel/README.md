@@ -481,16 +481,16 @@ make clean
 
 ```bash
 # For MI350 (CDNA4)
-hipcc -O2 -std=c++17 --offload-arch=gfx950 -o mega_kernel_test main.cpp mega_kernel.hip
+hipcc -O2 -std=c++23 --offload-arch=gfx950 -o mega_kernel_test main.cpp mega_kernel.hip
 
 
 # For Strix Point/Strix Halo/Krackan (RDNA 3.5)
-hipcc -O2 -std=c++17 --offload-arch=gfx1150 -o mega_kernel_test main.cpp mega_kernel.hip  # Strix Point
-hipcc -O2 -std=c++17 --offload-arch=gfx1151 -o mega_kernel_test main.cpp mega_kernel.hip  # Strix Halo
-hipcc -O2 -std=c++17 --offload-arch=gfx1152 -o mega_kernel_test main.cpp mega_kernel.hip  # Krackan
+hipcc -O2 -std=c++23 --offload-arch=gfx1150 -o mega_kernel_test main.cpp mega_kernel.hip  # Strix Point
+hipcc -O2 -std=c++23 --offload-arch=gfx1151 -o mega_kernel_test main.cpp mega_kernel.hip  # Strix Halo
+hipcc -O2 -std=c++23 --offload-arch=gfx1152 -o mega_kernel_test main.cpp mega_kernel.hip  # Krackan
 
 # For gfx1250
-hipcc -O2 -std=c++17 --offload-arch=gfx1250 -o mega_kernel_test_gfx1250 main.cpp mega_kernel.hip
+hipcc -O2 -std=c++23 --offload-arch=gfx1250 -o mega_kernel_test_gfx1250 main.cpp mega_kernel.hip
 ```
 
 ## Running

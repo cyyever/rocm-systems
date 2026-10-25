@@ -21,7 +21,7 @@ ASAN ?= 0
 UBSAN ?= 0
 NCCL_INSPECTOR_ENABLE_WARN ?= 0
 
-CXXSTD ?= -std=c++17
+CXXSTD ?= -std=c++23
 
 # Build directories
 OBJDIR := obj

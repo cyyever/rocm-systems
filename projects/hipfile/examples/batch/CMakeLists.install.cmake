@@ -18,7 +18,7 @@ find_package(hipfile REQUIRED CONFIG)
 add_subdirectory(../common "${CMAKE_CURRENT_BINARY_DIR}/common")
 
 add_executable(batch-roundtrip batch-roundtrip.cpp)
-target_compile_features(batch-roundtrip PRIVATE cxx_std_20)
+target_compile_features(batch-roundtrip PRIVATE cxx_std_23)
 set_target_properties(batch-roundtrip PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(batch-roundtrip PRIVATE -Wall -Wextra)
 target_link_libraries(batch-roundtrip PRIVATE examples_common)

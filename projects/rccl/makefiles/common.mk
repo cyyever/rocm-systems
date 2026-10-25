@@ -103,9 +103,9 @@ $(info NVCC_GENCODE is ${NVCC_GENCODE})
 
 # CUDA 13.0 requires c++17
 ifeq ($(shell test "0$(CUDA_MAJOR)" -ge 13; echo $$?),0)
-  CXXSTD ?= -std=c++17
+  CXXSTD ?= -std=c++23
 else
-  CXXSTD ?= -std=c++14
+  CXXSTD ?= -std=c++23
 endif
 
 CXXFLAGS   := -DCUDA_MAJOR=$(CUDA_MAJOR) -DCUDA_MINOR=$(CUDA_MINOR) -fPIC -fvisibility=hidden \

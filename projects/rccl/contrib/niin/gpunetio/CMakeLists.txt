@@ -157,7 +157,7 @@ else()
 
   add_library(niin_gpunetio_open_obj OBJECT ${NIIN_GPUNETIO_OPEN_SOURCES})
   set_target_properties(niin_gpunetio_open_obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
-  target_compile_features(niin_gpunetio_open_obj PRIVATE cxx_std_17)
+  target_compile_features(niin_gpunetio_open_obj PRIVATE cxx_std_23)
   target_compile_definitions(niin_gpunetio_open_obj PRIVATE
     DOCA_GPUNETIO_USE_CUDA_WRAPPER
     DOCA_VERBS_USE_NET_WRAPPER)
@@ -192,7 +192,7 @@ add_library(niin_gpunetio_atomics STATIC
   ${NIIN_GPUNETIO_ATOMIC_SOURCES}
   ${NIIN_GPUNETIO_PROVIDER_OBJECTS})
 
-target_compile_features(niin_gpunetio_atomics PUBLIC cxx_std_17)
+target_compile_features(niin_gpunetio_atomics PUBLIC cxx_std_23)
 target_compile_definitions(niin_gpunetio_atomics PUBLIC NIIN_GPUNETIO_ENABLE=1)
 if(NIIN_GPUNETIO_ENABLE_SRQ_PROXY_ATOMICS)
   target_compile_definitions(niin_gpunetio_atomics PUBLIC NIIN_GPUNETIO_SRQ_PROXY_ATOMICS_ENABLE=1)
@@ -228,7 +228,7 @@ target_link_libraries(niin_gpunetio_atomics
 # does not require a NIC or launch a kernel during a normal build.
 if(NIIN_GPUNETIO_BUILD_DEVICE_COMPILE_TEST)
   add_library(niin_gpunetio_atomic_device_compile OBJECT tests/device_compile.cu)
-  target_compile_features(niin_gpunetio_atomic_device_compile PRIVATE cxx_std_17)
+  target_compile_features(niin_gpunetio_atomic_device_compile PRIVATE cxx_std_23)
   target_compile_definitions(niin_gpunetio_atomic_device_compile PRIVATE NIIN_GPUNETIO_ENABLE=1)
   target_include_directories(niin_gpunetio_atomic_device_compile PRIVATE
     "${NIIN_INCLUDE_DIR}"
@@ -246,7 +246,7 @@ if(NIIN_GPUNETIO_BUILD_SMOKE_TEST)
   find_package(MPI QUIET COMPONENTS CXX)
   if(MPI_CXX_FOUND)
     add_executable(niin_gpunetio_atomic_smoke tests/atomic_smoke.cu)
-    target_compile_features(niin_gpunetio_atomic_smoke PRIVATE cxx_std_17)
+    target_compile_features(niin_gpunetio_atomic_smoke PRIVATE cxx_std_23)
     target_link_libraries(niin_gpunetio_atomic_smoke PRIVATE
       niin_gpunetio_atomics
       MPI::MPI_CXX
@@ -256,7 +256,7 @@ if(NIIN_GPUNETIO_BUILD_SMOKE_TEST)
       CUDA_STANDARD_REQUIRED ON)
     if(NIIN_GPUNETIO_ENABLE_SRQ_PROXY_ATOMICS)
       add_executable(niin_gpunetio_proxy_atomic_smoke proxy_atomics/tests/proxy_atomic_smoke.cu)
-      target_compile_features(niin_gpunetio_proxy_atomic_smoke PRIVATE cxx_std_17)
+      target_compile_features(niin_gpunetio_proxy_atomic_smoke PRIVATE cxx_std_23)
       target_link_libraries(niin_gpunetio_proxy_atomic_smoke PRIVATE
         niin_gpunetio_atomics
         MPI::MPI_CXX

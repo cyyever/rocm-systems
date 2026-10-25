@@ -40,7 +40,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.7 )
+cmake_minimum_required ( VERSION 3.20 )
 
 ## Clear target dependency data.
 ## Needed to allow UI transitions between static and dynamic builds.
@@ -49,9 +49,9 @@ unset ( hsa-runtime64_LIB_DEPENDS CACHE )
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 if (UNIX)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 23)
 else()
-  set(CMAKE_CXX_STANDARD 20)
+  set(CMAKE_CXX_STANDARD 23)
 endif()
 
 ## Set core runtime module name and project name.

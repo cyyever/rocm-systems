@@ -5,7 +5,7 @@
  #
  #######################################################################################################################
 
-cmake_minimum_required(VERSION 3.1...3.21)
+cmake_minimum_required(VERSION 3.20...3.21)
 
 project(MetroHash VERSION 1.0.0 LANGUAGES CXX)
 
@@ -19,7 +19,7 @@ target_sources(metrohash PRIVATE src/metrohash64.cpp
                                  src/metrohash128.cpp)
 
 
-set_target_properties(metrohash PROPERTIES CXX_STANDARD              11
+set_target_properties(metrohash PROPERTIES CXX_STANDARD              23
                                            CXX_STANDARD_REQUIRED     ON
                                            CXX_EXTENSIONS            OFF
                                            POSITION_INDEPENDENT_CODE ON)

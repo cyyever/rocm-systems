@@ -64,7 +64,7 @@ HAVE_HIP_FABRIC_API := $(shell printf '%s\n' \
   '#include <hip/hip_runtime_api.h>' \
   'int main() { hipMemFabricHandle_t h{}; (void)h; auto fn = &hipMemImportFromShareableHandle; (void)fn; }' \
   > $(PROBE_TMP) && \
-  $(PROBE_CXX) -x c++ -std=c++17 -fsyntax-only -D__HIP_PLATFORM_AMD__ -I$(ROCM_PATH)/include $(PROBE_TMP) \
+  $(PROBE_CXX) -x c++ -std=c++23 -fsyntax-only -D__HIP_PLATFORM_AMD__ -I$(ROCM_PATH)/include $(PROBE_TMP) \
   >/dev/null 2>&1 && echo yes || echo no)
 ifeq ($(HAVE_HIP_FABRIC_API),yes)
 FEATURE_DEFINES += -DHIP_FABRIC_API
@@ -74,7 +74,7 @@ HAVE_AMDSMI_FABRIC_API := $(shell printf '%s\n' \
   '#include <amd_smi/amdsmi.h>' \
   'int main() { amdsmi_fabric_info_t info{}; (void)info; }' \
   > $(PROBE_TMP) && \
-  $(PROBE_CXX) -x c++ -std=c++17 -fsyntax-only -I$(ROCM_PATH)/include $(PROBE_TMP) \
+  $(PROBE_CXX) -x c++ -std=c++23 -fsyntax-only -I$(ROCM_PATH)/include $(PROBE_TMP) \
   >/dev/null 2>&1 && echo yes || echo no)
 ifeq ($(HAVE_AMDSMI_FABRIC_API),yes)
 FEATURE_DEFINES += -DAMDSMI_FABRIC_DIRECT
@@ -87,7 +87,7 @@ HAVE_AMDSMI_FABRIC_TELEMETRY := $(shell printf '%s\n' \
   '#include <amd_smi/amdsmi.h>' \
   'int main() { amdsmi_fabric_telemetry_category_t cat = AMDSMI_FABRIC_TELEMETRY_CATEGORY_UNKNOWN; (void)cat; }' \
   > $(PROBE_TMP) && \
-  $(PROBE_CXX) -x c++ -std=c++17 -fsyntax-only -I$(ROCM_PATH)/include $(PROBE_TMP) \
+  $(PROBE_CXX) -x c++ -std=c++23 -fsyntax-only -I$(ROCM_PATH)/include $(PROBE_TMP) \
   >/dev/null 2>&1 && echo yes || echo no)
 ifeq ($(HAVE_AMDSMI_FABRIC_TELEMETRY),yes)
 FEATURE_DEFINES += -DAMDSMI_HEADER_HAS_FABRIC_TELEMETRY -DAMDSMI_FABRIC_DIRECT
@@ -96,7 +96,7 @@ endif
 PROBE_CLEANUP := $(shell rm -f $(PROBE_TMP))
 
 CXXFLAGS = -g -ffunction-sections -fdata-sections -DROCM_VERSION=$(ROCM_VERSION) \
-           -std=c++17 \
+           -std=c++23 \
            -Wl,--gc-sections -fgpu-rdc \
            -Iinclude -Itest -Ihipify_rccl/include -Ihipify_rccl/include/plugin \
 		   -Ihipify_rccl/include/nccl_device \

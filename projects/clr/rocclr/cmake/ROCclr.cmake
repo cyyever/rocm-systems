@@ -34,9 +34,9 @@ set_target_properties(rocclr PROPERTIES
     POSITION_INDEPENDENT_CODE ON)
 
 if(WIN32)
-  set_target_properties(rocclr PROPERTIES CXX_STANDARD 20)
+  set_target_properties(rocclr PROPERTIES CXX_STANDARD 23)
 else()
-  set_target_properties(rocclr PROPERTIES CXX_STANDARD 17)
+  set_target_properties(rocclr PROPERTIES CXX_STANDARD 23)
 endif()
 
 target_sources(rocclr PRIVATE

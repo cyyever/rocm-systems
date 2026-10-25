@@ -27,7 +27,7 @@ include(GoogleTest)
 add_executable(test_error_callback test_error_callback.cc)
 set_target_properties(test_error_callback
   PROPERTIES
-    CXX_STANDARD                17
+    CXX_STANDARD                23
     CXX_EXTENSIONS              OFF
     CXX_VISIBILITY_PRESET       hidden
     VISIBILITY_INLINES_HIDDEN   ON
@@ -51,7 +51,7 @@ gtest_discover_tests(test_error_callback)
 add_executable(test_memory test_memory.cc)
 set_target_properties(test_memory
   PROPERTIES
-    CXX_STANDARD                17
+    CXX_STANDARD                23
     CXX_EXTENSIONS              OFF
     CXX_VISIBILITY_PRESET       hidden
     VISIBILITY_INLINES_HIDDEN   ON
@@ -434,7 +434,7 @@ endif()
 add_executable(test_dispatch test_dispatch.cc)
 set_target_properties(test_dispatch
   PROPERTIES
-    CXX_STANDARD                17
+    CXX_STANDARD                23
     CXX_EXTENSIONS              OFF
     CXX_VISIBILITY_PRESET       hidden
     VISIBILITY_INLINES_HIDDEN   ON
@@ -495,7 +495,7 @@ add_executable(elf_parse_test
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../runtime/hsa-runtime/core/runtime/amd_aie_elf.cpp)
 set_target_properties(elf_parse_test
   PROPERTIES
-    CXX_STANDARD                17
+    CXX_STANDARD                23
     CXX_EXTENSIONS              OFF
     CXX_VISIBILITY_PRESET       hidden
     VISIBILITY_INLINES_HIDDEN   ON
@@ -530,7 +530,7 @@ add_executable(aie_code_test
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../runtime/hsa-runtime/libamdhsacode/amd_hsa_code_util.cpp)
 set_target_properties(aie_code_test
   PROPERTIES
-    CXX_STANDARD                17
+    CXX_STANDARD                23
     CXX_EXTENSIONS              OFF
     CXX_VISIBILITY_PRESET       hidden
     VISIBILITY_INLINES_HIDDEN   ON

@@ -60,6 +60,6 @@ fi
 # Run clang-tidy
 printf '%s\0' "${FILES[@]}" | \
     xargs -0 -I{} \
-    clang-tidy "${ARGS[@]}" {} -- "${INCLUDES[@]}" -std=c++17
+    clang-tidy "${ARGS[@]}" {} -- "${INCLUDES[@]}" -std=c++23
 
 echo "Processed ${#FILES[@]} files"

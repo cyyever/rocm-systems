@@ -21,7 +21,7 @@ CXX := $(HIPCC)
 GPU_TARGETS ?= gfx90a gfx942 gfx1100
 OFFLOAD_ARCH_FLAGS := $(foreach a,$(GPU_TARGETS),--offload-arch=$(a))
 
-CXXFLAGS  ?= -O2 -g -std=c++17 -Wall
+CXXFLAGS  ?= -O2 -g -std=c++23 -Wall
 CXXFLAGS  += -D__HIP_PLATFORM_AMD__ $(OFFLOAD_ARCH_FLAGS)
 
 # RCCL_HOME is searched before ROCM_PATH so a custom RCCL wins over the one

@@ -2,7 +2,7 @@
 
 # CMake version minimum requirements
 #==================================================================================================
-cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 
 # CMake Toolchain file to define compilers and path to ROCm
 #==================================================================================================
@@ -115,7 +115,7 @@ endif()
 # Set CMAKE flags
 #==================================================================================================
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
-set(CMAKE_CXX_STANDARD   17)   # rocshmem GIN QP device headers require C++17
+set(CMAKE_CXX_STANDARD   23)   # rocshmem GIN QP device headers require C++17
 set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++14 instead, which has some issues.
 set(CPACK_PACKAGING_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "Path to install to when packaged.")
 if(ROCM_PATH)

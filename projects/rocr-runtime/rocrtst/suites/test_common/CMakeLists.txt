@@ -27,7 +27,7 @@
 #   4) Run "make"
 #
 
-cmake_minimum_required(VERSION 3.12.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 # Set Name for Samples Project
 #
@@ -397,7 +397,7 @@ add_definitions(-DLITTLEENDIAN_CPU=1)
 #
 # Linux Compiler options
 #
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-math-errno")

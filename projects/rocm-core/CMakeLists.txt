@@ -91,7 +91,7 @@ configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/rocm_getpath.h.in ${BUILD_DIR}/rocm_
 set( SRCS rocm_version.cpp rocm_getpath.cpp)
 add_library( ${CORE_TARGET} ${SRCS} )
 
-set( CXX_FLAGS ${CXX_FLAGS} -g -fPIC -fvisibility=hidden -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wundef -Wshadow -Wpointer-arith -Wcast-qual -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=c++11 )
+set( CXX_FLAGS ${CXX_FLAGS} -g -fPIC -fvisibility=hidden -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wundef -Wshadow -Wpointer-arith -Wcast-qual -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=c++23 )
 set( CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}  -Wl,-z,nodelete -Wl,-no-undefined" )
 target_include_directories( ${CORE_TARGET} PRIVATE ${BUILD_DIR} )
 if(BUILD_SHARED_LIBS)

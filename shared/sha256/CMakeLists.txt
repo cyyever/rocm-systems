@@ -4,7 +4,7 @@
 # find_package(): it depends on nothing but the standard library, so it can be
 # pulled in from either direction without creating a cycle.
 
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 project(rocm-sha256 VERSION 1.0.0 LANGUAGES CXX)
 
 # Create as a STATIC and OBJECT library. rocprofiler-sdk links statically since
@@ -20,7 +20,7 @@ target_include_directories(
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
-target_compile_features(rocm-sha256-objects PUBLIC cxx_std_17)
+target_compile_features(rocm-sha256-objects PUBLIC cxx_std_23)
 
 # Linked into shared libraries.
 set_target_properties(

@@ -42,7 +42,7 @@ ifeq ($(GTEST_AVAILABLE),1)
 GTEST_INC := $(GTEST_DIR)/include
 GTEST_SRC := $(GTEST_DIR)/src
 
-GTEST_CXXFLAGS := -std=c++17 -pthread -O2 -Wall -Wno-uninitialized \
+GTEST_CXXFLAGS := -std=c++23 -pthread -O2 -Wall -Wno-uninitialized \
                   -isystem $(GTEST_INC) -I$(GTEST_DIR)
 
 GTEST_HDRS := $(wildcard $(GTEST_DIR)/include/gtest/*.h) \

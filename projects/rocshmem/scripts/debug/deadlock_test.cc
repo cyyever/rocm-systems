@@ -35,7 +35,7 @@
  *
  * Build (adjust ROCSHMEM, MPI_HOME, GPU_TARGET for your installation):
  *
- *   hipcc -O2 -g -std=c++17 -fgpu-rdc \
+ *   hipcc -O2 -g -std=c++23 -fgpu-rdc \
  *         --offload-arch=${GPU_TARGET} \
  *         -I${ROCSHMEM}/include -I${MPI_HOME}/include \
  *         -x hip deadlock_test.cc -x none \

@@ -94,7 +94,7 @@ fn compile(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = Command::new(compiler);
     command
-        .arg("-std=c++17")
+        .arg("-std=c++23")
         .arg("-fPIC")
         .arg("-O2")
         .arg("-DBRAHMA_BUILD=1")

@@ -20,7 +20,7 @@
 # SOFTWARE.
 #
 # ##############################################################################
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 if(NOT DEFINED ENHANCED_MESSAGE)
   string(ASCII 27 Esc)
@@ -40,7 +40,7 @@ else()
   set(ROCM_PATH /opt/rocm CACHE PATH "Default ROCm installation path")
 endif()
 # Set AMD Clang as default compiler
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED On)
 set(CMAKE_CXX_EXTENSIONS ON)
 if (NOT WIN32 AND NOT DEFINED CMAKE_CXX_COMPILER)

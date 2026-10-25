@@ -88,7 +88,7 @@ set(BITCODE_COMPILE_FLAGS_BASE
     -Wextra
     -x hip
     --cuda-device-only
-    -std=c++17
+    -std=c++23
     -emit-llvm
     -fvisibility=default
     -O3

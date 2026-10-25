@@ -1,6 +1,6 @@
 
 
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 ## Set module name and project name.
 set ( AQLPROFILE_NAME "hsa-amd-aqlprofile" )

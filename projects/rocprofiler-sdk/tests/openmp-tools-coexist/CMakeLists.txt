@@ -42,7 +42,7 @@ add_library(openmp-tools-coexist-client SHARED coexist_client.cpp)
 target_link_libraries(
     openmp-tools-coexist-client PRIVATE rocprofiler-sdk::rocprofiler-sdk
                                         rocprofiler-sdk::tests-build-flags)
-target_compile_features(openmp-tools-coexist-client PRIVATE cxx_std_17)
+target_compile_features(openmp-tools-coexist-client PRIVATE cxx_std_23)
 set_target_properties(
     openmp-tools-coexist-client PROPERTIES POSITION_INDEPENDENT_CODE ON
                                            INSTALL_RPATH "\$ORIGIN:\$ORIGIN/..")
@@ -55,7 +55,7 @@ target_include_directories(
         $<TARGET_PROPERTY:rocprofiler-sdk::rocprofiler-sdk,INTERFACE_INCLUDE_DIRECTORIES>)
 # links dl for dlsym(3); CMAKE_DL_LIBS is empty where libdl is folded into libc
 target_link_libraries(openmp-tools-coexist-mock PRIVATE ${CMAKE_DL_LIBS})
-target_compile_features(openmp-tools-coexist-mock PRIVATE cxx_std_17)
+target_compile_features(openmp-tools-coexist-mock PRIVATE cxx_std_23)
 set_target_properties(openmp-tools-coexist-mock PROPERTIES POSITION_INDEPENDENT_CODE ON
                                                            CXX_VISIBILITY_PRESET hidden)
 

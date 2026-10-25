@@ -32,7 +32,7 @@ endforeach()
 option(REPRODUCIBLE_DISPATCH_COUNT_USE_MPI
        "Enable MPI support in reproducible-dispatch-count exe" OFF)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_HIP_STANDARD 17)

@@ -266,7 +266,7 @@ std::string getHostName(int maxlen, const char delim) {
   std::string hostname(maxlen + 1, '\0');
   if (gethostname(const_cast<char*>(hostname.data()), maxlen) != 0) {
     ERROR("gethostname failed\n");
-    return nullptr;
+    return {};
   }
   int i = 0;
   while ((hostname[i] != delim) && (hostname[i] != '\0') &&

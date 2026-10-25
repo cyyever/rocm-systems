@@ -3,7 +3,7 @@
 
 # CMake version minimum requirements
 #==================================================================================================
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 # Locate the shared rocm-systems tree so standalone RCCL builds can pick up
 # shared/ctest/TestCategories.cmake (the test-categories block in test/CMakeLists.txt
@@ -295,7 +295,7 @@ endif()
 # Set CMAKE flags
 #==================================================================================================
 set(CMAKE_INSTALL_PREFIX "${ROCM_PATH}" CACHE PATH "")
-set(CMAKE_CXX_STANDARD   17)   # We use C++17 features, this will add compile option: -std=c++17
+set(CMAKE_CXX_STANDARD   23)   # We use C++17 features, this will add compile option: -std=c++23
 set(CMAKE_CXX_EXTENSIONS OFF)  # Without this line, it will add -std=gnu++20 instead, which has some issues.
 if(ROCM_PATH)
   list(APPEND CMAKE_PREFIX_PATH  # Add ROCM_PATH to CMake search paths (for finding HIP / HSA

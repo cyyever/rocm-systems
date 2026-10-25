@@ -171,7 +171,7 @@ add_executable(
 set_target_properties(
     rocprof-sys-capchk
     PROPERTIES
-        CXX_STANDARD 17
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
         RUNTIME_OUTPUT_DIRECTORY "${_capchk_dir}"

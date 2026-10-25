@@ -12,7 +12,7 @@ set(TEST_SRC
 hip_add_exe_to_target(NAME HrrTest
                       TEST_SRC ${TEST_SRC}
                       TEST_TARGET_NAME build_tests
-                      PROPERTY CXX_STANDARD 17)
+                      PROPERTY CXX_STANDARD 23)
 
 # hrr_capture_smoke_test.cc needs:
 #   HRR_TEST_EXE  — bare filename; SpawnProc resolves it from currentPath()

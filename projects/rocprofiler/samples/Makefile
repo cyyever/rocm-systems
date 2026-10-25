@@ -12,7 +12,7 @@ endif
 .PHONY: all
 all: profiler_kernel_no_replay profiler_device_profiling profiler_kernel_replay profiler_application_replay profiler_user_replay tracer_hip_hsa tracer_hip_hsa_async pcie_counters_sampler xgmi_counters_sampler pc_sampler
 
-CXX=$(ROCM_PATH)/bin/hipcc -std=c++17 -Wall
+CXX=$(ROCM_PATH)/bin/hipcc -std=c++23 -Wall
 
 DEBUG=1
 ifeq ($(DEBUG), 1)

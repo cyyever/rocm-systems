@@ -18,7 +18,7 @@ add_executable(hrr-unit-tests
   hrr_playback_test.cc
 )
 set_target_properties(hrr-unit-tests PROPERTIES
-  CXX_STANDARD 17
+  CXX_STANDARD 23
   CXX_STANDARD_REQUIRED ON)
 
 # Capture's code object scrubber lives in CLR and needs nothing but <cstring>,
@@ -113,7 +113,7 @@ if(TARGET hrr-playback AND NOT WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../playback/hrr_region_map.cpp
   )
   set_target_properties(hrr-handler-tests PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON)
   target_include_directories(hrr-handler-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../playback)

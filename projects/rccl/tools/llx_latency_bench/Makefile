@@ -5,7 +5,7 @@
 
 ROCM_PATH ?= $(wildcard /opt/rocm)
 HIPCC      = $(ROCM_PATH)/bin/hipcc
-CXXFLAGS   = -O3 -std=c++17 --offload-arch=native -x hip
+CXXFLAGS   = -O3 -std=c++23 --offload-arch=native -x hip
 
 BINS = llx_latency_bench_64 llx_latency_bench_128 llx_latency_bench_256
 

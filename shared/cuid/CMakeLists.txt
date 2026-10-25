@@ -58,7 +58,7 @@ endif()
 include(GNUInstallDirs)
 
 # C++ standard for all targets
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # A parent project has its own BUILD_TESTS etc. (projects/amdsmi sets

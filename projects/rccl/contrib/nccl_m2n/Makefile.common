@@ -61,7 +61,7 @@ BENCHDIR := $(NCCL_RESHARD_ROOT)/benchmarks
 TESTSDIR := $(NCCL_RESHARD_ROOT)/tests
 
 # ── Compiler flags ─────────────────────────────────────────────────────────
-CXXSTD := -std=c++17
+CXXSTD := -std=c++23
 
 INCLUDES := -isystem $(NCCL_HOME)/include \
             -isystem $(NCCL_HOME)/include/nccl_device \

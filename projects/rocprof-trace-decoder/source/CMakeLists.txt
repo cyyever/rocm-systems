@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 if(NOT DEFINED PROJECT_NAME)
     set(PROJECT_NAME "rocprof-trace-decoder")
 endif()
 
 if(NOT DEFINED TTD_PROJECT_SOURCE_DIR)
-    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(TTD_PROJECT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 endif()

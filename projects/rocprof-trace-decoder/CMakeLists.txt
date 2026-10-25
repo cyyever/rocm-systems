@@ -1,7 +1,7 @@
 #
 # Build Standaone Library for Advanced Thread Tracer
 #
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.cmake)
 
@@ -14,7 +14,7 @@ project(
     LANGUAGES C CXX)
 set(PROJECT_NAME ${CMAKE_PROJECT_NAME})
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/cmake)

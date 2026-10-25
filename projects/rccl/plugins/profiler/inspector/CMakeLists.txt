@@ -8,7 +8,7 @@
 
 # Detect standalone vs. in-tree configuration.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.16)
+    cmake_minimum_required(VERSION 3.20)
     project(rccl-profiler-inspector LANGUAGES CXX)
     set(INSPECTOR_STANDALONE ON)
 else()
@@ -75,7 +75,7 @@ target_compile_definitions(rccl-profiler-inspector PRIVATE
     NCCL_INSPECTOR_ENABLE_WARN=$<BOOL:${NCCL_INSPECTOR_ENABLE_WARN}>
 )
 
-target_compile_features(rccl-profiler-inspector PRIVATE cxx_std_17)
+target_compile_features(rccl-profiler-inspector PRIVATE cxx_std_23)
 
 target_compile_options(rccl-profiler-inspector PRIVATE -Wall -Wextra)
 

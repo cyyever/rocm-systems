@@ -51,7 +51,7 @@ HIPCC ?= hipcc
 GPU_ARCH ?= gfx1151
 
 # Common flags
-HIPCC_FLAGS = -O2 -g -std=c++17
+HIPCC_FLAGS = -O2 -g -std=c++23
 HIPCC_FLAGS += -Wall -Wextra
 HIPCC_FLAGS += -fPIC
 

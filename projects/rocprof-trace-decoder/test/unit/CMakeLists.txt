@@ -2,11 +2,11 @@
 # # Copyright (c) 2025 Advanced Micro Devices, Inc.
 # ######################################################################################################################
 
-cmake_minimum_required(VERSION 3.16.0)
+cmake_minimum_required(VERSION 3.20.0)
 
 project(att-decoder-unit-tests LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(${TTD_PROJECT_SOURCE_DIR}/cmake/version.cmake)

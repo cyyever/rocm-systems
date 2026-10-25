@@ -5,7 +5,7 @@
 
 HIPCC      ?= hipcc
 GPU_ARCH   ?= gfx1250
-HIPCC_FLAGS = -O2 -g -std=c++17 -Wall -Wextra -fPIC
+HIPCC_FLAGS = -O2 -g -std=c++23 -Wall -Wextra -fPIC
 INCLUDES    = -I.
 
 TARGET      = wmma_gemm_fp16

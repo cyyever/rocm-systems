@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 project(Aqlprofile_v2_tests LANGUAGES C CXX HIP)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 
 
 if(NOT DEFINED AQLPROFILE_TARGET)

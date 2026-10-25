@@ -473,7 +473,7 @@ find_package(hipfile QUIET CONFIG HINTS ${ROCM_PATH} PATHS ${ROCM_PATH}
 
 if(TARGET hip::hipfile)
     rocprofiler_config_nolink_target(rocprofiler-sdk-hipfile-nolink hip::hipfile)
-    # hipFILE currently exports cxx_std_20, but rocprofiler-sdk is built as C++17. Keep
+    # hipFILE currently exports cxx_std_23, but rocprofiler-sdk is built as C++17. Keep
     # the header/include propagation without raising SDK targets to C++20.
     set_property(TARGET rocprofiler-sdk-hipfile-nolink
                  PROPERTY INTERFACE_COMPILE_FEATURES)

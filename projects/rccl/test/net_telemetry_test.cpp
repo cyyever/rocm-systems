@@ -38,17 +38,17 @@
  * net_telemetry.cc depends only on libc + pthread, so this links directly
  * against it with no RCCL build system and no hardware:
  *
- *   g++ -std=c++17 -O2 -pthread -Wall -Wextra \
+ *   g++ -std=c++23 -O2 -pthread -Wall -Wextra \
  *       -I ../src/include net_telemetry_test.cpp ../src/transport/net_telemetry.cc \
  *       -o /tmp/net_telemetry_test && /tmp/net_telemetry_test
  *
  * Concurrency case is meant to be run under sanitizers as well:
  *
- *   g++ -std=c++17 -O1 -g -pthread -fsanitize=thread \
+ *   g++ -std=c++23 -O1 -g -pthread -fsanitize=thread \
  *       -I ../src/include net_telemetry_test.cpp ../src/transport/net_telemetry.cc \
  *       -o /tmp/net_telemetry_test_tsan && /tmp/net_telemetry_test_tsan
  *
- *   g++ -std=c++17 -O1 -g -pthread -fsanitize=address,undefined \
+ *   g++ -std=c++23 -O1 -g -pthread -fsanitize=address,undefined \
  *       -I ../src/include net_telemetry_test.cpp ../src/transport/net_telemetry.cc \
  *       -o /tmp/net_telemetry_test_asan && /tmp/net_telemetry_test_asan
  *
