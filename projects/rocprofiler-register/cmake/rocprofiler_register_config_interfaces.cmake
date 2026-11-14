@@ -55,13 +55,22 @@ endforeach()
 #
 # ----------------------------------------------------------------------------------------#
 
-find_library(stdcxxfs_LIBRARY NAMES stdc++fs)
-find_package_handle_standard_args(stdcxxfs-library REQUIRED_VARS stdcxxfs_LIBRARY)
-
-if(stdcxxfs_LIBRARY)
-    target_link_libraries(rocprofiler-register-stdcxxfs
-                          INTERFACE $<BUILD_INTERFACE:${stdcxxfs_LIBRARY}>)
-else()
+include(CheckCXXSourceCompiles)
+include(CMakePushCheckState)
+cmake_push_check_state(RESET)
+set(CMAKE_REQUIRED_INCLUDES
+    "${CMAKE_CURRENT_LIST_DIR}/../source/lib/rocprofiler-register/details")
+set(_filesystem_test "#include <filesystem.hpp>
+int main() { return fs::current_path().empty(); }")
+check_cxx_source_compiles("${_filesystem_test}" ROCPROFILER_REGISTER_FILESYSTEM_BUILTIN)
+if(NOT ROCPROFILER_REGISTER_FILESYSTEM_BUILTIN)
+    set(CMAKE_REQUIRED_LIBRARIES stdc++fs)
+    check_cxx_source_compiles("${_filesystem_test}" ROCPROFILER_REGISTER_FILESYSTEM_STDCXXFS)
+    if(NOT ROCPROFILER_REGISTER_FILESYSTEM_STDCXXFS)
+        message(FATAL_ERROR "C++ filesystem cannot link with the standard library or stdc++fs")
+    endif()
     target_link_libraries(rocprofiler-register-stdcxxfs
                           INTERFACE $<BUILD_INTERFACE:stdc++fs>)
 endif()
+unset(_filesystem_test)
+cmake_pop_check_state()
