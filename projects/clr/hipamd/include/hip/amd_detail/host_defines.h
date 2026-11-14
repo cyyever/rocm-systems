@@ -402,7 +402,8 @@ typedef __hip_internal::int64_t __hip_int64_t;
 
 #define __global__
 
-#define __noinline__
+// GCC 16's <format> uses [[__gnu__::__noinline__]]. Defining this token as
+// a macro breaks the attribute when HIP headers are included first.
 #define __forceinline__ inline
 
 #define __shared__
