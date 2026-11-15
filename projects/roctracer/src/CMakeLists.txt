@@ -166,7 +166,7 @@ target_include_directories(roctracer
     ${CMAKE_CURRENT_SOURCE_DIR}/roctracer ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_options(roctracer PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/roctracer/exportmap -Wl,--no-undefined)
-target_link_libraries(roctracer PRIVATE util hsa-runtime64::hsa-runtime64 stdc++fs Threads::Threads dl)
+target_link_libraries(roctracer PRIVATE util hsa-runtime64::hsa-runtime64 ${ROCTRACER_FILESYSTEM_LIBRARY} Threads::Threads dl)
 
 install(TARGETS roctracer LIBRARY
   DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -229,7 +229,7 @@ target_include_directories(roctracer_tool
     ${PROJECT_SOURCE_DIR}/inc ${CMAKE_CURRENT_SOURCE_DIR}/roctracer
     ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(roctracer_tool util roctracer hsa-runtime64::hsa-runtime64 stdc++fs Threads::Threads atomic dl)
+target_link_libraries(roctracer_tool util roctracer hsa-runtime64::hsa-runtime64 ${ROCTRACER_FILESYSTEM_LIBRARY} Threads::Threads atomic dl)
 target_link_options(roctracer_tool PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/tracer_tool/exportmap -Wl,--no-undefined)
 
 install(TARGETS roctracer_tool LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME} COMPONENT runtime)
@@ -238,7 +238,7 @@ install(TARGETS roctracer_tool LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PRO
 add_library(hip_stats SHARED hip_stats/hip_stats.cpp)
 set_target_properties(hip_stats PROPERTIES  INSTALL_RPATH "${ROCM_APPEND_PRIVLIB_RPATH}")
 target_compile_definitions(hip_stats PRIVATE __HIP_PLATFORM_AMD__)
-target_link_libraries(hip_stats roctracer stdc++fs)
+target_link_libraries(hip_stats roctracer ${ROCTRACER_FILESYSTEM_LIBRARY})
 install(TARGETS hip_stats LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME} COMPONENT runtime)
 install(TARGETS hip_stats LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME} COMPONENT asan)
 
