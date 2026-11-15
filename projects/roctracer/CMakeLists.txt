@@ -46,6 +46,25 @@ endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(CheckCXXSourceCompiles)
+include(CMakePushCheckState)
+cmake_push_check_state(RESET)
+set(_filesystem_test "#include <filesystem>
+int main() { return std::filesystem::current_path().empty(); }")
+set(ROCTRACER_FILESYSTEM_LIBRARY "")
+check_cxx_source_compiles("${_filesystem_test}" ROCTRACER_FILESYSTEM_BUILTIN)
+if(NOT ROCTRACER_FILESYSTEM_BUILTIN)
+  set(CMAKE_REQUIRED_LIBRARIES stdc++fs)
+  check_cxx_source_compiles("${_filesystem_test}" ROCTRACER_FILESYSTEM_STDCXXFS)
+  if(NOT ROCTRACER_FILESYSTEM_STDCXXFS)
+    message(FATAL_ERROR "C++ filesystem cannot link with the standard library or stdc++fs")
+  endif()
+  set(ROCTRACER_FILESYSTEM_LIBRARY stdc++fs)
+endif()
+unset(_filesystem_test)
+cmake_pop_check_state()
+
 add_compile_options(-Wall -Wno-error=ignored-attributes -Werror)
 # To set addition RUNPATH in libraries
 # installed in /opt/rocm-ver/lib/roctracer
